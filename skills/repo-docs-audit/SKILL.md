@@ -80,8 +80,9 @@ Do not assume existing docs are correct. Do not assume every current file should
    - **merge** — overlaps with another file; combine them
    - **remove** — low value or easily derivable from code inspection
    - **create** — important context is missing and should be written
-6. Propose the target doc set with verdicts and rationale.
-7. Recommend the next skill to run.
+6. Produce the audit output — a doc-by-doc verdict table with rationale and the proposed target doc set.
+7. **Gate on approval before any edits.** Present the full output and explicitly state: "No files will be modified until you approve." Do not create, edit, delete, or merge any file until the user confirms. If the user approves only part of the plan, apply only the approved subset.
+8. Recommend the next skill to run (e.g. `rewrite-docs-from-code`, `repair-agent-files`).
 
 ## Decision Rules
 
@@ -145,6 +146,7 @@ Produce:
 - the recommended target doc set
 - rationale for consolidations and deletions
 - recommended next skill
+- an explicit approval prompt before any file is touched
 
 ## Cautions / Common Failure Modes
 
@@ -154,6 +156,7 @@ Produce:
 - Keeping multiple weak docs instead of one strong doc
 - Recommending speculative docs because they sound complete
 - Trimming when the right call is to delete entirely
+- Applying changes before waiting for explicit user approval
 
 ## Example Usage
 
