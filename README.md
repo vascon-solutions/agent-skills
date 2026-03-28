@@ -16,8 +16,11 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
     ├── rewrite-docs-from-code/
     ├── repair-agent-files/
     ├── review-doc-changes/
+    ├── review-task-docs/
     ├── repo-skill-scan/
-    └── scaffold-repo-skill/
+    ├── roadmap-todo/
+    ├── scaffold-repo-skill/
+    └── task-doc/
 ```
 
 ## Skills
@@ -28,8 +31,11 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 | `rewrite-docs-from-code` | Write or repair project docs grounded in current code |
 | `repair-agent-files` | Create or align `AGENTS.md` and `CLAUDE.md` as a matched pair |
 | `review-doc-changes` | Second-pass review of recent doc changes; verify against code |
+| `review-task-docs` | Independently review task docs for executability, scope control, and whether they should be split |
 | `repo-skill-scan` | Scan a repo for repeated patterns; recommend skills, commands, or no action |
+| `roadmap-todo` | Create and maintain durable roadmap or todo files for feature-grade work across repos |
 | `scaffold-repo-skill` | Write an approved skill, command, or script candidate with correct structure and wiring |
+| `task-doc` | Create durable task documents for feature-grade work and reject small work that should stay in normal plan mode |
 
 ## Link Targets
 
@@ -104,6 +110,16 @@ The link script is idempotent — it skips symlinks that already point to the co
 
 1. `repo-skill-scan` — scan for repeated patterns; get a ranked candidate list
 2. `scaffold-repo-skill` — for each approved candidate: propose structure → wait for approval → write files
+
+### Feature-grade task planning across agents
+
+1. `task-doc` — turn a roadmap item, issue, PRD, or feature brief into a durable execution artifact
+2. Normal agent plan mode — use for small work that does not justify a maintained task doc
+
+### Reviewing and tracking feature work
+
+1. `review-task-docs` — challenge a task doc before implementation starts
+2. `roadmap-todo` — keep feature-grade backlog items concise, durable, and linked to task docs
 
 ## How To Add a Skill
 

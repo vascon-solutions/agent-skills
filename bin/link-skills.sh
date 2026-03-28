@@ -23,8 +23,11 @@ repo-docs-audit
 rewrite-docs-from-code
 repair-agent-files
 review-doc-changes
+review-task-docs
 repo-skill-scan
+roadmap-todo
 scaffold-repo-skill
+task-doc
 "
 
 # Skills removed in this version — unlink them if they still exist as symlinks
