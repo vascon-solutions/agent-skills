@@ -1,27 +1,26 @@
 ---
 name: task-doc
-description: Create a durable task document for feature-grade work from a roadmap item, issue, PRD, user brief, or codebase findings. Use when work is large enough to need a reviewable execution artifact rather than an ephemeral plan.
+description: Create a durable task document for feature-grade work from a roadmap item, issue, PRD, user brief, or codebase findings. Rejects small work that should stay in normal plan mode. Does not implement.
 ---
 
 # Task Doc
 
 ## Purpose
 
-Create a durable execution task document for major work.
+Create a durable execution task document for feature-grade work.
 
-This skill standardizes task artifacts across coding agents and repos.
+This skill produces a document, not an implementation. Do not implement any part of the task after creating the doc. Do not start coding.
+
 It is not a backlog manager, and it is not a replacement for normal plan mode on small work.
 
 ## When To Use
 
 Use when:
 
-- the user wants a durable task doc for a feature, migration, major refactor, or cross-cutting change
-- the work is likely to span multiple files, modules, or sessions
-- the task needs explicit scope, exclusions, verification, or approval gates
+- the work is feature-grade: spans multiple files, modules, or sessions
 - the output will be handed across agents or teammates
-- the source material exists in a roadmap, issue, PRD, feature brief, meeting notes, or codebase findings
-- the agent needs to decide whether the work is one bounded task or should be split into sub tasks
+- the task needs explicit scope, exclusions, verification, or approval gates
+- the source material exists in a roadmap, issue, PRD, feature brief, or codebase findings
 
 ## When Not To Use
 
@@ -31,7 +30,15 @@ Do not use when:
 - the user only needs an immediate implementation plan for the current session
 - the work is too vague to define as a bounded task artifact
 
-When not using this skill, default to the coding agent's normal plan mode.
+When not using this skill, default to normal plan mode and say so.
+
+## Constraints
+
+- **Do not implement.** This skill produces a task document only. Do not write code, create implementation files, or begin any work described in the task.
+- **Reject small work.** If the work does not justify a durable artifact, refuse and recommend plan mode. This is not optional — agents default to creating what was asked; this skill must override that instinct.
+- **Prefer omission over invention.** Do not add scope, requirements, or features the source did not ask for. When in doubt, leave it out and add it to Excluded.
+- **Exclusions are mandatory.** Every task doc must have an Excluded section. Missing exclusions invite scope creep during implementation.
+- **Split conservatively.** Only decompose when the task contains multiple independently shippable outcomes with different verification or risk profiles. Do not split for minor sequencing or obvious implementation steps.
 
 ## Required Inputs
 
@@ -40,127 +47,87 @@ You need:
 - a source input, or enough user context to derive one
 - a task title, or enough source detail to infer one safely
 
-Optional but useful:
-
-- target path or filename convention
-- task ID or numbering convention
-- frozen reference docs the task must respect
-- example task docs to match
-
-Read [references/source-modes.md](references/source-modes.md) when the source type is unclear.
+Optional: target path, task ID convention, frozen reference docs, example task docs to match.
 
 ## Decision Rules
 
-### 1. Decide whether a durable task doc is warranted
+### Classify the source mode
 
-Create a task doc when one or more of these are true:
+Choose exactly one:
 
-- the work is feature-grade or a major change
-- the work touches multiple modules or systems
-- the work requires explicit verification or approval gates
-- the work is likely to be handed across people, sessions, or agents
-- the source material is important enough to preserve as a stable execution contract
-
-Reject task-doc creation and recommend normal plan mode when most of these are true:
-
-- the task is isolated and can be completed in one short implementation pass
-- scope is obvious from the user request alone
-- no durable artifact would be useful after the work is done
-- failure modes are local and easy to inspect directly in code
-
-### 2. Classify the source mode
-
-Choose exactly one source mode:
-
-- `roadmap`
-- `issue`
-- `prd`
-- `brief`
-- `codebase-derived`
+- `roadmap` — bounded roadmap entry
+- `issue` — tracker item, bug ticket, or feature request
+- `prd` — feature spec or product requirement document
+- `brief` — user request, meeting notes, or freeform direction
+- `codebase-derived` — inferred from repo state (TODOs, missing integrations, repeated manual work)
 
 See [references/source-modes.md](references/source-modes.md).
 
-### 3. Choose generation style
+### Choose generation style
 
-Use `transform-only` when the source is already authoritative and bounded.
+Use `transform-only` when the source is already authoritative and bounded. Transform-only restructures the source into task-doc format without adding scope, requirements, or assumptions.
 
-Use `synthesized` when the source is incomplete and the task must be inferred from multiple inputs. In this mode:
+Use `synthesized` when the source is incomplete and the task must be inferred from multiple inputs. In synthesized mode:
 
-- clearly label assumptions
+- label all assumptions explicitly
 - do not invent major requirements without user direction
-- add exclusions to prevent scope drift
+- use strong exclusions to prevent drift
 
-### 4. Protect scope
+### Protect scope
 
 - Separate included scope from excluded scope
-- Prefer omission over invention
 - Keep implementation detail out of the objective unless it is already part of the source
-- Add approval gates for security, auth, compliance, finance, destructive data work, infra changes, or permission model changes
+- Add approval gates only for: security, auth, compliance, finance, destructive data work, infra changes, or permission model changes
 
-### 5. Discover when decomposition is required
+### Decide on decomposition
 
-Break the work into sub tasks when most of these are true:
+Break into sub tasks only when most of these are true:
 
-- the request contains multiple independently shippable outcomes
+- multiple independently shippable outcomes exist
 - different areas of the repo can be implemented and verified separately
-- one part is blocked by another part's prerequisite work
-- a single task doc would become vague, bloated, or hard to execute safely
 - different approval gates or risk profiles apply to different parts
+- a single task doc would become vague or hard to execute safely
 
-When decomposition is needed:
-
-- keep the current task doc focused on the parent feature or bounded first slice
-- list proposed sub tasks under `Follow-ups` unless the user explicitly asked for multiple task docs now
-- do not explode work into sub tasks for minor sequencing or obvious implementation steps
+When decomposition is needed, list proposed sub tasks under Follow-ups. Do not generate multiple task docs unless the user explicitly asked for that.
 
 ## Workflow
 
-1. Inspect the source inputs and determine whether this is feature-grade work or normal-plan work.
-2. If it should stay in plan mode, do not create a task doc. State that a durable task artifact would be overkill here.
-3. Classify the source mode.
-4. Decide whether the task should be `transform-only` or `synthesized`.
-5. Decide whether the work should stay as one task or be split into sub tasks.
-6. Draft the task doc using [references/task-template.md](references/task-template.md).
-7. Fill each section with bounded, execution-ready content.
-8. Add assumptions only when the source is incomplete, and label them clearly.
-9. Add exclusions, verify-first checks, and approval gates where warranted.
-10. If decomposition is needed, list proposed sub tasks in `Follow-ups` or generate multiple task docs if the user asked for that explicitly.
-11. Review the draft for scope inflation, hidden implementation decisions, and missing verification.
-12. Output only the task doc unless the user explicitly asks for commentary around it.
+1. Determine whether this is feature-grade work. If not, refuse and recommend plan mode.
+2. Classify the source mode.
+3. Choose `transform-only` or `synthesized`.
+4. Decide whether the work stays as one task or needs decomposition.
+5. Draft the task doc using [references/task-template.md](references/task-template.md).
+6. Verify the draft against the validation checks below.
+7. Output the task doc. Do not add commentary unless the user asked for it.
 
 Read [references/examples.md](references/examples.md) for example outcomes and rejection cases.
 
 ## Validation
 
-Before declaring the task doc complete, verify:
+Before declaring complete, verify:
 
-- the task is large enough to deserve a durable artifact
-- the title and objective describe one bounded piece of work
+- the work is large enough to deserve a durable artifact (re-check the rejection gate)
 - the task is not silently hiding multiple major sub tasks
 - scope and excluded items are both present
-- verify-first checks exist when current repo state matters
-- deliverables are concrete and reviewable
-- verification checklist items are testable or inspectable
-- approval gates are present only when they truly apply
-- any proposed sub tasks are real work slices, not mere implementation steps
 - the doc can be executed by another agent without relying on hidden chat context
+- any proposed sub tasks are real separable workstreams, not implementation steps
 
 ## Output
 
-Produce exactly one of the following:
+Produce exactly one of:
 
-- a completed task document using the standard section order in [references/task-template.md](references/task-template.md)
-- a brief refusal to create a task doc, with a recommendation to use normal plan mode instead
+- a completed task document using [references/task-template.md](references/task-template.md)
+- a brief refusal with a recommendation to use normal plan mode
 
-If the user asked for a file, write the file in the requested location.
-If no location was specified, provide the task doc content directly.
+If the user asked for a file, write it in the requested location. Otherwise provide the content directly.
 
-## Cautions / Common Failure Modes
+Do not implement. Do not start coding.
 
-- turning small work into heavyweight ceremony
-- inventing requirements that were never requested
-- hiding assumptions inside assertive wording
-- collapsing multiple major workstreams into one vague task
-- mixing execution guidance with implementation details that should stay flexible
-- omitting exclusions, which invites scope creep
-- generating a checklist that another agent cannot actually execute
+## Cautions
+
+- Turning small work into heavyweight ceremony
+- Inventing requirements that were never in the source
+- Hiding assumptions inside assertive wording
+- Collapsing multiple major workstreams into one vague task
+- Omitting exclusions
+- Generating a checklist that another agent cannot actually execute

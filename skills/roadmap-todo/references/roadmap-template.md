@@ -18,3 +18,15 @@ Each item should answer:
 
 Do not pack verification details or execution checklists into the roadmap.
 
+## Example
+
+```markdown
+## Auth & Access Control
+
+| # | Item | Status | Task doc |
+|---|---|---|---|
+| 1 | Role-based route guards | done | tasks/001-rbac-guards.md |
+| 2 | Session token rotation | in-progress | tasks/002-token-rotation.md |
+| 3 | Audit log for permission changes | todo | — |
+```
+

@@ -1,102 +1,80 @@
 ---
 name: review-task-docs
-description: Independently review task documents created by another agent or teammate, challenge scope and assumptions, and decide whether the task is executable, overscoped, underspecified, or should be split.
+description: Validate task documents created by another agent or teammate. Report verdicts and findings only — never implement or edit the task doc. Use for cross-agent review before implementation begins.
 ---
 
 # Review Task Docs
 
 ## Purpose
 
-Perform an independent review of task documents before implementation begins.
+Validate task documents before implementation begins. This is a review-only skill.
 
-This skill is skeptical in the same way `review-doc-changes` is skeptical, but its target is different:
-
-- task quality, not general documentation quality
-- execution readiness, not prose polish
-- scope control, assumptions, decomposition, and approval gates
+You must never implement any part of the task, and you must never edit the task doc directly. Your only output is a verdict and findings.
 
 ## When To Use
 
 Use when:
 
-- another agent or teammate created a task doc and you want a second pass
-- the user asks whether a task doc is executable as written
-- the user wants task scope challenged before implementation
-- the user wants to know whether one task should be split into sub tasks
+- another agent or teammate created a task doc and you want independent validation
+- the user wants task scope challenged before handing the task to an implementing agent
+- the user wants to know whether one task should be split
 
 ## When Not To Use
 
 Do not use when:
 
-- there is no task doc or draft to review
-- the user wants the initial task doc created from scratch
-  Use `task-doc`
-- the target is a general documentation review rather than a task artifact
-  Use `review-doc-changes`
+- the user wants the task doc created — use `task-doc`
+- the target is general documentation, not a task artifact — use `review-doc-changes`
 
-## Required Inputs
+## Constraints
 
-You need:
-
-- one or more task docs or drafts to review
-- access to the current codebase when the task makes claims about existing behavior, dependencies, or reusable patterns
-
-Do not assume the task is correct because it looks structured.
+- **Do not implement.** Do not write code, create files, or begin any work described in the task.
+- **Do not edit the task doc.** Report findings. The author or user decides what to change.
+- **Do not trust structure as proof of quality.** A well-formatted doc can still be unexecutable.
+- **Verify against the codebase.** When the task claims something about existing behavior, dependencies, or patterns, check the repo.
 
 ## Review Criteria
 
-Audit the task doc for:
+Audit for:
 
 - **Bounded objective** — is this one task, not a disguised program of work?
-- **Scope discipline** — are included and excluded items explicit and coherent?
-- **Executability** — could another agent act on this without hidden chat context?
-- **Assumptions** — are they explicit, justified, and limited?
-- **Verification quality** — do checklist items prove completion rather than restate intent?
-- **Approval gates** — are they present where needed and absent where not needed?
-- **Decomposition** — should this be split into sub tasks?
-
-## Decision Rules
-
-- Prefer rejecting a vague task over approving a task that will drift during implementation
-- If the task hides multiple independently shippable outcomes, recommend splitting it
-- If a task lacks exclusions, treat that as a real risk, not a formatting omission
-- If deliverables do not map clearly back to the source request, call that out
-- Verify codebase-dependent claims against the repo instead of trusting the task wording
-- Accept all is a valid outcome when the task doc is strong
-
-## Step-By-Step Instructions
-
-1. Read the task doc as written.
-2. Identify the claimed objective, source context, and task boundaries.
-3. Check whether the task is actually one bounded unit of work.
-4. Independently inspect the codebase where existing-state claims matter.
-5. Audit scope, exclusions, assumptions, verification, and approval gates.
-6. Decide whether to accept, trim, split, or rewrite.
-7. Apply low-risk corrections directly if asked to edit; otherwise report findings and recommendations.
+- **Scope discipline** — are included and excluded items explicit? Missing exclusions are a risk.
+- **Executability** — could another agent act on this without hidden context?
+- **Assumptions** — are they labeled and limited, or buried in assertive wording?
+- **Verification quality** — do checklist items prove completion, or restate intent?
+- **Approval gates** — present where needed, absent where not?
+- **Decomposition** — does this hide multiple independently shippable outcomes that should be split?
 
 ## Verdicts
 
-Use one of these verdicts:
+Assign exactly one:
 
-- `accept` — task is ready to execute
-- `trim` — task is broadly correct but too wide, too long, or over-specified
-- `split` — task contains multiple real sub tasks and should be decomposed
-- `rewrite` — task is not dependable enough to execute safely
+- `accept` — ready to execute as written
+- `trim` — broadly correct but overscoped or over-specified
+- `split` — contains multiple real sub tasks that should be separate docs
+- `rewrite` — not safe to execute; needs a new draft
+
+## Workflow
+
+1. Read the task doc.
+2. Check whether the objective describes one bounded piece of work.
+3. Inspect the codebase where the task makes claims about existing state.
+4. Audit against the review criteria above.
+5. Assign a verdict.
+6. Report findings, highest-risk first.
 
 ## Output
 
-Produce:
+Produce only:
 
-- a verdict for each reviewed task doc
-- the highest-risk findings first
-- recommended corrections or decomposition plan
-- explicit acceptance if the task is already strong
+- a verdict
+- findings ordered by severity
+- recommended changes (for the author to apply, not you)
+- explicit `accept` when the doc is strong — do not invent problems
 
-## Cautions / Common Failure Modes
+## Cautions
 
-- treating section completeness as proof of quality
-- reviewing wording without checking executability
-- allowing hidden assumptions to slip through
-- preserving a bloated task because the source feature is important
-- splitting work into tiny implementation steps instead of real sub tasks
-
+- Do not implement. Do not edit the task doc. Report only.
+- Do not treat section completeness as proof of quality.
+- Do not split work into tiny implementation steps — only real separable workstreams.
+- Do not preserve a bloated task because the feature sounds important.
