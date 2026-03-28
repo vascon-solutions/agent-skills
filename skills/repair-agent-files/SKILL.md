@@ -103,6 +103,12 @@ Remove anything that:
 - belongs in a contributor guide
 - is likely to change frequently and is not required every session
 
+**Code block rules:**
+- **Keep** a code block only when it enforces a critical constraint where prose alone is ambiguous — e.g., a prohibited API paired with the correct alternative that isn't obvious.
+- **Remove** code blocks for patterns that are consistently followed in the codebase — agents discover them by reading existing files.
+- **Remove** code blocks for anything a linter or formatter auto-corrects (import order, formatting style). Documenting what the tool fixes for you is redundant.
+- **Keep** operational command blocks (validation, test flags, setup commands) — these are instructions to execute, not patterns to infer.
+
 **Size guidance:** target 120–180 lines. Under 200 for most repos. Over 300 is almost certainly bloated.
 
 ### 4. Repair CLAUDE.md
@@ -137,6 +143,7 @@ Verify:
 - If both files have unique high-value content, migrate it to the correct owner — do not keep both copies
 - If a section helps human readers more than agents, it belongs in project docs, not in `AGENTS.md`
 - Temporary implementation detail does not belong in `AGENTS.md`
+- A code block earns its place only if an agent would plausibly get the constraint wrong without it and the correct approach is not discoverable by reading existing files. When in doubt, remove it and point the agent to the relevant files instead.
 
 ## Expected Outputs
 
@@ -153,6 +160,8 @@ Produce:
 - Including architecture detail that belongs in `/docs`
 - Making the file so long agents stop reading it
 - Treating the section list as a rigid required template rather than a minimum frame
+- Adding code blocks for patterns the agent can find in existing files — point to the files instead
+- Documenting what the linter already enforces and auto-fixes
 
 ## Example Usage
 

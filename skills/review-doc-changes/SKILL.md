@@ -55,7 +55,7 @@ Do not assume recent edits are wrong because they are recent.
    - **Scope discipline** — does the file stay in its lane, or does it drift into another doc's territory?
    - **Overlap** — does it now duplicate content from another file?
    - **Durable value** — will this be useful in six months, or is it a current-state snapshot?
-   - **Lean structure** — could it be shorter without losing meaning?
+   - **Lean structure** — could it be shorter without losing meaning? For `AGENTS.md` specifically: does each code block enforce a critical constraint that prose alone cannot express, or is the pattern discoverable by reading existing files? Does the block document something the linter auto-fixes?
 6. Assign a verdict to each file:
    - **accept** — changes are correct and improve the doc
    - **trim** — broadly correct but over-specified or too long
@@ -81,7 +81,7 @@ Do not assume recent edits are wrong because they are recent.
 - Verify against code, not against the author's apparent intent
 - Prefer deletion over light polish when a doc still does not earn its place after the edits
 - Challenge generated inventories and folder listings regardless of how clean they look
-- Keep `AGENTS.md` lean and agent-focused
+- Keep `AGENTS.md` lean and agent-focused — code blocks belong only when a constraint is non-obvious AND the correct approach isn't discoverable from existing files. Patterns the codebase already demonstrates consistently, and anything a linter auto-corrects, should be removed.
 - Do not preserve structure just because it was recently introduced
 - If all recent changes are correct, say so explicitly — accept all is a valid outcome
 
