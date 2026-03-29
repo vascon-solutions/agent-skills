@@ -102,6 +102,15 @@ When decomposition is needed, list proposed sub tasks under Follow-ups. Do not g
 
 Read [references/examples.md](references/examples.md) for example outcomes and rejection cases.
 
+Before choosing an output path, detect any existing task-doc convention in this order:
+
+1. a user-specified path
+2. repo instructions such as `AGENTS.md`, `CLAUDE.md`, or docs that explicitly name a task-doc location or naming convention
+3. existing task-doc directories or file patterns, such as repeated task files under `.agent/tasks/`, `tasks/`, `docs/tasks/`, or similarly named folders
+4. existing filename conventions used for comparable task artifacts in the repo
+
+If no clear convention is found, do not invent one. Provide the task doc content directly.
+
 ## Validation
 
 Before declaring complete, verify:
@@ -119,7 +128,7 @@ Produce exactly one of:
 - a completed task document using [references/task-template.md](references/task-template.md)
 - a brief refusal with a recommendation to use normal plan mode
 
-If the user asked for a file, write it in the requested location. Otherwise provide the content directly.
+If the user specified a path, write the file there. Otherwise, if the repo has a clear existing task-doc convention, follow it. If no clear convention is found, provide the content directly instead of inventing a repo-specific default path. If the user asks for output only, provide the content directly instead of writing a file.
 
 Do not implement. Do not start coding.
 
