@@ -65,6 +65,7 @@ Existing docs are inputs only — they are not trusted by default.
 
 ## Decision Rules
 
+- **File placement and naming**: only `README.md`, `AGENTS.md`, and `CLAUDE.md` belong at the repo root. All other docs go in `docs/` with lowercase filenames (e.g., `docs/architecture.md`, `docs/context.md`, `docs/contributing.md`). Uppercase names are reserved for root-level repo meta-files that tools and platforms expect at the project root.
 - If a claim is not evidenced in code or reliable config, omit it or clearly qualify it.
 - Do not infer active integrations from env vars, references, or package names alone — verify from code paths.
 - If two docs overlap heavily, merge them.

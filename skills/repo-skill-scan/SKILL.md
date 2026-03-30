@@ -60,8 +60,8 @@ Scan in this priority order. Earlier sources carry higher-confidence signals.
 These name repeated tasks directly:
 
 - `AGENTS.md`, `CLAUDE.md` — multi-step checklists, declared constraints, "before touching X do Y" sections
-- `docs/CONTRIBUTING.md` or `CONTRIBUTING.md` — manual procedures described in prose
-- `docs/WORKFLOWS.md` or equivalent — declared how-to sections
+- `docs/contributing.md` or `CONTRIBUTING.md` — manual procedures described in prose
+- `docs/workflows.md` or equivalent — declared how-to sections
 - PR templates, issue templates — recurring review or validation checklists
 - Any `docs/` file with a "How to" or step-numbered section
 

@@ -86,6 +86,7 @@ Do not assume existing docs are correct. Do not assume every current file should
 
 ## Decision Rules
 
+- **File placement and naming**: only `README.md`, `AGENTS.md`, and `CLAUDE.md` belong at the repo root. All other docs go in `docs/` with lowercase filenames (e.g., `docs/architecture.md`, `docs/context.md`, `docs/contributing.md`). Uppercase names are reserved for root-level repo meta-files. Flag violations during audits.
 - Keep a doc only if it adds durable value beyond what is quickly discoverable from code.
 - **Default to remove** for files that are primarily folder listings, generated inventory, or generic framework advice. Do not trim what should be deleted.
 - Prefer one strong doc over two overlapping docs.
