@@ -28,6 +28,7 @@ repo-skill-scan
 roadmap-todo
 scaffold-repo-skill
 task-doc
+vascon-bits-usage
 "
 
 # Skills removed in this version — unlink them if they still exist as symlinks

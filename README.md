@@ -20,31 +20,33 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
     ├── repo-skill-scan/
     ├── roadmap-todo/
     ├── scaffold-repo-skill/
-    └── task-doc/
+    ├── task-doc/
+    └── vascon-bits-usage/
 ```
 
 ## Skills
 
-| Skill | Purpose |
-|---|---|
-| `repo-docs-audit` | Audit what docs should exist; produce verdicts before rewriting anything |
-| `rewrite-docs-from-code` | Write or repair project docs grounded in current code |
-| `repair-agent-files` | Create or align `AGENTS.md` and `CLAUDE.md` as a matched pair |
-| `review-doc-changes` | Second-pass review of recent doc changes; verify against code |
-| `review-task-docs` | Independently review task docs for executability, scope control, and whether they should be split |
-| `repo-skill-scan` | Scan a repo for repeated patterns; recommend skills, commands, or no action |
-| `roadmap-todo` | Create and maintain durable roadmap or todo files for feature-grade work across repos |
-| `scaffold-repo-skill` | Write an approved skill, command, or script candidate with correct structure and wiring |
-| `task-doc` | Create durable task documents for feature-grade work and reject small work that should stay in normal plan mode |
+| Skill                    | Purpose                                                                                                                                                               |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `repo-docs-audit`        | Audit what docs should exist; produce verdicts before rewriting anything                                                                                              |
+| `rewrite-docs-from-code` | Write or repair project docs grounded in current code                                                                                                                 |
+| `repair-agent-files`     | Create or align `AGENTS.md` and `CLAUDE.md` as a matched pair                                                                                                         |
+| `review-doc-changes`     | Second-pass review of recent doc changes; verify against code                                                                                                         |
+| `review-task-docs`       | Independently review task docs for executability, scope control, and whether they should be split                                                                     |
+| `repo-skill-scan`        | Scan a repo for repeated patterns; recommend skills, commands, or no action                                                                                           |
+| `roadmap-todo`           | Create and maintain durable roadmap or todo files for feature-grade work across repos                                                                                 |
+| `scaffold-repo-skill`    | Write an approved skill, command, or script candidate with correct structure and wiring                                                                               |
+| `task-doc`               | Create durable task documents for feature-grade work and reject small work that should stay in normal plan mode                                                       |
+| `vascon-bits-usage`      | Use components, hooks, and utilities from the vascon-bits component library correctly — imports, variant APIs, composition patterns, styling conventions, and testing |
 
 ## Link Targets
 
 `bin/link-skills.sh` symlinks each skill directory into three tool-specific locations:
 
-| Target directory | Tool |
-|---|---|
-| `~/.claude/skills/<name>` | Claude Code |
-| `~/.codex/skills/<name>` | OpenAI Codex |
+| Target directory          | Tool                           |
+| ------------------------- | ------------------------------ |
+| `~/.claude/skills/<name>` | Claude Code                    |
+| `~/.codex/skills/<name>`  | OpenAI Codex                   |
 | `~/.agents/skills/<name>` | agents.sh and compatible tools |
 
 Per-skill symlinks are used (not the whole `skills/` directory) so each tool's existing skills are not disturbed.
@@ -115,6 +117,10 @@ The link script is idempotent — it skips symlinks that already point to the co
 
 1. `task-doc` — turn a roadmap item, issue, PRD, or feature brief into a durable execution artifact
 2. Normal agent plan mode — use for small work that does not justify a maintained task doc
+
+### Building or reviewing UI with vascon-bits
+
+1. `vascon-bits-usage` — verify correct imports, variant APIs, compound component composition, and styling conventions before writing or reviewing UI code
 
 ### Reviewing and tracking feature work
 
