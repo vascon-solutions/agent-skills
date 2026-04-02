@@ -1,265 +1,488 @@
 ---
 name: vascon-bits-usage
-description: Use components, hooks, and utilities from the vascon-bits component library correctly. Covers import paths, variant APIs, compound component composition, styling conventions, and testing patterns. Use when building UI with this library or adding new components to it.
+description: Use components, hooks, and utilities from the vascon-bits component library correctly. Covers import paths, variant APIs, compound component composition, styling conventions, and React patterns. Use when building UI with this library.
+user-invocable: false
 ---
 
-# Vascon Bits Component Library Usage
+# Vascon Bits Component Library
 
-## Purpose
+A comprehensive React component library built on Radix UI primitives with TanStack integrations. Components are consumed via npm package with Tailwind CSS styling.
 
-Guide correct usage of the vascon-bits component library — imports, component APIs, styling conventions, composition patterns, and testing. Ensures consistency when consuming or extending library components.
-
-## When To Use
-
-Use when:
-
-- building UI features that consume vascon-bits components
-- debugging styling or composition issues with library components
-- reviewing code that uses library components
-
-## When Not To Use
-
-Do not use when:
-
-- the task involves unrelated third-party component libraries
-- pure backend logic with no UI rendering
-- the user explicitly wants raw HTML/CSS without library components
+> **IMPORTANT:** All imports come from `@vascon-solutions/bits`. Never import from internal paths like `src/components/button/button.tsx`.
 
 ## Imports
 
-All components, hooks, utilities, and types are exported from the package root:
-
 ```typescript
 import {
+  // Components
   Button,
   Modal,
   Table,
   Input,
+  Tabs,
+  Accordion,
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  // Hooks
   useDisclosure,
+  useControllableState,
+  useDebounce,
+  // Utilities
   cn,
 } from "@vascon-solutions/bits";
 ```
 
-Styles must be imported separately:
+Styles must be imported once in your app entry point:
 
 ```typescript
 import "@vascon-solutions/bits/style.css";
 ```
 
-## Components
+## Principles
 
-The library exports 55+ components. Each lives in `src/components/<name>/` with this structure:
+1. **Use library components first.** Check the component list below before writing custom markup.
+2. **Use built-in variants before custom styles.** `variant="outline"`, `size="sm"`, etc.
+3. **Compose compound components correctly.** Use all required sub-components.
+4. **className is for layout only.** Never override colors, typography, or internal styles.
+5. **Avoid unnecessary Effects.** Calculate derived state during render, use event handlers for user actions.
 
-```
-component-name/
-  component-name.tsx    # Implementation
-  index.ts              # Public exports
-  component-name.test.tsx
-  component-name.stories.tsx
-  types.ts              # (optional) Separate type definitions
-  variants.ts           # (optional) CVA variant definitions
-  *.module.css          # (optional) CSS module styles
-```
+## Critical Rules
 
-### Available Components
+These rules are **always enforced**. Each links to a file with Incorrect/Correct code pairs.
 
-Accordion, AccountBanner, ActivityLog, Alert, ApplicationAssignModal, ApplicationResubmit, ApplicationReview, Avatar, AvatarLabelGroup, Badge, BadgeGroup, Banner, Breadcrumb, Button, Card, CardHeader, Checkbox, CheckboxGroup, CommandMenu, CurrencyInput, DatePicker, Drawer, Dropdown (DropdownMenu, DropdownMenuItem, etc.), Dropzone, DropzoneUploader, EmptyState, FeatureIcon, FileIcons, FileList, Filter, Filters, HeaderNav, InfoCards, InlineCta, Input, Label, LoadingIndicator, Modal, MultiSelect, MultipleCombo, NativeSelect, OldTable, PageHeader, Pagination, Progress, ProgressSteps, Radio, Reviews, Sidebar, Skeleton, Slider, Switch, SystemSync, Table, TableCells, Tabs, Tag, Text, TextArea, TextEditor, Toast, Tooltip.
+### Styling & Tailwind → [styling.md](./rules/styling.md)
 
-## Component API Patterns
+- **`v:` prefix required inside library code.** Consumer code does NOT use `v:` prefix.
+- **Use `cn()` for class merging.** Never manual string concatenation or template literals.
+- **`className` for layout only.** `w-full`, `mt-4`, `max-w-md` — never override colors or typography.
+- **Use built-in variants first.** `variant="outline"` not `className="border bg-transparent"`.
+- **Use component-specific className props.** `overlayClassName`, `contentClassName`, `triggerClassName`.
+- **No raw Tailwind colors.** Use Badge variants or semantic tokens, not `text-green-500`.
 
-### Pattern 1: CVA Variants
+### Component Composition → [composition.md](./rules/composition.md)
 
-Most leaf components use `class-variance-authority` for type-safe variant props.
+- **Button uses `variant` and `size` props.** Never className for size/color changes.
+- **Button with links uses `asChild`.** `<Button asChild><a href="...">` — never nest `<a>` inside `<Button>`.
+- **Modal requires `trigger` and `title`.** Always provide both for functionality and accessibility.
+- **Drawer is for side panels.** Not Modal. Different animation and positioning.
+- **Table uses `Table.Root` + compound parts.** `Table.Header`, `Table.Body`, `Table.Content`, `Table.Pagination`.
+- **Tabs uses the `tabs` array prop.** Not manual `TabsTrigger` composition.
+- **Accordion uses compound parts.** `AccordionItem`, `AccordionTrigger`, `AccordionContent`.
+- **DropdownMenu uses named exports.** `DropdownMenuTrigger`, `DropdownMenuContent`, `DropdownMenuItem`, `DropdownMenuGroup`.
+- **Tooltip wraps trigger with `Tooltip` component.** Pass `content` prop for tooltip text.
+- **EmptyState for empty content.** Never custom `div` with centered text and icon.
+- **Skeleton for loading placeholders.** Never custom `animate-pulse` divs.
+- **LoadingIndicator for spinners.** Never custom spinning divs.
+- **Badge for status indicators.** Never custom styled spans.
+- **Alert/Banner for notices.** Never custom callout divs.
 
-```typescript
-import { Button } from "@vascon-solutions/bits";
+### Forms & Inputs → [forms.md](./rules/forms.md)
 
-// Variant and size props are type-safe
-<Button variant="default">Default</Button>
+- **Input icons use `icon` + `iconPosition` props.** Never manual absolute positioning.
+- **Input states use `variant="error"`.** Never custom red border classes.
+- **Input sizes use `size` prop.** `sm`, `default`, `lg` — never className for height.
+- **Password toggle is built-in.** `type="password"` automatically shows toggle. Never build custom.
+- **Number input blocks invalid chars.** Built-in. Never manual `onKeyDown` filtering.
+- **Switch for settings, Checkbox for forms.** Semantic difference in purpose.
+- **NativeSelect for simple dropdowns.** When you don't need search or custom styling.
+- **MultiSelect/MultipleCombo for searchable.** When users need to search options.
+- **DatePicker for date selection.** Built on react-day-picker.
+- **CurrencyInput for money fields.** Has formatting built-in.
+- **TextArea for multi-line text.** Never Input with custom height.
+- **TextEditor for rich text.** Built on Tiptap.
+- **Dropzone/DropzoneUploader for file upload.** Built on react-dropzone.
+- **Controlled inputs need `value` + `onChange`.** Both together, always.
+- **Uncontrolled inputs use `defaultValue`.** Not `value` without `onChange`.
+
+### Hooks → [hooks.md](./rules/hooks.md)
+
+- **`useDisclosure` for open/close state.** Returns `{ open, onOpen, onClose, onToggle }`.
+- **`useControllableState` for controlled/uncontrolled.** Single hook handles both patterns.
+- **`useComposedRefs` for merging refs.** When you need forwardRef + local ref.
+- **`useClickOutside` for dismiss on outside click.** Pass ref and callback.
+- **`useDebounce` for rate limiting.** Search inputs, API calls.
+- **`useMediaQuery` for responsive logic.** When CSS media queries aren't enough.
+- **`useUrlQuery` for URL state sync.** Tabs component uses this automatically.
+
+### React Patterns → [no-unnecessary-effect.md](./rules/no-unnecessary-effect.md)
+
+- **Don't use Effect for derived state.** `const fullName = first + last` — calculate during render.
+- **Use `useMemo` for expensive calculations.** Not useEffect + setState.
+- **Use `key` prop to reset component state.** Not useEffect watching props.
+- **Event handlers for user actions.** Not useEffect checking state changes.
+- **Avoid Effect chains.** Calculate all state updates in single event handler.
+- **`useSyncExternalStore` for external subscriptions.** Not manual useEffect listeners.
+
+---
+
+## Component Reference
+
+### Buttons & Actions
+
+| Component | Usage                    | Key Props                                             |
+| --------- | ------------------------ | ----------------------------------------------------- |
+| `Button`  | Primary action component | `variant`, `size`, `asChild`, `isLoading`, `disabled` |
+
+```tsx
+<Button variant="default">Primary</Button>
 <Button variant="destructive" size="sm">Delete</Button>
-<Button variant="outline" size="lg">Cancel</Button>
-<Button variant="ghost">Ghost</Button>
-<Button variant="link">Link</Button>
+<Button variant="outline" isLoading>Saving...</Button>
+<Button asChild><a href="/dashboard">Go to Dashboard</a></Button>
 ```
 
-Common variant props: `variant`, `size`. The `buttonVariants` (and similar) function is also exported for use outside the component:
+**Button variants:** `default`, `destructive`, `outline`, `secondary`, `ghost`, `link`, `warning`
+**Button sizes:** `default`, `sm`, `lg`, `icon`
 
-```typescript
-import { buttonVariants } from "@vascon-solutions/bits";
+---
 
-<a className={buttonVariants({ variant: "outline" })} href="/page">Link styled as button</a>
-```
+### Overlays & Modals
 
-### Pattern 2: asChild (Radix Slot)
+| Component    | Usage                     | Key Props                                                              |
+| ------------ | ------------------------- | ---------------------------------------------------------------------- |
+| `Modal`      | Centered dialog           | `trigger`, `title`, `description`, `open`, `onOpenChange`, `showClose` |
+| `ModalClose` | Close button inside Modal | `asChild`                                                              |
+| `Drawer`     | Side panel overlay        | `trigger`, `title`, `side`                                             |
+| `Tooltip`    | Hover information         | `content`, `side`, `align`                                             |
 
-Components with an `asChild` prop render their styling onto the child element instead of a wrapper:
-
-```typescript
-<Button asChild>
-  <a href="/dashboard">Go to Dashboard</a>
-</Button>
-```
-
-### Pattern 3: Compound Components (Namespaced)
-
-Complex components use a namespace object with sub-components:
-
-```typescript
-import { Table } from "@vascon-solutions/bits";
-
-<Table.Root columns={columns} data={data}>
-  <Table.Header />
-  <Table.Body />
-  <Table.Pagination />
-  <Table.Empty />
-</Table.Root>
-```
-
-### Pattern 4: Compound Components (Named Exports)
-
-Some compound components export sub-parts as separate named exports:
-
-```typescript
-import { Modal, ModalClose } from "@vascon-solutions/bits";
-
+```tsx
+// Modal - always provide trigger and title
 <Modal
   trigger={<Button>Open</Button>}
-  title="Confirm"
-  description="Are you sure?"
-  open={isOpen}
-  onOpenChange={setIsOpen}
+  title="Confirm Action"
+  description="This cannot be undone."
 >
+  <p>Are you sure?</p>
   <ModalClose asChild>
     <Button variant="outline">Cancel</Button>
   </ModalClose>
+  <Button variant="destructive">Delete</Button>
 </Modal>
+
+// Drawer - side panel
+<Drawer trigger={<Button>Open Panel</Button>} title="Settings" side="right">
+  <p>Panel content</p>
+</Drawer>
+
+// Tooltip
+<Tooltip content="More information here">
+  <Button variant="ghost" size="icon"><InfoIcon /></Button>
+</Tooltip>
 ```
 
-```typescript
-import {
-  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem
-} from "@vascon-solutions/bits";
+---
 
+### Forms & Inputs
+
+| Component          | Usage                   | Key Props                                         |
+| ------------------ | ----------------------- | ------------------------------------------------- |
+| `Input`            | Text input              | `variant`, `size`, `icon`, `iconPosition`, `type` |
+| `TextArea`         | Multi-line text         | `variant`, `size`                                 |
+| `NativeSelect`     | Simple dropdown         | `value`, `onChange`, `children`                   |
+| `MultiSelect`      | Searchable multi-select | `options`, `value`, `onChange`                    |
+| `MultipleCombo`    | Combobox with search    | `options`, `value`, `onChange`                    |
+| `Checkbox`         | Form checkbox           | `checked`, `onCheckedChange`                      |
+| `CheckboxGroup`    | Multiple checkboxes     | `value`, `onValueChange`, `options`               |
+| `Switch`           | Toggle switch           | `checked`, `onCheckedChange`                      |
+| `Radio`            | Radio button            | `value`, `onValueChange`                          |
+| `Slider`           | Range slider            | `value`, `onValueChange`, `min`, `max`            |
+| `DatePicker`       | Date selection          | `value`, `onChange`, `mode`                       |
+| `CurrencyInput`    | Money input             | `value`, `onChange`, `currency`                   |
+| `TextEditor`       | Rich text editor        | `value`, `onChange`                               |
+| `Dropzone`         | File drop area          | `onDrop`, `accept`                                |
+| `DropzoneUploader` | Full file uploader      | `onUpload`, `maxFiles`                            |
+| `Label`            | Form label              | `htmlFor`                                         |
+
+```tsx
+// Input with icon
+<Input icon={<SearchIcon />} iconPosition="left" placeholder="Search..." />
+
+// Input with error state
+<Input variant="error" placeholder="Email" />
+<span className="text-sm text-destructive">Invalid email</span>
+
+// Password (toggle built-in)
+<Input type="password" placeholder="Password" />
+
+// Checkbox
+<Checkbox checked={agreed} onCheckedChange={setAgreed} id="terms" />
+<Label htmlFor="terms">I agree to terms</Label>
+
+// Switch (for settings)
+<Switch checked={darkMode} onCheckedChange={setDarkMode} />
+
+// Native select
+<NativeSelect value={country} onChange={(e) => setCountry(e.target.value)}>
+  <option value="us">United States</option>
+  <option value="uk">United Kingdom</option>
+</NativeSelect>
+```
+
+---
+
+### Data Display
+
+| Component          | Usage                | Key Props                                |
+| ------------------ | -------------------- | ---------------------------------------- |
+| `Table.Root`       | Data table container | `columns`, `getData`, `url`, `queryKey`  |
+| `Table.Content`    | Table wrapper        | —                                        |
+| `Table.Header`     | Table header row     | —                                        |
+| `Table.Body`       | Table body rows      | —                                        |
+| `Table.Search`     | Search input         | —                                        |
+| `Table.Pagination` | Page controls        | —                                        |
+| `Table.Empty`      | Empty state          | —                                        |
+| `Badge`            | Status indicator     | `variant`                                |
+| `Tag`              | Removable tag        | `onRemove`                               |
+| `Avatar`           | User avatar          | `src`, `fallback`, `size`                |
+| `AvatarLabelGroup` | Avatar with text     | `avatars`, `label`                       |
+| `Skeleton`         | Loading placeholder  | `className` (for size)                   |
+| `LoadingIndicator` | Spinning loader      | `size`                                   |
+| `EmptyState`       | Empty content        | `title`, `description`, `icon`, `action` |
+| `Progress`         | Progress bar         | `value`, `max`                           |
+| `ProgressSteps`    | Step indicator       | `steps`, `currentStep`                   |
+
+```tsx
+// Table - full composition
+<Table.Root
+  url="/api/users"
+  queryKey="users"
+  getData={getData}
+  columns={columns}
+>
+  <Table.Search />
+  <Table.Content>
+    <Table.Header />
+    <Table.Body />
+  </Table.Content>
+  <Table.Pagination />
+  <Table.Empty />
+</Table.Root>
+
+// Badge
+<Badge variant="default">Active</Badge>
+<Badge variant="destructive">Error</Badge>
+<Badge variant="secondary">Pending</Badge>
+
+// Empty state
+<EmptyState
+  icon={<SearchIcon className="h-12 w-12 text-gray-400" />}
+  title="No results found"
+  description="Try adjusting your search terms"
+  action={<Button>Clear filters</Button>}
+/>
+
+// Skeleton
+<Skeleton className="h-4 w-[200px]" />
+<Skeleton className="h-10 w-full" />
+```
+
+---
+
+### Navigation
+
+| Component    | Usage             | Key Props                                   |
+| ------------ | ----------------- | ------------------------------------------- |
+| `Tabs`       | Tab navigation    | `tabs`, `defaultValue`, `urlKey`            |
+| `Breadcrumb` | Breadcrumb trail  | `items`                                     |
+| `Sidebar`    | Side navigation   | `items`, `collapsed`                        |
+| `Pagination` | Page navigation   | `currentPage`, `totalPages`, `onPageChange` |
+| `HeaderNav`  | Header navigation | `items`                                     |
+
+```tsx
+// Tabs - uses tabs array, auto URL sync
+<Tabs
+  defaultValue="details"
+  urlKey="tab"
+  tabs={[
+    { key: "details", title: "Details", content: <DetailsPanel /> },
+    { key: "settings", title: "Settings", content: <SettingsPanel /> },
+    { key: "history", title: "History", content: <HistoryPanel />, disabled: true },
+  ]}
+/>
+
+// Breadcrumb
+<Breadcrumb
+  items={[
+    { label: "Home", href: "/" },
+    { label: "Products", href: "/products" },
+    { label: "Widget" }, // Current page, no href
+  ]}
+/>
+```
+
+---
+
+### Layout & Structure
+
+| Component          | Usage                    | Key Props                             |
+| ------------------ | ------------------------ | ------------------------------------- |
+| `Card`             | Content container        | `className`                           |
+| `CardHeader`       | Card header section      | `title`, `description`, `action`      |
+| `Accordion`        | Collapsible sections     | `type`, `collapsible`, `defaultValue` |
+| `AccordionItem`    | Single accordion section | `value`                               |
+| `AccordionTrigger` | Accordion header         | `icon`, `openIcon`                    |
+| `AccordionContent` | Accordion body           | —                                     |
+| `Alert`            | Alert message            | `variant`                             |
+| `Banner`           | Page banner              | `variant`, `dismissible`              |
+| `InlineCta`        | Call to action           | `title`, `action`                     |
+
+```tsx
+// Card
+<Card className="max-w-md">
+  <CardHeader title="Settings" description="Manage your preferences" />
+  <div className="p-4">Card content</div>
+</Card>
+
+// Accordion
+<Accordion type="single" collapsible defaultValue="item-1">
+  <AccordionItem value="item-1">
+    <AccordionTrigger>Section 1</AccordionTrigger>
+    <AccordionContent>Content for section 1</AccordionContent>
+  </AccordionItem>
+  <AccordionItem value="item-2">
+    <AccordionTrigger>Section 2</AccordionTrigger>
+    <AccordionContent>Content for section 2</AccordionContent>
+  </AccordionItem>
+</Accordion>
+
+// Alert
+<Alert variant="destructive">
+  <AlertTitle>Error</AlertTitle>
+  <AlertDescription>Something went wrong.</AlertDescription>
+</Alert>
+```
+
+---
+
+### Menus & Dropdowns
+
+| Component               | Usage           | Key Props             |
+| ----------------------- | --------------- | --------------------- |
+| `DropdownMenu`          | Action menu     | —                     |
+| `DropdownMenuTrigger`   | Menu trigger    | `asChild`             |
+| `DropdownMenuContent`   | Menu container  | `align`, `side`       |
+| `DropdownMenuGroup`     | Group of items  | —                     |
+| `DropdownMenuItem`      | Menu item       | `variant`, `onSelect` |
+| `DropdownMenuSeparator` | Divider line    | —                     |
+| `DropdownMenuLabel`     | Group label     | —                     |
+| `CommandMenu`           | Command palette | `commands`            |
+
+```tsx
+// DropdownMenu - full composition
 <DropdownMenu>
   <DropdownMenuTrigger asChild>
-    <Button variant="outline">Options</Button>
+    <Button variant="outline">Actions</Button>
   </DropdownMenuTrigger>
-  <DropdownMenuContent>
-    <DropdownMenuItem>Edit</DropdownMenuItem>
-    <DropdownMenuItem variant="danger">Delete</DropdownMenuItem>
+  <DropdownMenuContent align="end">
+    <DropdownMenuLabel>Actions</DropdownMenuLabel>
+    <DropdownMenuGroup>
+      <DropdownMenuItem onSelect={() => handleEdit()}>
+        <EditIcon className="mr-2 h-4 w-4" />
+        Edit
+      </DropdownMenuItem>
+      <DropdownMenuItem onSelect={() => handleDuplicate()}>
+        <CopyIcon className="mr-2 h-4 w-4" />
+        Duplicate
+      </DropdownMenuItem>
+    </DropdownMenuGroup>
+    <DropdownMenuSeparator />
+    <DropdownMenuItem variant="danger" onSelect={() => handleDelete()}>
+      <TrashIcon className="mr-2 h-4 w-4" />
+      Delete
+    </DropdownMenuItem>
   </DropdownMenuContent>
 </DropdownMenu>
 ```
 
-### Pattern 5: Controlled and Uncontrolled
+---
 
-Components that manage open/closed or value state support both modes:
+### Feedback
 
-```typescript
-// Uncontrolled (component manages its own state)
-<Modal defaultOpen trigger={<Button>Open</Button>}>
-  Content
-</Modal>
+| Component         | Usage                | Key Props                        |
+| ----------------- | -------------------- | -------------------------------- |
+| `toast.success()` | Success notification | `{ title, description, action }` |
+| `toast.error()`   | Error notification   | `{ title, description }`         |
+| `toast.info()`    | Info notification    | `{ title, description }`         |
+| `toast.warning()` | Warning notification | `{ title, description }`         |
+| `Toasts`          | Toast container      | `position`, `duration`           |
 
-// Controlled (parent manages state)
-<Modal open={isOpen} onOpenChange={setIsOpen} trigger={<Button>Open</Button>}>
-  Content
-</Modal>
+```tsx
+// Setup in app root
+<Toasts position="bottom-right" duration={5000} />;
+
+// Usage anywhere
+toast.success({
+  title: "Saved",
+  description: "Your changes have been saved.",
+  action: { label: "Undo", onClick: () => handleUndo() },
+});
+
+toast.error({
+  title: "Error",
+  description: "Failed to save changes.",
+});
 ```
 
-### className Overrides
+---
 
-All components accept a `className` prop. Classes are merged using `cn()` (clsx + tailwind-merge), so consumer classes override library defaults correctly:
+### Specialized Components
 
-```typescript
-<Button className="v:w-full">Full Width</Button>
-<Modal overlayClassName="v:bg-black/80" contentClassName="v:max-w-lg">...</Modal>
-```
+| Component                | Usage                  |
+| ------------------------ | ---------------------- |
+| `AccountBanner`          | Account status banner  |
+| `ActivityLog`            | Activity feed          |
+| `ApplicationAssignModal` | Application assignment |
+| `ApplicationResubmit`    | Resubmission UI        |
+| `ApplicationReview`      | Review interface       |
+| `FeatureIcon`            | Feature highlight icon |
+| `FileIcons`              | File type icons        |
+| `FileList`               | File listing           |
+| `Filter`                 | Single filter control  |
+| `Filters`                | Filter group           |
+| `InfoCards`              | Information cards      |
+| `PageHeader`             | Page header with title |
+| `Reviews`                | Review display         |
+| `SystemSync`             | Sync status            |
+| `TableCells`             | Pre-built table cells  |
 
-## Styling
+---
 
-### Tailwind `v:` Prefix
+## Hooks Reference
 
-All library Tailwind classes use a `v:` prefix to avoid conflicts with consumer project styles. Always use this prefix when writing styles inside the library:
+| Hook                   | Purpose                         | Returns                               |
+| ---------------------- | ------------------------------- | ------------------------------------- |
+| `useDisclosure`        | Boolean open/close state        | `{ open, onOpen, onClose, onToggle }` |
+| `useControllableState` | Controlled/uncontrolled pattern | `[value, setValue]`                   |
+| `useComposedRefs`      | Merge multiple refs             | Combined ref callback                 |
+| `useClickOutside`      | Detect outside clicks           | void                                  |
+| `useMediaQuery`        | Responsive breakpoints          | `boolean`                             |
+| `useDebounce`          | Debounce value changes          | Debounced value                       |
+| `useUrlQuery`          | URL query param sync            | `[value, setValue]`                   |
+| `useUrlQueryMocker`    | Mock URL params in tests        | Context provider                      |
 
-```typescript
-// Correct — inside library code
-"v:flex v:items-center v:gap-2 v:text-sm v:text-gray-700";
-
-// Wrong — missing prefix inside library
-"flex items-center gap-2 text-sm text-gray-700";
-```
-
-When consuming the library in an external project, your own classes do **not** need the `v:` prefix.
-
-### cn() Utility
-
-Use `cn()` to merge class names. It handles conditional classes and Tailwind conflict resolution:
-
-```typescript
-import { cn } from "@vascon-solutions/bits";
-
-cn("v:px-4 v:py-2", isActive && "v:bg-primary-600", className);
-```
-
-### CSS Modules
-
-Some complex components use CSS modules (`.module.css` files) for animations or styles that Tailwind cannot express. These are internal to the component — consumers do not interact with them.
-
-## Hooks
-
-```typescript
-import {
-  useDisclosure,
-  useControllableState,
-  useComposedRefs,
-  useClickOutside,
-  useMediaQuery,
-  useDebounce,
-  useUrlQuery,
-  useUrlQueryMocker,
-} from "@vascon-solutions/bits";
-```
-
-| Hook                   | Purpose                                                         |
-| ---------------------- | --------------------------------------------------------------- |
-| `useDisclosure`        | Boolean open/close state: `{ open, onOpen, onClose, onToggle }` |
-| `useControllableState` | Controlled/uncontrolled value with optional `onUpdate` callback |
-| `useComposedRefs`      | Merge multiple refs into one                                    |
-| `useClickOutside`      | Fire callback when click lands outside a ref element            |
-| `useMediaQuery`        | Responsive breakpoint detection                                 |
-| `useDebounce`          | Debounced value                                                 |
-| `useUrlQuery`          | Read/write URL query parameters                                 |
-| `useUrlQueryMocker`    | Mock URL query parameters in tests/stories                      |
+---
 
 ## Utilities
 
 ```typescript
-import { cn } from "@vascon-solutions/bits"; // CSS class merging
+import { cn } from "@vascon-solutions/bits";
+
+// Merge classes with Tailwind conflict resolution
+cn("px-4 py-2", isActive && "bg-primary", className);
 ```
 
-Additional utility modules exported from the library: `number`, `request`, `array`, `token`, `format`, `files`, `string`.
+Additional utilities: `number`, `request`, `array`, `token`, `format`, `files`, `string`.
+
+---
 
 ## Key Dependencies
 
-Components build on these primitives — understand them when debugging or extending:
-
-- **Radix UI** (`@radix-ui/*`) — accessible unstyled primitives (Dialog, Dropdown, Accordion, Tabs, Tooltip, etc.)
-- **TanStack Table** (`@tanstack/react-table`) — headless table with sorting, filtering, pagination
-- **TanStack Virtual** (`@tanstack/react-virtual`) — virtual scrolling for large lists
-- **TanStack Query** (`@tanstack/react-query`) — server state (used in Table stories/examples)
-- **Framer Motion** — animations
-- **Lucide React** — icons
-- **CVA** (`class-variance-authority`) — type-safe variant class generation
-- **cmdk** — command menu
-- **react-day-picker** — date picker
-- **react-dropzone** — file upload
-- **Tiptap** (`@tiptap/*`) — rich text editor
-
-## Cautions
-
-- Always use the `v:` prefix on Tailwind classes inside library source. Omitting it causes styles to silently fail.
-- Do not import from component internals (e.g., `src/components/button/button.tsx`). Import from the package root or component index.
-- Do not bypass `cn()` for className merging — direct string concatenation breaks Tailwind conflict resolution.
-- The `Table` component requires `@tanstack/react-table` column definitions. Do not try to use it with plain JSX children.
-- Components wrapping Radix UI primitives inherit Radix's controlled/uncontrolled patterns. Mixing both in the same render causes warnings.
+- **Radix UI** — Accessible primitives (Dialog, Dropdown, Accordion, Tabs, Tooltip)
+- **TanStack Table** — Headless table with sorting, filtering, pagination
+- **TanStack Virtual** — Virtual scrolling for large lists
+- **TanStack Query** — Server state management (used in Table)
+- **Sonner** — Toast notifications
+- **Tiptap** — Rich text editor
+- **react-day-picker** — Date picker
+- **react-dropzone** — File upload
