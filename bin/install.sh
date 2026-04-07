@@ -2,7 +2,7 @@
 set -eu
 
 # Install the agent-skills pack to ~/agent-skills and link skills into
-# ~/.claude/skills, ~/.codex/skills, and ~/.agents/skills.
+# ~/.claude/skills, ~/.codex/skills, ~/.cursor/skills, and ~/.agents/skills.
 #
 # Usage:
 #   # via curl (recommended for first install):
@@ -61,6 +61,7 @@ echo ""
 echo "Skills are linked into:"
 echo "  ~/.claude/skills/    (Claude Code)"
 echo "  ~/.codex/skills/     (OpenAI Codex)"
+echo "  ~/.cursor/skills/    (Cursor)"
 echo "  ~/.agents/skills/    (agents.sh and compatible tools)"
 echo ""
 echo "To update later:"

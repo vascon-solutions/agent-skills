@@ -39,12 +39,13 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 
 ## Link Targets
 
-`bin/link-skills.sh` symlinks each skill directory into three tool-specific locations:
+`bin/link-skills.sh` symlinks each skill directory into four tool-specific locations:
 
 | Target directory | Tool |
 |---|---|
 | `~/.claude/skills/<name>` | Claude Code |
 | `~/.codex/skills/<name>` | OpenAI Codex |
+| `~/.cursor/skills/<name>` | Cursor (primary) |
 | `~/.agents/skills/<name>` | agents.sh and compatible tools |
 
 Per-skill symlinks are used (not the whole `skills/` directory) so each tool's existing skills are not disturbed.
@@ -140,7 +141,7 @@ Do not consider the skill installed until step 4 is complete.
 
 ## Contributing
 
-Skills in this pack must remain framework-agnostic and contain no repo-specific paths, enums, or domain rules. Repo-specific skills belong in the project's `.agents/skills/` directory, not here.
+Skills in this pack must remain framework-agnostic and contain no repo-specific paths, enums, or domain rules. Repo-specific skills belong in the project's `.cursor/skills/` directory for Cursor, or `.agents/skills/` as a compatibility fallback, not here.
 
 To contribute a new skill or fix:
 
@@ -151,6 +152,8 @@ To contribute a new skill or fix:
 ## Compatibility Notes
 
 - The link script assumes the consuming tool discovers skills through filesystem directories and follows symlinked directories.
+- **Cursor symlinks:** Cursor had a symlink-discovery bug for home-directory skills; it was fixed in Cursor 2.5 (February 2026). Symlinks into `~/.cursor/skills` work on 2.5+. If you are on an older version, copy the skill directory directly instead.
+- **Cursor repo-local skills:** Use `.cursor/skills/` as the primary path. As of Cursor 2.5.26 (February 2026), `.agents/skills/` was not reliably discovered; Cursor staff confirmed `.agents/skills` support on March 11, 2026, but `.cursor/skills/` remains the safer default.
 - If a tool does not follow symlinks, copy the skill directory directly into that tool as a fallback — do not edit the copy; keep `~/agent-skills` as the source of truth.
 - If a skill with the same name already exists in a target location, remove or rename it before linking.
-- If an environment uses a repo-local `.agents/skills/` instead of `~/.agents/skills/`, adapt the linking target in `link-skills.sh` accordingly.
+- If an environment uses a repo-local `.cursor/skills/` or `.agents/skills/` instead of the home-directory paths, adapt the linking target in `link-skills.sh` accordingly.

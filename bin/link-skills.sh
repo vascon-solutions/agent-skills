@@ -40,6 +40,7 @@ agent-doc-handoff-review
 TARGET_DIRS="
 $HOME/.codex/skills
 $HOME/.claude/skills
+$HOME/.cursor/skills
 $HOME/.agents/skills
 "
 
