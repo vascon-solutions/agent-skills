@@ -12,6 +12,7 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 │   ├── install.sh        ← first-time install + link
 │   └── link-skills.sh    ← re-link after updates
 └── skills/
+    ├── publish-branch/
     ├── repo-docs-audit/
     ├── rewrite-docs-from-code/
     ├── repair-agent-files/
@@ -27,6 +28,7 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 
 | Skill | Purpose |
 |---|---|
+| `publish-branch` | Publish a branch or working tree safely by staging intentionally, handling push and PR flow, and avoiding accidental publication of unrelated work |
 | `repo-docs-audit` | Audit what docs should exist; produce verdicts before rewriting anything |
 | `rewrite-docs-from-code` | Write or repair project docs grounded in current code |
 | `repair-agent-files` | Create or align `AGENTS.md` and `CLAUDE.md` as a matched pair |
@@ -116,6 +118,10 @@ The link script is idempotent — it skips symlinks that already point to the co
 
 1. `task-doc` — turn a roadmap item, issue, PRD, or feature brief into a durable execution artifact
 2. Normal agent plan mode — use for small work that does not justify a maintained task doc
+
+### Publishing code safely
+
+1. `publish-branch` — inspect scope, commit intentionally, push safely, and open a draft PR when requested
 
 ### Reviewing and tracking feature work
 

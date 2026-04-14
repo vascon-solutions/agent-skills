@@ -19,6 +19,7 @@ if [ ! -d "$SKILLS_DIR" ]; then
 fi
 
 SKILL_NAMES="
+publish-branch
 repo-docs-audit
 rewrite-docs-from-code
 repair-agent-files
