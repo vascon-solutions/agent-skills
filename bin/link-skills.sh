@@ -19,6 +19,8 @@ if [ ! -d "$SKILLS_DIR" ]; then
 fi
 
 SKILL_NAMES="
+prepare-frontend-handoff
+prepare-qa-handoff
 publish-branch
 repo-docs-audit
 rewrite-docs-from-code

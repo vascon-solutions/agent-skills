@@ -13,6 +13,8 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 │   └── link-skills.sh    ← re-link after updates
 └── skills/
     ├── publish-branch/
+    ├── prepare-frontend-handoff/
+    ├── prepare-qa-handoff/
     ├── repo-docs-audit/
     ├── rewrite-docs-from-code/
     ├── repair-agent-files/
@@ -26,28 +28,30 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 
 ## Skills
 
-| Skill | Purpose |
-|---|---|
-| `publish-branch` | Publish a branch or working tree safely by staging intentionally, handling push and PR flow, and avoiding accidental publication of unrelated work |
-| `repo-docs-audit` | Audit what docs should exist; produce verdicts before rewriting anything |
-| `rewrite-docs-from-code` | Write or repair project docs grounded in current code |
-| `repair-agent-files` | Create or align `AGENTS.md` and `CLAUDE.md` as a matched pair |
-| `review-doc-changes` | Second-pass review of recent doc changes; verify against code |
-| `review-task-docs` | Independently review task docs for executability, scope control, and whether they should be split |
-| `repo-skill-scan` | Scan a repo for repeated patterns; recommend skills, commands, or no action |
-| `roadmap-todo` | Create and maintain durable roadmap or todo files for feature-grade work across repos |
-| `scaffold-repo-skill` | Write an approved skill, command, or script candidate with correct structure and wiring |
-| `task-doc` | Create durable task documents for feature-grade work and reject small work that should stay in normal plan mode |
+| Skill                      | Purpose                                                                                                                                                                                                       |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `prepare-frontend-handoff` | Prepare implementation handoff notes for frontend developers, including API contracts, screen behavior, route state, form mapping, query/cache behavior, UI states, migration steps, and retired dependencies |
+| `prepare-qa-handoff`       | Prepare QA sign-off notes for features with lifecycle flows, endpoint touchpoints, expected behavior, negative coverage, and release validation scope                                                         |
+| `publish-branch`           | Publish a branch or working tree safely by staging intentionally, handling push and PR flow, and avoiding accidental publication of unrelated work                                                            |
+| `repo-docs-audit`          | Audit what docs should exist; produce verdicts before rewriting anything                                                                                                                                      |
+| `rewrite-docs-from-code`   | Write or repair project docs grounded in current code                                                                                                                                                         |
+| `repair-agent-files`       | Create or align `AGENTS.md` and `CLAUDE.md` as a matched pair                                                                                                                                                 |
+| `review-doc-changes`       | Second-pass review of recent doc changes; verify against code                                                                                                                                                 |
+| `review-task-docs`         | Independently review task docs for executability, scope control, and whether they should be split                                                                                                             |
+| `repo-skill-scan`          | Scan a repo for repeated patterns; recommend skills, commands, or no action                                                                                                                                   |
+| `roadmap-todo`             | Create and maintain durable roadmap or todo files for feature-grade work across repos                                                                                                                         |
+| `scaffold-repo-skill`      | Write an approved skill, command, or script candidate with correct structure and wiring                                                                                                                       |
+| `task-doc`                 | Create durable task documents for feature-grade work and reject small work that should stay in normal plan mode                                                                                               |
 
 ## Link Targets
 
 `bin/link-skills.sh` symlinks each skill directory into four tool-specific locations:
 
-| Target directory | Tool |
-|---|---|
-| `~/.claude/skills/<name>` | Claude Code |
-| `~/.codex/skills/<name>` | OpenAI Codex |
-| `~/.cursor/skills/<name>` | Cursor (primary) |
+| Target directory          | Tool                           |
+| ------------------------- | ------------------------------ |
+| `~/.claude/skills/<name>` | Claude Code                    |
+| `~/.codex/skills/<name>`  | OpenAI Codex                   |
+| `~/.cursor/skills/<name>` | Cursor (primary)               |
 | `~/.agents/skills/<name>` | agents.sh and compatible tools |
 
 Per-skill symlinks are used (not the whole `skills/` directory) so each tool's existing skills are not disturbed.
@@ -122,6 +126,11 @@ The link script is idempotent — it skips symlinks that already point to the co
 ### Publishing code safely
 
 1. `publish-branch` — inspect scope, commit intentionally, push safely, and open a draft PR when requested
+
+### Preparing handoffs
+
+1. `prepare-qa-handoff` — write QA/ClickUp sign-off notes without leaking implementation details
+2. `prepare-frontend-handoff` — write implementation handoffs for frontend developers when API contracts or UI migration behavior changes
 
 ### Reviewing and tracking feature work
 
