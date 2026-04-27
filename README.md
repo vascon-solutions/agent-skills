@@ -15,6 +15,7 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
     ├── publish-branch/
     ├── prepare-frontend-handoff/
     ├── prepare-qa-handoff/
+    ├── qa-triage-and-fix/
     ├── repo-docs-audit/
     ├── rewrite-docs-from-code/
     ├── repair-agent-files/
@@ -32,6 +33,7 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `prepare-frontend-handoff` | Prepare implementation handoff notes for frontend developers, including API contracts, screen behavior, route state, form mapping, query/cache behavior, UI states, migration steps, and retired dependencies |
 | `prepare-qa-handoff`       | Prepare QA sign-off notes for features with lifecycle flows, endpoint touchpoints, expected behavior, negative coverage, and release validation scope                                                         |
+| `qa-triage-and-fix`        | Triage QA reports issue-by-issue, reproduce or contest findings with evidence, implement focused fixes, update authorized report fields, and record validation                                                |
 | `publish-branch`           | Publish a branch or working tree safely by staging intentionally, handling push and PR flow, and avoiding accidental publication of unrelated work                                                            |
 | `repo-docs-audit`          | Audit what docs should exist; produce verdicts before rewriting anything                                                                                                                                      |
 | `rewrite-docs-from-code`   | Write or repair project docs grounded in current code                                                                                                                                                         |
@@ -131,6 +133,10 @@ The link script is idempotent — it skips symlinks that already point to the co
 
 1. `prepare-qa-handoff` — write QA/ClickUp sign-off notes without leaking implementation details
 2. `prepare-frontend-handoff` — write implementation handoffs for frontend developers when API contracts or UI migration behavior changes
+
+### Handling QA reports
+
+1. `qa-triage-and-fix` — triage each QA issue, fix real bugs, contest unsupported findings with evidence, and update authorized report fields
 
 ### Reviewing and tracking feature work
 

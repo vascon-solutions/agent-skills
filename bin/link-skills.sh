@@ -21,6 +21,7 @@ fi
 SKILL_NAMES="
 prepare-frontend-handoff
 prepare-qa-handoff
+qa-triage-and-fix
 publish-branch
 repo-docs-audit
 rewrite-docs-from-code
