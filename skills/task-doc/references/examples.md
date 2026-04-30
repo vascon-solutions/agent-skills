@@ -86,3 +86,121 @@ Why it should be rejected:
 - the work is too small
 - a durable task artifact adds no real value
 - normal plan mode is enough
+
+## Example 6: Populated Implementation-Oriented Task
+
+User request:
+
+`Create a task doc for moving API clients from the legacy auth header to bearer tokens.`
+
+Abbreviated output:
+
+```markdown
+# Bearer Token API Client Migration
+
+## Objective
+
+Move internal API clients from the legacy `x-api-token` header to standard bearer-token authentication without changing endpoint authorization semantics.
+
+## Source Context
+
+Source mode: `brief`.
+
+This task is synthesized from a user request and codebase findings in the API client and auth middleware.
+
+## Design Reference
+
+- Source Spec: `docs/api-auth-migration.md`
+- `docs/security.md`
+
+## Architecture Summary
+
+The API already validates bearer tokens at the shared middleware boundary. This task updates internal clients to send the existing access token through the standard `Authorization` header while preserving the same downstream permission checks.
+
+## Code Evidence
+
+| Behavior | Source |
+|---|---|
+| Bearer tokens are parsed by shared auth middleware | `src/auth/jwt.strategy.ts#JwtStrategy` |
+| Legacy clients still set `x-api-token` | `src/clients/internal-api.client.ts#InternalApiClient` |
+
+## Current Behavior To Preserve
+
+- Endpoint authorization and permission semantics must not change.
+- Existing response handling and retry behavior must remain unchanged.
+- Server-side support for `x-api-token` must remain available until the follow-up removal task.
+
+## Prerequisites
+
+- Existing access tokens are available to internal clients.
+
+## Scope
+
+- Update internal API clients to send `Authorization: Bearer <token>`.
+- Remove legacy header use from updated clients.
+- Add tests proving the new header is sent.
+
+## Excluded
+
+- Do not remove server support for `x-api-token`.
+- Do not change token signing, session validation, or permissions.
+
+## Pre-Implementation Verification
+
+- Confirm bearer-token middleware still exists.
+- Confirm each client still has access to the token source before changing it.
+
+## Likely Files To Touch
+
+- `src/clients/internal-api.client.ts`
+- `src/clients/internal-api.client.spec.ts`
+
+## Decisions Required Before Implementation
+
+None.
+
+## Execution Rules
+
+- Preserve existing response handling and retry behavior.
+- Do not broaden endpoint access while changing headers.
+
+## Deliverables
+
+- Updated client header behavior.
+- Focused tests for the changed client.
+
+## Completion Verification
+
+- Tests fail before the client change and pass after it.
+- No client sends both old and new headers unless explicitly required by compatibility code.
+
+## Approval Gates
+
+None. Security review applies to the follow-up task that removes server support for `x-api-token`.
+
+## Completion Criteria
+
+The task is complete when internal clients send bearer tokens and focused tests pass.
+
+## Follow-ups
+
+- Separate task to remove server-side legacy header support after clients deploy.
+```
+
+## Example 7: Task With Open Decisions
+
+Use this shape when implementation is blocked by a real product, security, or architecture choice:
+
+```markdown
+## Decisions Required Before Implementation
+
+- **Token rotation cadence**
+  - Options: (a) rotate per session, (b) rotate every 24 hours, (c) rotate only on privilege change.
+  - Implications: (a) shortest exposure window with more Redis writes and more frequent client refreshes; (b) balanced operational cost and risk; (c) lowest runtime overhead but longest exposure window if a token leaks.
+  - Resolver: security review and platform auth owner.
+
+- **Public key distribution**
+  - Options: (a) JWKS endpoint with cache headers, (b) static public key through deployment config.
+  - Implications: (a) supports key rotation without redeploying every verifier; (b) simpler rollout but key rotation requires coordinated config deployment.
+  - Resolver: platform architecture decision before implementation starts.
+```
