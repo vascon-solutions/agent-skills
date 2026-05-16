@@ -279,6 +279,28 @@ No CLAUDE.md or AGENTS.md configuration. Two options only: explicit arg or the d
 
 ---
 
+## Follow-up: `markdown-artifact` Skill
+
+**Design separately after `html-artifact` ships.**
+
+`markdown-artifact` is the companion skill that generates Markdown documents from scratch — any topic, idea, spec, brief, or task plan, scoped to a repo or not. Where `html-artifact` renders existing docs, `markdown-artifact` produces the source.
+
+**Intended use cases:**
+- Brainstorming a new app or product idea
+- CTO concept briefs for a team
+- Documentation on any topic (not repo-bound)
+- Computer use task plans
+- Specs and proposals for distributed/side-gig teams
+
+**Key design decisions to resolve in that brainstorm:**
+- Doc-type detection (app spec vs concept brief vs how-to vs task plan)
+- Audience awareness (technical team vs stakeholders vs distributed collaborators)
+- Output destination: `~/agent-artifacts/markdown-docs/<type>/` or similar
+- Whether `markdown-artifact` automatically calls `html-artifact` at the end, or leaves that as a separate opt-in
+- Relationship to existing repo-scoped skills (`task-doc`, `roadmap-todo`) — when does the user reach for `markdown-artifact` vs those
+
+---
+
 ## Success Criteria
 
 - Running `html-artifact` on any `.md` file produces a valid, self-contained `.html` file
