@@ -300,6 +300,40 @@ The Markdown remains the source of truth. HTML is derived output.
 
 ---
 
+## Relationship To Future Image Artifacts
+
+`image-artifact` is a future companion skill, not part of `markdown-artifact`.
+
+It should convert an existing Markdown source document into generated image outputs under the same workspace:
+
+```text
+~/agent-artifacts/<artifact-slug>/
+├── markdown/
+│   └── ui-component-design.md
+├── html/
+├── images/
+│   ├── ui-component-design-summary.png
+│   ├── variant-a.png
+│   ├── variant-b.png
+│   └── comparison-board.png
+└── metadata.md
+```
+
+The image generation provider should be tool-agnostic. Use whatever image-generation capability is available in the agent environment and appropriate for the request. Do not require a specific vendor or model in the skill contract.
+
+Good use cases for a future `image-artifact`:
+
+- one-page visual summaries from concept docs
+- UI design variant boards
+- architecture or API flow infographics
+- concept comparison boards
+- pitch-card or poster-style summaries
+- visual decision aids for choosing between variants
+
+`markdown-artifact` may optionally mention that an image companion can be generated when the source doc clearly benefits from a visual summary or variant board, but it should not generate images itself.
+
+---
+
 ## Workflow
 
 1. Receive the prompt, notes, path, or codebase context.
