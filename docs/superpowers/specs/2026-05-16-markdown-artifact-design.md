@@ -66,9 +66,34 @@ Do not use `markdown-artifact` when a more specific skill owns the outcome:
 - Use `prepare-qa-handoff` for QA sign-off notes.
 - Use `prepare-frontend-handoff` for frontend developer handoffs.
 - Use `html-artifact` when the Markdown already exists and the user only wants HTML output.
+- Use the existing `brainstorming` and `writing-plans` workflow for repo implementation specs and execution plans.
 - Use normal implementation workflows when the user asks to build or change code directly.
 
 If a `markdown-artifact` output becomes execution-ready implementation work, recommend creating a follow-up `task-doc` instead of bloating the artifact.
+
+---
+
+## Relationship To `docs/superpowers/`
+
+`docs/superpowers/` is the internal agent execution control plane for the current repository. It holds specs and plans created by the existing Superpowers workflow:
+
+```text
+brainstorming -> docs/superpowers/specs/<date>-<topic>-design.md
+writing-plans -> docs/superpowers/plans/<date>-<topic>.md
+```
+
+`markdown-artifact` is different. It creates portable, user-facing artifact workspaces under:
+
+```text
+~/agent-artifacts/<artifact-slug>/
+```
+
+Use this boundary:
+
+- If the user is designing or planning implementation work for the current repo, defer to `brainstorming` and then `writing-plans`.
+- If the user wants an exploratory artifact, product concept, UI/backend design option, proposal, or shareable Markdown source doc, use `markdown-artifact`.
+- Do not write to `docs/superpowers/` from `markdown-artifact` unless the user explicitly asks for a Superpowers implementation spec or plan.
+- Do not create replacement versions of `brainstorming` or `writing-plans`; reference and defer to the existing skills.
 
 ---
 
@@ -329,6 +354,7 @@ Then include the optional HTML companion invitation.
 - Do not turn every generated artifact into a task doc.
 - Do not overwrite existing artifacts without confirmation.
 - Do not force everything under an `ideas/` root.
+- Do not write to `docs/superpowers/` unless the user explicitly asks for a Superpowers spec or plan.
 - Do not initialize a Git repo unless the user explicitly requests it and confirms.
 - Keep the Markdown source authoritative; HTML is optional derived output.
 - Prefer explicit assumptions over invented detail.
