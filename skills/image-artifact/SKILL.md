@@ -25,6 +25,7 @@ Accept any of:
 - optional `--workspace <slug-or-path>`
 - optional `--variants <n>`
 - optional `--force`
+- optional `--use-repo-design`
 
 Do not invent source content. If required visual facts are missing, mark them as assumptions in the prompt plan or ask one focused question before generating.
 
@@ -78,6 +79,24 @@ Treat `--workspace` as a path when the value contains `/`, starts with `.`, or s
 
 Create missing directories automatically. If a target file exists, ask before overwriting unless the user provided `--force` or explicitly requested replacement. When refreshing from changed Markdown without `--force`, write a versioned file such as `-2`, `-v2`, or a dated suffix. For variants, append `-variant-a`, `-variant-b`, or descriptive slugs.
 
+## Repo Design Context
+
+Default to neutral visual direction. Only scan and apply repo design context when the user passes `--use-repo-design`.
+
+Invoke the `repo-design-context` skill to resolve scan root, discovery precedence, confidence, and reporting. Pass the source Markdown path or captured title, optional output kind, explicit repo path if the user provided one, artifact target such as `image companion` or `architecture diagram`, and current working directory.
+
+Use only high-confidence findings in the prompt plan:
+
+- palette, typography, spacing, and UI tone as visual style hints
+- real service, module, endpoint, entity, and DTO names in architecture/API diagrams
+- existing diagram vocabulary when it matches the source Markdown
+
+Medium or low confidence means neutral visual direction. No `--neutral` flag is needed because neutral is the default when `--use-repo-design` is absent or confidence is not high.
+
+Repo context applies globally to the prompt plan by default. If variants intentionally target different products, themes, or architectures, record per-variant repo context inside each variant block; otherwise do not repeat the same context in every variant.
+
+Do not present generated images as officially branded or exact architecture truth just because repo context was scanned.
+
 ## Prompt Plan
 
 Before generating images, derive a short prompt plan from the Markdown:
@@ -92,6 +111,7 @@ Before generating images, derive a short prompt plan from the Markdown:
 - text to avoid or keep minimal
 - assumptions
 - variant source and count when generating multiple variants
+- repo design context and confidence when `--use-repo-design` is provided
 
 Write the prompt plan to `images/<source-stem>-prompt-plan.md` when generation is complex, has multiple variants, or image generation is unavailable.
 
@@ -159,6 +179,22 @@ Use the active tool name when known. Use `unknown` when it is not known. If meta
 
 Record the tool actually invoked, such as the active image tool or model name returned by the environment. Do not guess a vendor name from the visual style or from general platform knowledge.
 
+When `--use-repo-design` is provided, record repo-design state near the artifact row without changing an existing table shape:
+
+```markdown
+Repo design context: found <signals>; applied <tokens/vocabulary or neutral default>; confidence <high|medium|low>
+```
+
+Do not add a `Repo Design` column to existing `Type | Markdown | HTML | Images` tables. Keep that table shape stable and add the repo-design note as nearby prose.
+
+If using the image-only `Type | Source | Output | Tool` table and creating it from scratch, add a `Repo Design` column:
+
+```markdown
+| Type | Source | Output | Tool | Repo Design |
+|---|---|---|---|---|
+| architecture-diagram | `markdown/backend-design.md` | `images/backend-design-architecture.png` | `unknown` | `found API services; applied service names; confidence high` |
+```
+
 ## Workflow
 
 1. Receive Markdown, workspace, pasted source, or explicit source.
@@ -166,14 +202,15 @@ Record the tool actually invoked, such as the active image tool or model name re
 3. Determine output kind from `--kind` or source signals.
 4. Resolve workspace and output destination.
 5. Read Markdown and extract the visual brief.
-6. Build a prompt plan with assumptions and variant definitions when needed.
-7. Handle existing target files: confirm replacement, honor `--force`, or choose a versioned filename.
-8. If generation is unavailable, write a `prompt-pack` Markdown file and stop.
-9. Generate the image artifact or artifacts with the available tool.
-10. Save outputs under `images/` or the explicit `--out`.
-11. Update `metadata.md` when using a workspace.
-12. Verify outputs.
-13. Report concise paths.
+6. If `--use-repo-design` is provided, scan repo design context and decide whether confidence is high enough to apply.
+7. Build a prompt plan with assumptions, variant definitions, and repo design context when needed.
+8. Handle existing target files: confirm replacement, honor `--force`, or choose a versioned filename.
+9. If generation is unavailable, write a `prompt-pack` Markdown file and stop.
+10. Generate the image artifact or artifacts with the available tool.
+11. Save outputs under `images/` or the explicit `--out`.
+12. Update `metadata.md` when using a workspace.
+13. Verify outputs.
+14. Report concise paths and repo design context when scanned.
 
 ## Validation
 
@@ -185,6 +222,7 @@ Before reporting complete, verify:
 - no unrelated source Markdown was modified
 - `metadata.md` includes the image artifact when using a workspace
 - each variant file has a clear name and maps to the prompt plan
+- if `--use-repo-design` was provided, prompt plan and final report list discovered signals, applied context, and confidence
 
 When possible, visually inspect generated images or produce a thumbnail/contact-sheet check.
 
@@ -204,6 +242,9 @@ Report:
 Written: ~/agent-artifacts/<slug>/images/<name>.png (<kind>)
 Source: ~/agent-artifacts/<slug>/markdown/<source>.md
 Metadata: ~/agent-artifacts/<slug>/metadata.md
+Repo design context: found Tailwind config and API service names; applied palette/service vocabulary; confidence high
+Repo design context: found likely app theme and duplicate service names; applied neutral default; confidence medium
+Repo design context: found multiple themes; applied neutral default; confidence low
 ```
 
 If generation is unavailable:
@@ -223,3 +264,4 @@ Image generation unavailable in this environment.
 - Do not overwrite image artifacts without confirmation or `--force`.
 - Do not create Git repos in artifact workspaces unless explicitly requested and confirmed.
 - Do not write to `docs/superpowers/` unless the user explicitly asks for a Superpowers spec or plan.
+- Do not apply repo design context from ambiguous signals. Prefer neutral output unless confidence is high.
