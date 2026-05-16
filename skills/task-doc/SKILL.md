@@ -150,6 +150,14 @@ If the user specified a path, write the file there. Otherwise, if the repo has a
 
 Do not implement. Do not start coding.
 
+## HTML Companion
+
+After the task document is written (or a refusal is issued), append this as a separate follow-up line — not part of the task document itself:
+
+> "HTML companion available. Run `html-artifact` on this file for a browser-ready version. (yes / skip)"
+
+If the user says yes, invoke `html-artifact` on the output path. This is a post-completion affordance. It does not modify the task document, does not count as commentary, and does not affect the "Produce exactly one of" output contract above.
+
 ## Cautions
 
 - Turning small work into heavyweight ceremony
