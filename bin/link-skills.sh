@@ -33,6 +33,7 @@ roadmap-todo
 scaffold-repo-skill
 task-doc
 html-artifact
+markdown-artifact
 "
 
 # Skills removed in this version — unlink them if they still exist as symlinks
