@@ -95,6 +95,14 @@ Use this boundary:
 - Do not write to `docs/superpowers/` from `markdown-artifact` unless the user explicitly asks for a Superpowers implementation spec or plan.
 - Do not create replacement versions of `brainstorming` or `writing-plans`; reference and defer to the existing skills.
 
+If `brainstorming` or `writing-plans` is not installed in the current agent environment, degrade safely:
+
+- State that the specialized Superpowers skill is unavailable.
+- Do not write to `docs/superpowers/` by default.
+- For implementation-ready repo work, either ask whether to continue with a plain Markdown artifact under `~/agent-artifacts/<slug>/` or advise installing the missing skill.
+- For exploratory work, continue with `markdown-artifact` normally.
+- Do not silently imitate the missing skill's full workflow; keep the output clearly labeled as an artifact, not an official Superpowers spec or implementation plan.
+
 ---
 
 ## Inputs
