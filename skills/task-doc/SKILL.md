@@ -38,6 +38,7 @@ When not using this skill, default to normal plan mode and say so.
 - **Reject small work.** If the work does not justify a durable artifact, refuse and recommend plan mode. This is not optional — agents default to creating what was asked; this skill must override that instinct.
 - **Prefer omission over invention.** Do not add scope, requirements, or features the source did not ask for. When in doubt, leave it out and add it to Excluded.
 - **Exclusions are mandatory.** Every task doc must have an Excluded section. Missing exclusions invite scope creep during implementation.
+- **Implementation orientation sections are mandatory.** Include the sections for design references, architecture summary, code evidence, current behavior to preserve, likely files to touch, and decisions required before implementation. Use `None` when the source genuinely lacks the input; do not invent context to satisfy a heading.
 - **Split conservatively.** Only decompose when the task contains multiple independently shippable outcomes with different verification or risk profiles. Do not split for minor sequencing or obvious implementation steps.
 
 ## Required Inputs
@@ -65,7 +66,7 @@ See [references/source-modes.md](references/source-modes.md).
 
 ### Choose generation style
 
-Use `transform-only` when the source is already authoritative and bounded. Transform-only restructures the source into task-doc format without adding scope, requirements, or assumptions.
+Use `transform-only` when the source is already authoritative and bounded. Transform-only restructures the source into task-doc format without adding scope, requirements, or assumptions. Codebase reading is still allowed in transform-only mode when it only verifies existing behavior, identifies reusable patterns, or fills implementation-orientation sections; it must not expand the task.
 
 Use `synthesized` when the source is incomplete and the task must be inferred from multiple inputs. In synthesized mode:
 
@@ -77,7 +78,20 @@ Use `synthesized` when the source is incomplete and the task must be inferred fr
 
 - Separate included scope from excluded scope
 - Keep implementation detail out of the objective unless it is already part of the source
+- Preserve the difference between design intent and execution guidance: task docs should orient implementers without becoming line-by-line implementation plans
+- Treat **Excluded** as work that will not ship in this task. Treat **Follow-ups** as separate future tasks, including excluded work that may become valid later. Approval gates for excluded follow-up work belong in the follow-up task, not the current one.
 - Add approval gates only for: security, auth, compliance, finance, destructive data work, infra changes, or permission model changes
+
+### Add implementation orientation
+
+Every task doc should carry enough context for an implementing agent to start safely without hidden chat history.
+
+- **Design Reference:** Link to authoritative specs, roadmaps, PRDs, issues, or task source docs. If the task is derived from a spec, include `Source Spec: <path>`. If the source is only the user brief, say so.
+- **Architecture Summary:** Give a compact explanation of the intended approach and system boundary. This should be shorter than a spec, but clear enough to prevent wrong architecture.
+- **Code Evidence:** Cite files for read-only claims about current behavior, patterns, dependencies, or service ownership. Prefer file plus symbol/section; add line numbers when a claim depends on a narrow implementation detail. Do not cite code when the task is pure product discovery and no codebase claim is being made.
+- **Current Behavior To Preserve:** List invariants, contracts, guardrails, user-visible behavior, or compliance behavior that must remain true after implementation. Use `None` only when there is no current behavior constraint.
+- **Likely Files To Touch:** List probable write targets or inspection points for new work. This is orientation, not a mandate to edit every file and not a substitute for code evidence.
+- **Decisions Required Before Implementation:** List unresolved choices that block safe execution. Each unresolved decision must include at least two realistic options, implications or tradeoffs, and who or what should resolve it. If none remain, explicitly say `None`. If this section is non-empty, the implementing agent must resolve those decisions before writing code.
 
 ### Decide on decomposition
 
@@ -118,6 +132,10 @@ Before declaring complete, verify:
 - the work is large enough to deserve a durable artifact (re-check the rejection gate)
 - the task is not silently hiding multiple major sub tasks
 - scope and excluded items are both present
+- design references, architecture summary, code evidence, current behavior to preserve, likely files, and decision points are present and useful
+- spec-derived tasks include a `Source Spec` reference
+- non-empty decision points include options, implications, and a resolver, and are explicit blockers rather than implementation-time suggestions
+- excluded work is not mixed into current-task approval gates, deliverables, or completion criteria
 - the doc can be executed by another agent without relying on hidden chat context
 - any proposed sub tasks are real separable workstreams, not implementation steps
 
@@ -132,10 +150,23 @@ If the user specified a path, write the file there. Otherwise, if the repo has a
 
 Do not implement. Do not start coding.
 
+## HTML Companion
+
+After the task document is written (or a refusal is issued), append this as a separate follow-up line — not part of the task document itself:
+
+> "HTML companion available. Run `html-artifact` on this file for a browser-ready version. (yes / skip)"
+
+If the user says yes, invoke `html-artifact` on the output path. This is a post-completion affordance. It does not modify the task document, does not count as commentary, and does not affect the "Produce exactly one of" output contract above.
+
 ## Cautions
 
 - Turning small work into heavyweight ceremony
 - Inventing requirements that were never in the source
+- Inventing architecture choices or code evidence to fill mandatory sections
+- Omitting behavior invariants for load-bearing code such as auth, payments, workflow, permissions, or migrations
+- Listing likely files from guesswork when codebase inspection is required
+- Turning Likely Files To Touch into a stealth implementation plan
+- Putting approval gates, deliverables, or completion criteria for excluded follow-up work in the current task
 - Hiding assumptions inside assertive wording
 - Collapsing multiple major workstreams into one vague task
 - Omitting exclusions

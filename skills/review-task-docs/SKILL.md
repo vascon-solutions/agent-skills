@@ -38,11 +38,18 @@ Do not use when:
 Audit for:
 
 - **Bounded objective** — is this one task, not a disguised program of work?
-- **Scope discipline** — are included and excluded items explicit? Missing exclusions are a risk.
+- **Design Reference** — does it link to the authoritative specs, roadmap, PRD, issue, or source brief the implementer should follow, including `Source Spec` when the task is derived from a spec?
+- **Architecture Summary** — does it state the intended approach and system boundary clearly enough to prevent wrong implementation choices?
+- **Code Evidence** — are codebase claims backed by file references rather than memory or assertion, using file plus symbol/section and line numbers for narrow implementation details?
+- **Current Behavior To Preserve** — does it capture invariants, contracts, or user/compliance behavior that must remain true after implementation?
+- **Scope discipline** — are included and excluded items explicit, with Excluded limited to work that will not ship in this task and Follow-ups kept as separate future tasks? Missing exclusions are a risk.
 - **Executability** — could another agent act on this without hidden context?
+- **Likely Files To Touch** — does it orient the implementer to probable files/directories without pretending to be a complete implementation plan?
+- **Decisions Required Before Implementation** — are unresolved choices called out before implementation starts with options, implications, and a resolver, and are they treated as blockers before code changes?
 - **Assumptions** — are they labeled and limited, or buried in assertive wording?
-- **Verification quality** — do checklist items prove completion, or restate intent?
-- **Approval gates** — present where needed, absent where not?
+- **Verification quality** — do Pre-Implementation Verification items re-check drift-prone assumptions, and do Completion Verification items prove the finished task rather than restating intent?
+- **Approval gates** — present where needed, absent where not, and not aimed only at excluded follow-up work?
+- **Completion Criteria** — does completion depend only on current-task deliverables, not excluded or follow-up work?
 - **Decomposition** — does this hide multiple independently shippable outcomes that should be split?
 
 ## Verdicts
@@ -50,9 +57,24 @@ Audit for:
 Assign exactly one:
 
 - `accept` — ready to execute as written
-- `trim` — broadly correct but overscoped or over-specified
+- `revise` — broadly correct but needs targeted additions, removals, or clarification before execution
 - `split` — contains multiple real sub tasks that should be separate docs
 - `rewrite` — not safe to execute; needs a new draft
+
+Use these thresholds:
+
+- Missing or fabricated Architecture Summary for implementation work: `rewrite`.
+- Codebase claims without Code Evidence in a code-dependent task: `rewrite`. A code-dependent task changes code or depends on current code behavior; pure product discovery is not code-dependent.
+- Narrow implementation claims without line-level or symbol-level evidence: `revise`.
+- Missing Current Behavior To Preserve for load-bearing code such as auth, payments, workflow, permissions, migrations, or public APIs: `rewrite`.
+- Non-empty Decisions Required Before Implementation that are not treated as blockers or lack options, implications, and a resolver: `rewrite`.
+- Missing Excluded section: `rewrite`.
+- Missing Source Spec when the task is explicitly derived from a spec: `revise`.
+- Missing Design Reference when another authoritative source exists: `revise`.
+- Missing or weak Likely Files To Touch when the task is otherwise executable: `revise`.
+- Approval gates, deliverables, or completion criteria aimed only at excluded follow-up work: `revise`.
+- Multiple independently shippable outcomes: `split`.
+- Extra implementation detail that bloats the doc but does not make it unsafe: `revise`.
 
 ## Workflow
 
@@ -78,3 +100,5 @@ Produce only:
 - Do not treat section completeness as proof of quality.
 - Do not split work into tiny implementation steps — only real separable workstreams.
 - Do not preserve a bloated task because the feature sounds important.
+- Do not accept completion criteria that depend on excluded or future work.
+- Do not accept vague open decisions that lack options, implications, and a resolver.

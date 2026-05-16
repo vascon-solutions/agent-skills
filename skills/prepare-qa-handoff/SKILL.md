@@ -123,3 +123,4 @@ When done, report:
 - Key behavioral clarifications made.
 - Validation run.
 - Validation not run and why.
+- HTML companion available — run `html-artifact` on the handoff file for a browser-ready version with state timeline and endpoint tables. (yes / skip)

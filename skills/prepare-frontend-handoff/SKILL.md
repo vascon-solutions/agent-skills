@@ -144,3 +144,4 @@ When done, report:
 - Key model or contract shifts.
 - Validation run.
 - Validation not run and why.
+- HTML companion available — run `html-artifact` on the handoff file for a tabbed browser-ready version with API surface, checklist, and retired dependencies. (yes / skip)
