@@ -51,6 +51,8 @@ Use `markdown-artifact` when the user wants to create a durable Markdown artifac
 - architecture alternatives and tradeoffs
 - data model sketches
 - rollout or migration plans
+- learning guides or tutorials
+- operational task plans for a person or computer-use agent
 - rough notes that need to become a polished source doc
 
 Use it for early-stage and mid-stage thinking where the output is a shareable source document, not immediate implementation.
@@ -164,6 +166,9 @@ If the target Markdown file already exists, ask before overwriting. If the user 
 | `architecture-options` | `architecture-options.md` | Multiple technical approaches need comparison and recommendation |
 | `data-model-design` | `data-model-design.md` | Entities, relationships, lifecycle, migrations, or retention need a design |
 | `rollout-plan` | `rollout-plan.md` | Delivery sequencing, validation, rollout, rollback, or risk controls need a plan |
+| `learning-guide` | `learning-guide.md` | A topic needs structured explanation, examples, exercises, or study flow |
+| `tutorial` | `tutorial.md` | A user needs step-by-step instruction to complete a concrete outcome |
+| `task-plan` | `task-plan.md` | A person or computer-use agent needs operational steps, checkpoints, and fallbacks |
 | `generic` | `document.md` | Fallback for polished Markdown not covered above |
 
 The skill may create multiple documents in the same workspace when the user asks for a bundle, such as an idea brief plus UI and backend designs.
@@ -176,6 +181,7 @@ Every generated document should include:
 
 - title
 - purpose
+- audience
 - source context
 - assumptions
 - main content sections appropriate to the doc type
@@ -183,6 +189,23 @@ Every generated document should include:
 - next recommended artifact or action
 
 Do not invent certainty. Mark assumptions and recommendations explicitly.
+
+## Audience Handling
+
+Audience is a variable, not a doc type. Do not hardcode title-specific document types such as a named executive brief. Instead, shape tone, depth, vocabulary, examples, and level of detail around the intended reader.
+
+Common audiences:
+
+- technical team
+- non-technical stakeholders
+- client or buyer
+- learner or student
+- operator or support team
+- executive reviewer
+- solo founder or product owner
+- distributed team
+
+If the audience is unclear and it materially changes the artifact, ask one focused question. Otherwise infer a reasonable audience from the request and label it under `Assumptions`.
 
 ### `idea-brief`
 
@@ -286,6 +309,49 @@ Include:
 - communication notes
 - owners or decision points if known
 
+### `learning-guide`
+
+Include:
+
+- learning objectives
+- intended audience and assumed level
+- prerequisites
+- concept map
+- explanation sections
+- examples
+- exercises or practice prompts
+- knowledge checks
+- common misunderstandings
+- next learning steps
+
+### `tutorial`
+
+Include:
+
+- outcome
+- intended audience and assumed level
+- prerequisites and materials
+- step-by-step instructions
+- expected result for each major step
+- screenshots or image-artifact opportunities when useful
+- troubleshooting
+- completion check
+- next steps
+
+### `task-plan`
+
+Include:
+
+- task objective
+- actor: human, computer-use agent, or both
+- prerequisites and required access
+- step-by-step sequence
+- checkpoints and expected observations
+- decision points
+- fallback or escalation steps
+- safety constraints
+- final output or completion signal
+
 ---
 
 ## Relationship To `html-artifact`
@@ -295,6 +361,14 @@ After writing Markdown, append an opt-in line:
 > "HTML companion available. Run `html-artifact` on this Markdown file for a browser-ready version. (yes / skip)"
 
 If the user says yes, invoke `html-artifact` on the generated Markdown file and direct its output into the same workspace's `html/` folder.
+
+Use an explicit `--out` argument. Do not rely on `html-artifact`'s default destination, because its standalone default may resolve to a repo/doc-type folder instead of the current artifact workspace.
+
+Example:
+
+```text
+html-artifact ~/agent-artifacts/<slug>/markdown/<doc-type>.md --out ~/agent-artifacts/<slug>/html/<doc-type>.html
+```
 
 The Markdown remains the source of truth. HTML is derived output.
 
@@ -373,10 +447,10 @@ Create or update `metadata.md` in each workspace:
 
 | Type | Markdown | HTML |
 |---|---|---|
-| idea-brief | `markdown/idea-brief.md` | `html/idea-brief.html` |
+| idea-brief | `markdown/idea-brief.md` | |
 ```
 
-Only list files that exist. Update the table when new Markdown or HTML artifacts are created.
+Only list files that exist. Leave the HTML cell empty until the corresponding HTML file exists. Update the table when new Markdown, HTML, or image artifacts are created.
 
 ---
 
