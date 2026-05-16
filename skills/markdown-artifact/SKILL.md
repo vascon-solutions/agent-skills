@@ -141,6 +141,16 @@ These universal fields are additive. They do not get replaced by doc-type requir
 
 Do not invent certainty. Mark assumptions and recommendations explicitly.
 
+## Clarification Before Writing
+
+Do not invoke the full `brainstorming` skill by default. `brainstorming` is for repo implementation specs that end at `writing-plans`; this skill creates portable artifacts.
+
+Ask at most one focused question, and only when missing information would materially change the artifact: audience (developer vs. stakeholder), doc-type ambiguity, single-option vs. comparison, or whether source code context is required. Otherwise proceed, label assumptions explicitly, and list open questions in the document.
+
+If the input is too vague even with assumptions, ask one question or write a deliberately thin artifact with the gaps called out.
+
+Use `brainstorming` only when the user explicitly asks to brainstorm/spec a feature, or the request is repo implementation planning that belongs under `docs/superpowers/`.
+
 ## Relationship To `docs/superpowers/`
 
 `docs/superpowers/` is the internal agent execution control plane for the current repository:
@@ -190,13 +200,14 @@ If Markdown was written through `--out`, substitute the resolved Markdown path a
 
 1. Receive prompt, notes, path, or codebase context.
 2. Decide whether a specialized skill should handle the request instead. If another installed skill owns the output, stop this flow and use or offer that skill unless the user explicitly wants a portable artifact.
-3. Determine doc type, asking one focused question only if needed.
-4. Resolve workspace or explicit output path.
-5. Gather only the context needed for the artifact.
-6. Generate Markdown using [references/doc-types.md](references/doc-types.md).
-7. Write the Markdown file and `metadata.md` when using a workspace.
-8. Validate the file exists, has no unresolved placeholder content, and labels assumptions clearly.
-9. Report the Markdown path and offer relevant companion artifact options.
+3. Determine doc type.
+4. Run Clarification Before Writing, asking at most one focused question only when needed.
+5. Resolve workspace or explicit output path.
+6. Gather only the context needed for the artifact.
+7. Generate Markdown using [references/doc-types.md](references/doc-types.md).
+8. Write the Markdown file and `metadata.md` when using a workspace.
+9. Validate the file exists, has no unresolved placeholder content, and labels assumptions clearly.
+10. Report the Markdown path and offer relevant companion artifact options.
 
 ## Metadata
 
