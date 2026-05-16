@@ -19,6 +19,7 @@ Default workspace:
 ~/agent-artifacts/<artifact-slug>/
 ├── markdown/
 ├── html/
+├── images/
 ├── assets/
 └── metadata.md
 ```
@@ -71,13 +72,17 @@ When the artifact depends on current third-party package behavior, inspect real 
 
 ## Workspace Resolution
 
+Treat `--workspace` as a path if it is absolute, starts with `~` or `.`, or contains `/`. Otherwise treat it as a slug under `~/agent-artifacts/`.
+
 Resolution order:
 
-1. `--out <path>` writes exactly that Markdown file and does not require a workspace.
+1. `--out <path>` writes exactly that Markdown file.
 2. `--workspace <path>` uses that directory as the artifact workspace.
 3. `--workspace <slug>` uses `~/agent-artifacts/<slug>/`.
 4. Existing artifact context if the user points to an existing `~/agent-artifacts/<slug>/`.
 5. Derived slug from the artifact title.
+
+If both `--out` and `--workspace` are provided, `--out` controls the Markdown file path and `--workspace` controls metadata and companion artifact folders. Do not rewrite `--out` into the workspace. If `--out` is outside the workspace, list the Markdown path in metadata exactly as written.
 
 Slug rules:
 
@@ -86,12 +91,15 @@ Slug rules:
 - collapse repeated hyphens
 - trim leading and trailing hyphens
 - fall back to `artifact-YYYY-MM-DD` if no useful title exists
+- append a numeric suffix when a same-day fallback slug already exists
 
 Default paths:
 
 - Markdown: `~/agent-artifacts/<slug>/markdown/<doc-type>.md`
 - HTML: `~/agent-artifacts/<slug>/html/<doc-type>.html`
 - Metadata: `~/agent-artifacts/<slug>/metadata.md`
+
+If the resolved workspace exists, inspect `metadata.md` and current files before writing. Reuse it only when the title, source context, or user request clearly matches. If it appears to belong to a different project, or contains unrelated files without metadata, ask whether to reuse it, choose a new slug, or provide another workspace.
 
 If the target Markdown file exists, ask before overwriting. If the user wants a new variant, append a descriptive or numeric suffix.
 
@@ -114,7 +122,7 @@ Supported doc types:
 
 Read [references/doc-types.md](references/doc-types.md) for detection guidance, audience handling, and section requirements.
 
-The first explicit doc-type hint wins. Otherwise infer from the request. Ask one focused question only if the doc type materially changes the output.
+The first explicit doc-type hint wins. Otherwise infer from the request. Ask one focused question only if the doc type materially changes the output. If the user does not answer or has no preference, use `generic` and label the doc-type assumption.
 
 ## Source Rules
 
@@ -128,6 +136,8 @@ Every generated document must include:
 - doc-type-specific content
 - open questions
 - next recommended artifact or action
+
+These universal fields are additive. They do not get replaced by doc-type requirements. Compose every artifact from the common opening sections, the relevant doc-type sections, and the common closing sections.
 
 Do not invent certainty. Mark assumptions and recommendations explicitly.
 
@@ -158,6 +168,8 @@ If the user says yes, invoke `html-artifact` with an explicit `--out` path:
 html-artifact ~/agent-artifacts/<slug>/markdown/<doc-type>.md --out ~/agent-artifacts/<slug>/html/<doc-type>.html
 ```
 
+If Markdown was written through `--out`, substitute the resolved Markdown path as the source argument. If a workspace exists, still place HTML under that workspace's `html/` folder. If this is a one-off `--out` artifact with no workspace, choose an explicit sibling HTML path or ask once if the destination is unclear.
+
 Do not rely on `html-artifact`'s default destination when rendering a workspace artifact.
 
 ### Images
@@ -171,13 +183,13 @@ Do not generate images from this skill.
 ## Workflow
 
 1. Receive prompt, notes, path, or codebase context.
-2. Decide whether a specialized skill should handle the request instead.
+2. Decide whether a specialized skill should handle the request instead. If another installed skill owns the output, stop this flow and use or offer that skill unless the user explicitly wants a portable artifact.
 3. Determine doc type, asking one focused question only if needed.
 4. Resolve workspace or explicit output path.
 5. Gather only the context needed for the artifact.
 6. Generate Markdown using [references/doc-types.md](references/doc-types.md).
 7. Write the Markdown file and `metadata.md` when using a workspace.
-8. Validate the file exists, has no placeholder sections, and labels assumptions clearly.
+8. Validate the file exists, has no unresolved placeholder content, and labels assumptions clearly.
 9. Report the Markdown path and offer relevant companion artifact options.
 
 ## Metadata
@@ -195,12 +207,12 @@ Create or update `metadata.md` in each workspace:
 
 ## Artifacts
 
-| Type | Markdown | HTML |
-|---|---|---|
-| idea-brief | `markdown/idea-brief.md` | |
+| Type | Markdown | HTML | Images |
+|---|---|---|---|
+| idea-brief | `markdown/idea-brief.md` | | |
 ```
 
-Only list files that exist. Leave the HTML cell empty until the HTML file exists. Update the table when new Markdown, HTML, or image artifacts are created.
+Only list files that exist. Leave the HTML and Images cells empty until corresponding files exist. Update the table when new Markdown, HTML, or image artifacts are created.
 
 ## Validation
 
@@ -209,6 +221,7 @@ Before reporting complete, verify:
 - output file exists at the resolved path
 - metadata exists and lists the artifact when using a workspace
 - no placeholder markers remain: `TBD`, `TODO`, `FIXME`, `??`
+- no section contains only template instructions, empty filler, or unresolved placeholders
 - assumptions are explicit
 - `--out` was honored when provided
 - specialized-skill boundaries were respected
@@ -218,7 +231,7 @@ Before reporting complete, verify:
 Report:
 
 ```text
-Written: ~/agent-artifacts/<slug>/markdown/<doc-type>.md (<doc-type>)
+Written: <resolved-markdown-path> (<doc-type>)
 Metadata: ~/agent-artifacts/<slug>/metadata.md
 ```
 

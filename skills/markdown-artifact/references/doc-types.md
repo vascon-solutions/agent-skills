@@ -32,6 +32,8 @@ Every document should include:
 - `## Open Questions`
 - `## Next Recommended Artifact Or Action`
 
+These common sections are additive. Per-type required sections do not replace them; place the doc-type sections between the common opening context and common closing questions/actions.
+
 Use `None` only when a section truly has no content. Prefer concise, explicit assumptions over invented certainty.
 
 ## Doc Type Map

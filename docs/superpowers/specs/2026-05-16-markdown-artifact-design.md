@@ -29,6 +29,8 @@ Default structure:
 │   └── backend-design.md
 ├── html/
 │   └── ...
+├── images/
+│   └── ...
 ├── assets/
 └── metadata.md
 ```
@@ -118,7 +120,7 @@ Accept any of:
 - optional doc-type hint
 - optional `--workspace <slug-or-path>` to choose the artifact workspace
 - optional `--doc-type <type>` to force a document type
-- optional `--out <path>` for a one-off Markdown output outside the default workspace
+- optional `--out <path>` for an exact Markdown output path
 
 When the requested artifact depends on current third-party package behavior, follow repo instructions and inspect real source with `opensrc` before making package-behavior claims.
 
@@ -126,13 +128,17 @@ When the requested artifact depends on current third-party package behavior, fol
 
 ## Workspace Resolution
 
+Treat `--workspace` as a path if it is absolute, starts with `~` or `.`, or contains `/`. Otherwise treat it as a slug and resolve it under `~/agent-artifacts/`.
+
 Resolution order:
 
-1. `--out <path>` writes exactly that Markdown file and does not require a workspace.
+1. `--out <path>` writes exactly that Markdown file.
 2. `--workspace <path>` uses that directory as the artifact workspace.
 3. `--workspace <slug>` uses `~/agent-artifacts/<slug>/`.
 4. Existing artifact context, if the user points to an existing `~/agent-artifacts/<slug>/` folder.
 5. Derived slug from the artifact title.
+
+If both `--out` and `--workspace` are provided, `--out` controls the Markdown file path and `--workspace` controls metadata and companion artifact folders. Do not rewrite `--out` into the workspace. If `--out` is outside the workspace, list the Markdown path in metadata exactly as written.
 
 Slug rules:
 
@@ -141,6 +147,7 @@ Slug rules:
 - collapse repeated hyphens
 - trim leading and trailing hyphens
 - fall back to `artifact-YYYY-MM-DD` if no useful title exists
+- append a numeric suffix such as `artifact-YYYY-MM-DD-2` when a same-day fallback slug already exists
 
 Default files:
 
@@ -148,13 +155,15 @@ Default files:
 - Optional HTML output: `~/agent-artifacts/<slug>/html/<doc-type>.html`
 - Metadata: `~/agent-artifacts/<slug>/metadata.md`
 
+If the resolved workspace already exists, inspect `metadata.md` and the current files before writing. Reuse it only when the artifact title, source context, or user request clearly matches the existing workspace. If the workspace appears to belong to a different project or has no metadata but contains unrelated files, ask whether to reuse it, choose a new slug, or provide a different workspace.
+
 If the target Markdown file already exists, ask before overwriting. If the user wants a new variant, append a descriptive or numeric suffix such as `ui-component-design-2.md` or `ui-component-design-compact-table.md`.
 
 ---
 
 ## Document Types
 
-`markdown-artifact` supports these doc types. The first matching explicit hint wins; otherwise infer from the request.
+`markdown-artifact` supports these doc types. The first matching explicit hint wins; otherwise infer from the request. Ask one focused question when classification materially changes the output. If the user does not answer or has no preference, use `generic` and label the doc-type assumption.
 
 | Doc type | File | Use when |
 |---|---|---|
@@ -187,6 +196,8 @@ Every generated document should include:
 - main content sections appropriate to the doc type
 - open questions
 - next recommended artifact or action
+
+These universal fields are additive. They do not get replaced by the per-type requirements below. Compose every artifact from the common opening sections, the relevant per-type sections, and the common closing sections.
 
 Do not invent certainty. Mark assumptions and recommendations explicitly.
 
@@ -352,6 +363,18 @@ Include:
 - safety constraints
 - final output or completion signal
 
+### `generic`
+
+Include:
+
+- purpose
+- audience
+- source context
+- main content
+- assumptions
+- open questions
+- next recommended artifact or action
+
 ---
 
 ## Relationship To `html-artifact`
@@ -369,6 +392,8 @@ Example:
 ```text
 html-artifact ~/agent-artifacts/<slug>/markdown/<doc-type>.md --out ~/agent-artifacts/<slug>/html/<doc-type>.html
 ```
+
+If Markdown was written through `--out`, substitute the resolved Markdown path as the source argument. If a workspace exists, still place HTML under that workspace's `html/` folder. If this is a one-off `--out` artifact with no workspace, choose an explicit sibling HTML path or ask once if the destination is unclear.
 
 The Markdown remains the source of truth. HTML is derived output.
 
@@ -419,14 +444,14 @@ Only offer this for docs that clearly benefit from a visual summary, diagram, or
 ## Workflow
 
 1. Receive the prompt, notes, path, or codebase context.
-2. Determine whether a specialized skill should handle the request instead.
+2. Determine whether a specialized skill should handle the request instead. If another installed skill owns the output, stop the `markdown-artifact` flow and use or offer that skill unless the user explicitly wants a portable artifact.
 3. Determine doc type or ask one focused question if classification changes the output materially.
 4. Resolve the artifact workspace or explicit output path.
 5. Gather only the context needed for the artifact.
 6. Generate Markdown using the doc-type template.
 7. Write the Markdown file and `metadata.md` if using a workspace.
-8. Validate the file exists, has no placeholder sections, and labels assumptions clearly.
-9. Report the Markdown path and offer the optional `html-artifact` companion.
+8. Validate the file exists, has no unresolved placeholder content, and labels assumptions clearly.
+9. Report the Markdown path and offer relevant companion options.
 
 ---
 
@@ -445,21 +470,23 @@ Create or update `metadata.md` in each workspace:
 
 ## Artifacts
 
-| Type | Markdown | HTML |
-|---|---|---|
-| idea-brief | `markdown/idea-brief.md` | |
+| Type | Markdown | HTML | Images |
+|---|---|---|---|
+| idea-brief | `markdown/idea-brief.md` | | |
 ```
 
-Only list files that exist. Leave the HTML cell empty until the corresponding HTML file exists. Update the table when new Markdown, HTML, or image artifacts are created.
+Only list files that exist. Leave the HTML and Images cells empty until corresponding files exist. Update the table when new Markdown, HTML, or image artifacts are created.
+
+Placeholder validation is concrete: no section may contain only template instructions, `TBD`, `TODO`, `FIXME`, `??`, or empty filler. If the information is unknown, say so as an assumption, an open question, or `None identified`.
 
 ---
 
 ## Output
 
-Report one concise line:
+Report one concise line using the exact resolved Markdown path:
 
 ```text
-Written: ~/agent-artifacts/<slug>/markdown/<doc-type>.md (<doc-type>)
+Written: <resolved-markdown-path> (<doc-type>)
 ```
 
 If metadata was updated, include:
