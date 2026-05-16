@@ -26,7 +26,7 @@ Convert any Markdown document into a rich, self-contained HTML companion. The Ma
 Accept any of:
 
 - Path to any `.md` file
-- Path to a directory — apply detection rules to all `.md` files; pick highest-confidence match by rule priority, then most recently modified, then ask once
+- Path to a directory — apply detection rules to all `.md` files; pick highest-confidence match by rule priority (lowest number), then most recently modified. If still tied or ambiguous, ask: "Found multiple candidates: [file-a.md] (task-doc) and [file-b.md] (roadmap). Which one should I convert?"
 - Raw pasted Markdown + optional doc-type hint
 - Optional `--out <path>` to override output destination
 
@@ -95,17 +95,25 @@ Every output file must:
 7. Write to resolved path; create directories; handle collisions
 8. Report one line: output path, doc type, layout used
 
+## Validation
+
+Before reporting complete, verify:
+
+- The output file exists at the resolved path
+- Opening the file in a browser (or running `grep -c "http" <file>`) shows zero external URLs in `src=`, `href=`, or `url()` — the single-file rule holds
+- The detected doc type matches what the source document actually is (not just a filename match)
+- If `--out` was provided, the file landed there, not at the default path
+
 ## Output
 
 ```
 Written: ~/agent-artifacts/agent-skills/task-docs/my-task.html (task-doc → jump-link layout)
+Written: ~/agent-artifacts/agent-skills/generic/notes.html (generic → generic layout)
 ```
 
 ## Cautions
 
-- Never modify the source Markdown file
-- Never render source HTML, scripts, event handlers, or remote assets in output
-- Never refuse an unrecognized doc type — use generic layout
-- Never create external dependencies in the HTML output
-- Never push, publish, or deploy the HTML file
-- Never implement any content described in the source document — this skill produces a file only
+- **Sanitization bypass** — if the source Markdown contains raw HTML, it may look like valid content but must be escaped, not rendered. The most common mistake is passing Markdown through a lenient renderer that interprets embedded HTML.
+- **Treating this as a generation skill** — this skill converts existing Markdown. If there is no source doc yet, the agent must stop and tell the user to run task-doc, roadmap-todo, or similar first.
+- **Skipping the output path resolution** — if `--out` is not provided, the repo name must be derived from git remote, not hardcoded or guessed. A wrong repo name silently writes to the wrong folder.
+- **Calling this from inside a priority skill before the skill's own output is complete** — the HTML invitation is a post-completion affordance. Do not invoke html-artifact until the calling skill has fully written its Markdown output and delivered its report.
