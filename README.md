@@ -27,6 +27,8 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
     ├── html-artifact/
     ├── markdown-artifact/
     ├── image-artifact/
+    ├── repo-design-context/
+    ├── publish-artifact/
     └── task-doc/
 ```
 
@@ -50,6 +52,8 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 | `html-artifact`            | Convert any Markdown file into a self-contained, browser-ready HTML companion stored in `~/agent-artifacts/`. Supports task docs, roadmaps, QA handoffs, frontend handoffs, repo docs, and generic files |
 | `markdown-artifact`        | Create polished Markdown artifact workspaces under `~/agent-artifacts/<slug>/` from ideas, notes, UI/backend designs, learning topics, tutorials, task plans, and other early-stage source docs |
 | `image-artifact`           | Create static visual companions from existing Markdown, including summary cards, UI variant boards, comparison boards, decision boards, concept posters, architecture diagrams, and API flow images |
+| `repo-design-context`      | Discover whether local repo styling, design tokens, brand assets, or architecture vocabulary can safely inform generated artifacts |
+| `publish-artifact`         | Publish a `~/agent-artifacts/<slug>/` workspace to a private S3 archive; optionally produce presigned URLs and secret GitHub gists for Markdown and HTML. Explicit command only |
 
 ## Link Targets
 
@@ -156,6 +160,14 @@ The link script is idempotent — it skips symlinks that already point to the co
 ### Generating image artifact companions
 
 1. `image-artifact` — convert existing Markdown into static visual companions under `~/agent-artifacts/<slug>/images/`. Use it for shareable summaries, UI variant boards, comparison boards, decision boards, concept posters, architecture diagrams, and API flow images.
+
+### Applying repo design context to artifacts
+
+1. `repo-design-context` — shared helper for `html-artifact --use-repo-design` and `image-artifact --use-repo-design`. It discovers local design tokens or architecture vocabulary, applies only high-confidence results, and falls back to neutral output otherwise.
+
+### Publishing artifact workspaces externally
+
+1. `publish-artifact` — push a `~/agent-artifacts/<slug>/` workspace to a private S3 archive. Use `--share markdown` or `--share html` to also generate a secret GitHub gist and an S3 presigned URL you can send to someone. Bucket access is never modified; sharing is link-based with a TTL.
 
 ### Creating Markdown artifact workspaces
 
