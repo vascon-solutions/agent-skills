@@ -304,6 +304,8 @@ The Markdown remains the source of truth. HTML is derived output.
 
 `image-artifact` is a future companion skill, not part of `markdown-artifact`.
 
+Design spec: `docs/superpowers/specs/2026-05-16-image-artifact-design.md`
+
 It should convert an existing Markdown source document into generated image outputs under the same workspace:
 
 ```text
@@ -331,6 +333,12 @@ Good use cases for a future `image-artifact`:
 - visual decision aids for choosing between variants
 
 `markdown-artifact` may optionally mention that an image companion can be generated when the source doc clearly benefits from a visual summary or variant board, but it should not generate images itself.
+
+When `image-artifact` is implemented, update `markdown-artifact` so it can offer:
+
+> "Image companion available. Run `image-artifact` on this Markdown file for visual summaries or variant boards. (yes / skip)"
+
+Only offer this for docs that clearly benefit from a visual summary, diagram, or option board. Do not offer it for every Markdown artifact by default.
 
 ---
 
