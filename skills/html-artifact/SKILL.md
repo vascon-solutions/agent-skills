@@ -41,7 +41,7 @@ Apply ordered rules. First match wins.
 5. **repo-doc** — filename is `README*`, `AGENTS*`, `CLAUDE*`, `CONTRIBUTING*`, or `ARCHITECTURE*`; OR file lives in a `docs/` directory
 6. **generic** — fallback for any `.md` not matched above
 
-If two candidates tie, present both and ask once.
+If a file matches signals from two different rules simultaneously, or two files in a directory tie on rule priority and modification time, present both candidates and ask once.
 
 ## Source Sanitization
 
@@ -54,7 +54,7 @@ Before generating HTML, apply these rules to the source:
 | `<script>` tags | Strip entirely |
 | Event handler attributes (`onclick`, `onload`, etc.) | Strip the attribute |
 | `<iframe>` tags | Strip entirely |
-| External `<link>` tags | Strip entirely |
+| External stylesheet `<link>` tags | Strip entirely |
 | Malformed tables | Best-effort parse; skip invalid rows |
 | Malformed fenced code blocks | Treat as plain text |
 | Inline SVG from source | Strip — only skill-generated SVG allowed |
@@ -65,6 +65,8 @@ Resolution order (first match wins):
 
 1. `--out <path>` argument
 2. Default: `~/agent-artifacts/<repo-name>/<doc-type-folder>/`
+
+No CLAUDE.md or AGENTS.md configuration is supported. Only two options: `--out` argument or the default path.
 
 Derive repo name from `git remote get-url origin` basename; fall back to current directory name.
 
@@ -105,3 +107,5 @@ Written: ~/agent-artifacts/agent-skills/task-docs/my-task.html (task-doc → jum
 - Never render source HTML, scripts, event handlers, or remote assets in output
 - Never refuse an unrecognized doc type — use generic layout
 - Never create external dependencies in the HTML output
+- Never push, publish, or deploy the HTML file
+- Never implement any content described in the source document — this skill produces a file only
