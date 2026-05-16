@@ -24,6 +24,7 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
     ├── repo-skill-scan/
     ├── roadmap-todo/
     ├── scaffold-repo-skill/
+    ├── html-artifact/
     └── task-doc/
 ```
 
@@ -44,6 +45,7 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 | `roadmap-todo`             | Create and maintain durable roadmap or todo files for feature-grade work across repos                                                                                                                         |
 | `scaffold-repo-skill`      | Write an approved skill, command, or script candidate with correct structure and wiring                                                                                                                       |
 | `task-doc`                 | Create durable task documents for feature-grade work and reject small work that should stay in normal plan mode                                                                                               |
+| `html-artifact`            | Convert any Markdown file into a self-contained, browser-ready HTML companion stored in `~/agent-artifacts/`. Supports task docs, roadmaps, QA handoffs, frontend handoffs, repo docs, and generic files |
 
 ## Link Targets
 
@@ -142,6 +144,10 @@ The link script is idempotent — it skips symlinks that already point to the co
 
 1. `review-task-docs` — challenge a task doc before implementation starts
 2. `roadmap-todo` — keep feature-grade backlog items concise, durable, and linked to task docs
+
+### Generating HTML artifact companions
+
+1. `html-artifact` — convert any `.md` file into a self-contained browser-ready HTML file stored in `~/agent-artifacts/`. Works standalone or as an opt-in step after `task-doc`, `roadmap-todo`, `prepare-qa-handoff`, or `prepare-frontend-handoff`.
 
 ## How To Add a Skill
 
