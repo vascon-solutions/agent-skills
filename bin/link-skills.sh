@@ -35,6 +35,8 @@ task-doc
 html-artifact
 markdown-artifact
 image-artifact
+repo-design-context
+publish-artifact
 "
 
 # Skills removed in this version — unlink them if they still exist as symlinks
