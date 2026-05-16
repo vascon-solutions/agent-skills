@@ -26,6 +26,7 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
     ├── scaffold-repo-skill/
     ├── html-artifact/
     ├── markdown-artifact/
+    ├── image-artifact/
     └── task-doc/
 ```
 
@@ -48,6 +49,7 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 | `task-doc`                 | Create durable task documents for feature-grade work and reject small work that should stay in normal plan mode                                                                                               |
 | `html-artifact`            | Convert any Markdown file into a self-contained, browser-ready HTML companion stored in `~/agent-artifacts/`. Supports task docs, roadmaps, QA handoffs, frontend handoffs, repo docs, and generic files |
 | `markdown-artifact`        | Create polished Markdown artifact workspaces under `~/agent-artifacts/<slug>/` from ideas, notes, UI/backend designs, learning topics, tutorials, task plans, and other early-stage source docs |
+| `image-artifact`           | Create static visual companions from existing Markdown, including summary cards, UI variant boards, comparison boards, decision boards, concept posters, architecture diagrams, and API flow images |
 
 ## Link Targets
 
@@ -151,10 +153,15 @@ The link script is idempotent — it skips symlinks that already point to the co
 
 1. `html-artifact` — convert any `.md` file into a self-contained browser-ready HTML file stored in `~/agent-artifacts/`. Works standalone or as an opt-in step after `task-doc`, `roadmap-todo`, `prepare-qa-handoff`, or `prepare-frontend-handoff`.
 
+### Generating image artifact companions
+
+1. `image-artifact` — convert existing Markdown into static visual companions under `~/agent-artifacts/<slug>/images/`. Use it for shareable summaries, UI variant boards, comparison boards, decision boards, concept posters, architecture diagrams, and API flow images.
+
 ### Creating Markdown artifact workspaces
 
 1. `markdown-artifact` — turn rough ideas, notes, learning topics, UI/backend design options, feature proposals, tutorials, or operational task plans into polished Markdown under `~/agent-artifacts/<slug>/markdown/`.
 2. Optional follow-up: `html-artifact` — render the Markdown into the same workspace's `html/` folder with an explicit `--out` path.
+3. Optional follow-up: `image-artifact` — render the Markdown into the same workspace's `images/` folder when it clearly benefits from a visual summary, diagram, option board, or variant board.
 
 ## How To Add a Skill
 

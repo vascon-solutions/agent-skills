@@ -89,6 +89,7 @@ Accept any of:
 - optional `--out <path>` to write a specific image file or image directory
 - optional `--workspace <slug-or-path>` to choose an artifact workspace
 - optional `--variants <n>` for variant boards
+- optional `--force` to replace an existing generated output without asking
 
 The skill must not invent source content that is not present or reasonably inferable from the Markdown. If the visual depends on missing facts, mark them as assumptions in the prompt plan or ask one focused question before generating.
 
@@ -111,13 +112,24 @@ The skill must not invent source content that is not present or reasonably infer
 
 If no kind is provided, infer from the Markdown:
 
-- UI/component/flow docs -> `ui-variant-board`
+- UI/component/flow docs with multiple variants, states, screens, options, or approaches -> `ui-variant-board`
+- UI/component/flow docs describing one component or one flow without variants -> `summary-card`
 - architecture/backend/API/data-model docs -> `architecture-diagram` or `api-flow`
 - option/tradeoff docs -> `comparison-board`
 - idea/concept docs -> `summary-card` or `concept-poster`
 - generic docs -> `summary-card`
 
 Ask one focused question only if the inferred kind would materially change the result.
+
+### Variant Count
+
+`--variants <n>` controls the number of generated variants for `ui-variant-board`, `comparison-board`, and other multi-output board kinds.
+
+- If the Markdown already defines variants, options, states, screens, or approaches, use those source-defined variants first.
+- If `--variants <n>` is provided, generate at most `n` variants from the source-defined set.
+- If the user requests a variant board but provides no count and the Markdown does not define a clear count, default to 3 variants.
+- Do not generate more than 6 variants unless the user explicitly requests a higher count.
+- Do not invent arbitrary variants. If the requested count exceeds what the Markdown supports, mark the gap as an assumption in the prompt plan or ask one focused question.
 
 ---
 
@@ -133,7 +145,7 @@ Provider-independent rules:
 - For text-heavy content, generate a visual summary or board and keep detailed text in Markdown/HTML.
 - If a provider cannot reliably render required text, produce an image prompt pack or an HTML companion instead.
 - Respect the active tool's safety, copyright, and content limits.
-- Record the tool or provider used in `metadata.md` when known.
+- Record the tool or provider used in `metadata.md` when known and when the metadata table shape supports it.
 
 ---
 
@@ -150,6 +162,7 @@ Before generating images, derive a short prompt plan from the Markdown:
 - optional elements
 - text to avoid or keep minimal
 - assumptions
+- variant source and count when generating multiple variants
 
 For variant outputs, define each variant explicitly:
 
@@ -184,7 +197,9 @@ Resolution order:
 5. If source is inside `~/agent-artifacts/<slug>/markdown/`, write to sibling `~/agent-artifacts/<slug>/images/`.
 6. Otherwise derive slug from source title/stem and write to `~/agent-artifacts/<slug>/images/`.
 
-Create missing directories automatically. If a target file exists, ask before overwriting unless the user explicitly requested replacement. For new variants, append a suffix such as `-2`, `-variant-a`, or a descriptive slug.
+Treat `--workspace` as a path when the value contains `/`, starts with `.`, or starts with `~`. Treat it as a slug only when it contains no path separators.
+
+Create missing directories automatically. If a target file exists, ask before overwriting unless the user provided `--force` or explicitly requested replacement. When refreshing from changed Markdown without `--force`, write a new versioned file such as `-2`, `-v2`, or a descriptive dated suffix. For new variants, append a suffix such as `-variant-a`, `-variant-b`, or a descriptive slug.
 
 ---
 
@@ -192,18 +207,36 @@ Create missing directories automatically. If a target file exists, ask before ov
 
 Create or update `metadata.md` in the artifact workspace when using a workspace.
 
-Add image artifacts to the table:
+If `metadata.md` already has the `markdown-artifact` table shape, update that table instead of creating a second artifact table:
+
+```markdown
+## Artifacts
+
+| Type | Markdown | HTML | Images |
+|---|---|---|---|
+| idea-brief | `markdown/idea-brief.md` | | `images/idea-brief-summary.png` |
+```
+
+- Match the row by the Markdown source path when possible.
+- If no row exists for the source Markdown, add one.
+- Put one image path in the `Images` cell for single outputs.
+- Put comma-separated image paths in the `Images` cell for multiple variants.
+- Do not add a `Tool` column to this existing table shape.
+
+If no artifact table exists, or the workspace is image-only, add image artifacts with this table shape:
 
 ```markdown
 ## Artifacts
 
 | Type | Source | Output | Tool |
 |---|---|---|---|
-| summary-card | `markdown/idea-brief.md` | `images/idea-brief-summary.png` | `<tool if known>` |
-| comparison-board | `markdown/ui-component-design.md` | `images/ui-component-design-comparison-board.png` | `<tool if known>` |
+| summary-card | `markdown/idea-brief.md` | `images/idea-brief-summary.png` | `unknown` |
+| comparison-board | `markdown/ui-component-design.md` | `images/ui-component-design-comparison-board.png` | `unknown` |
 ```
 
-If the source metadata file already uses a different table shape, preserve its existing shape where possible and add only the missing image rows.
+Use the active image-generation tool name when known. Use `unknown` when the tool is unavailable or cannot be identified.
+
+If the source metadata file already uses a different table shape, preserve its columns and add the minimum information needed to record the image output. Do not silently change or reorder existing columns.
 
 ---
 
@@ -215,12 +248,13 @@ If the source metadata file already uses a different table shape, preserve its e
 4. Resolve workspace and output destination.
 5. Read the Markdown source and extract the visual brief.
 6. Build a prompt plan with assumptions and variant definitions when needed.
-7. If image generation is unavailable, write a `prompt-pack` Markdown file and stop.
-8. Generate the image artifact or artifacts with the available tool.
-9. Save outputs under `images/`.
-10. Update `metadata.md` when using a workspace.
-11. Verify output files exist.
-12. Report paths and source Markdown used.
+7. If a target file exists, confirm replacement, honor `--force`, or choose a versioned filename.
+8. If image generation is unavailable, write a `prompt-pack` Markdown file and stop.
+9. Generate the image artifact or artifacts with the available tool.
+10. Save outputs under `images/`.
+11. Update `metadata.md` when using a workspace.
+12. Verify output files exist and pass the available visual or file-level checks.
+13. Report paths and source Markdown used.
 
 ---
 
@@ -236,7 +270,15 @@ Before reporting complete, verify:
 - for variants, each generated file has a clear name and maps to the prompt plan
 - if image generation was unavailable, a prompt pack was written instead of claiming image output
 
-When possible, visually inspect generated images or produce a quick thumbnail/contact-sheet check. If visual inspection is not possible in the environment, state that limitation.
+When possible, visually inspect generated images or produce a quick thumbnail/contact-sheet check.
+
+If visual inspection is not possible in the environment, perform a file-level fallback check before reporting complete:
+
+- file size is greater than 0 bytes
+- MIME type or file signature identifies the output as an image
+- dimensions are readable through an available image utility, metadata reader, or provider response
+
+State when only file-level validation was possible. Do not claim exact visual fidelity unless the generated artifact was visually inspected.
 
 ---
 

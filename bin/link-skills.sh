@@ -34,6 +34,7 @@ scaffold-repo-skill
 task-doc
 html-artifact
 markdown-artifact
+image-artifact
 "
 
 # Skills removed in this version — unlink them if they still exist as symlinks

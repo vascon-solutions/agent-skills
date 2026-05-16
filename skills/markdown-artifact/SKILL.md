@@ -174,11 +174,17 @@ Do not rely on `html-artifact`'s default destination when rendering a workspace 
 
 ### Images
 
-`image-artifact` is a future companion. Mention it only when the generated Markdown clearly benefits from a visual summary, diagram, or option board:
+After writing Markdown, offer an image companion only when the document clearly benefits from a visual summary, diagram, option board, or variant board:
 
 > "Image companion available. Run `image-artifact` on this Markdown file for visual summaries or variant boards. (yes / skip)"
 
-Do not generate images from this skill.
+If the user says yes, invoke `image-artifact` with an explicit source path and workspace:
+
+```text
+image-artifact ~/agent-artifacts/<slug>/markdown/<doc-type>.md --workspace ~/agent-artifacts/<slug>
+```
+
+If Markdown was written through `--out`, substitute the resolved Markdown path as the source argument. If a workspace exists, still place images under that workspace's `images/` folder. Do not offer this for every artifact by default.
 
 ## Workflow
 
