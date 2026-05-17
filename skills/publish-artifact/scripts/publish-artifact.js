@@ -18,6 +18,7 @@ const { createHttpClient } = require('./common/http.js');
 const s3 = require('./destinations/s3.js');
 const wiki = require('./destinations/wiki.js');
 const clickup = require('./destinations/clickup.js');
+const googleDocs = require('./destinations/google-docs.js');
 
 const VALID_TO = new Set(['s3', 'wiki', 'clickup', 'google-docs']);
 
@@ -172,7 +173,7 @@ function defaultRunner(command, args, options = {}) {
 }
 
 function selectDrivers(names) {
-  const byName = { s3, wiki, clickup };
+  const byName = { s3, wiki, clickup, 'google-docs': googleDocs };
   const list = names.length > 0 ? names : ['s3'];
   return list.map((n) => {
     const d = byName[n];
