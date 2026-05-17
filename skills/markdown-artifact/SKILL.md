@@ -1,6 +1,6 @@
 ---
 name: markdown-artifact
-description: Use when rough ideas, notes, prompts, learning topics, UI/backend designs, feature concepts, architecture options, rollout plans, or operational task plans need a polished Markdown artifact workspace.
+description: Use when rough ideas, notes, prompts, learning topics, UI/backend designs, feature concepts, architecture options, rollout plans, operational task plans, or interactive artifact source docs need a polished Markdown workspace.
 ---
 
 # markdown-artifact
@@ -41,6 +41,7 @@ Use when the user wants a durable Markdown artifact for:
 - rollout or migration plans
 - learning guides or tutorials
 - operational task plans for a person or computer-use agent
+- source docs for browser artifacts such as annotated diffs, design-token sheets, slide decks, prototypes, chart reports, and editing interfaces
 - rough notes that need a polished source document
 
 ## When Not To Use
@@ -115,6 +116,14 @@ Supported doc types:
 - `architecture-options`
 - `data-model-design`
 - `rollout-plan`
+- `approach-comparison`
+- `annotated-review`
+- `design-system-reference`
+- `interactive-prototype`
+- `diagram-explainer`
+- `slide-deck-outline`
+- `report-brief`
+- `editing-interface-spec`
 - `learning-guide`
 - `tutorial`
 - `task-plan`
@@ -179,6 +188,19 @@ html-artifact ~/agent-artifacts/<slug>/markdown/<doc-type>.md --out ~/agent-arti
 ```
 
 If Markdown was written through `--out`, substitute the resolved Markdown path as the source argument. If a workspace exists, still place HTML under that workspace's `html/` folder. If this is a one-off `--out` artifact with no workspace, choose an explicit sibling HTML path or ask once if the destination is unclear.
+
+For browser-artifact source docs, include the matching `--artifact-kind` when known:
+
+| Markdown doc type | Suggested `html-artifact --artifact-kind` |
+|---|---|
+| `approach-comparison` | `approach-comparison` |
+| `annotated-review` | `diff-annotation` |
+| `design-system-reference` | `design-system-tokens` |
+| `interactive-prototype` | `clickable-flow` or `animation-sandbox` |
+| `diagram-explainer` | `svg-figure-sheet` |
+| `slide-deck-outline` | `slide-deck` |
+| `report-brief` | `chart-report` |
+| `editing-interface-spec` | `split-view-editor` or `draggable-kanban` |
 
 Do not rely on `html-artifact`'s default destination when rendering a workspace artifact.
 

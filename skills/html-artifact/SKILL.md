@@ -1,6 +1,6 @@
 ---
 name: html-artifact
-description: Convert any Markdown file into a self-contained HTML companion artifact stored in ~/agent-artifacts/. Supports 6 doc-type layouts. Works standalone or as an opt-in post-output step from task-doc, roadmap-todo, prepare-qa-handoff, and prepare-frontend-handoff.
+description: "Use when existing Markdown needs a self-contained browser artifact: readable HTML companion, interactive prototype, slide deck, design-system sheet, annotated diff, chart report, draggable board, or split-view editor."
 ---
 
 # html-artifact
@@ -12,6 +12,8 @@ Convert any Markdown document into a rich, self-contained HTML companion. The Ma
 ## When To Use
 
 - You want a browser-ready version of any `.md` file
+- You want an interactive single-file artifact whose source content lives in Markdown
+- You need article-style artifacts such as annotated diffs, design token sheets, slide decks, animation sandboxes, clickable flows, SVG figure sheets, chart reports, draggable Kanban boards, or split-view editors
 - After task-doc, roadmap-todo, prepare-qa-handoff, or prepare-frontend-handoff writes its output (opt-in)
 - Standalone on any Markdown file — repo docs, specs, notes, handoffs
 
@@ -29,7 +31,51 @@ Accept any of:
 - Path to a directory — apply detection rules to all `.md` files; pick highest-confidence match by rule priority (lowest number), then most recently modified. If still tied or ambiguous, ask: "Found multiple candidates: [file-a.md] (task-doc) and [file-b.md] (roadmap). Which one should I convert?"
 - Raw pasted Markdown + optional doc-type hint
 - Optional `--out <path>` to override output destination
+- Optional `--artifact-kind <kind>` for hand-built interactive or visual patterns
 - Optional `--use-repo-design` to apply high-confidence local design tokens
+
+## Bundled Script
+
+Prefer the bundled renderer for deterministic conversion of straightforward Markdown:
+
+```bash
+node <this-skill-dir>/scripts/render-html-artifact.js <source.md> --out <output.html> [--doc-type <type>]
+node <this-skill-dir>/scripts/verify-layout-artifact.js <doc-type-or-artifact-kind> <output.html>
+```
+
+What the script does:
+
+- Renders a single sidebar-nav + TL;DR layout regardless of doc-type. `--doc-type` only picks the default output folder and a meta line.
+- Handles headings, paragraphs, ordered/unordered lists, fenced code blocks, GFM tables, inline code, bold, links, and remote-image-line replacement with a placeholder SVG.
+- Enforces the single-file rule by rejecting `<script src=remote>`, `<link href=remote>`, `<iframe>`, `<img src=remote>`, and CSS `url(remote)` in the rendered output. URLs inside `<pre>`/`<code>` blocks and link text are allowed.
+
+What the script does *not* do:
+
+- Per-doc-type layouts from [references/html-layouts.md](references/html-layouts.md) — fall back to hand-built HTML when a specific layout is required.
+- Artifact kinds — the script does not accept `--artifact-kind`. Artifact kinds are hand-built; pass `--artifact-kind` only to `verify-layout-artifact.js` after writing the hand-built HTML.
+- Repo design tokens — the script accepts no design args. When `--use-repo-design` is in effect and `repo-design-context` returns high-confidence tokens, build the HTML by hand (or edit the script's `<style>` block post-render).
+- Blockquotes, horizontal rules, nested lists, reference-style links, setext headings, inline images, or strikethrough. Hand-build the HTML if the source uses these.
+
+The render script is the fast path. Hand-built HTML is the correct path when the source or destination needs anything in the second list. Use `fixtures/<layout-type>.md` as source examples and the matching `fixtures/html/<layout-type>.html` as the structural reference. Three fixtures are realistic exemplars worth cribbing from — `slide-deck.html`, `split-view-editor.html`, and `draggable-kanban.html` — with working CSS, inline JS, and sample content. The rest are verifier-shape minimums marked with a comment at the top of the file; treat those as "what the verifier accepts," not as the target output. After hand-building, run `verify-layout-artifact.js <layout-type> <output.html>`.
+
+## Artifact Kinds Beyond Doc Types
+
+Use `--artifact-kind <kind>` when the user wants a specific browser artifact shape rather than a document-shaped companion. Artifact kinds are hand-built from [references/html-layouts.md](references/html-layouts.md); the render script does not generate them.
+
+Supported artifact kinds:
+
+- `approach-comparison` — side-by-side implementation or architecture approaches
+- `diff-annotation` — annotated PR diff with severity callouts
+- `design-system-tokens` — copyable colors, spacing, typography, radius, and component tokens
+- `slide-deck` — arrow-key presentation deck
+- `animation-sandbox` — tunable CSS/JS animation demo
+- `clickable-flow` — multi-screen prototype or state walkthrough
+- `svg-figure-sheet` — tweakable inline SVG figures or diagrams
+- `chart-report` — status or metrics report with inline SVG charts
+- `draggable-kanban` — draggable ticket triage or prioritization board
+- `split-view-editor` — prompt tuner, feature flag editor, or source/preview workbench
+
+If `--artifact-kind` is present, it overrides doc-type layout selection. Still detect doc type for metadata and output folder when useful, but select the artifact pattern for the HTML structure.
 
 ## Doc-Type Detection
 
@@ -85,6 +131,8 @@ Derive repo name from `git remote get-url origin` basename; fall back to current
 
 Doc-type folders: `task-docs/`, `roadmaps/`, `qa-handoffs/`, `frontend-handoffs/`, `repo-docs/`, `generic/`
 
+When `--artifact-kind` is set, write to `~/agent-artifacts/<repo-name>/artifacts/<kind>/` instead of a doc-type folder. The detected doc type is still recorded in metadata, but the artifact-kind drives the folder so kind-driven outputs are easy to find.
+
 Create missing directories automatically. Handle filename collisions with numeric suffix (`my-doc-2.html`).
 
 ## Single-File Rule
@@ -106,10 +154,11 @@ Every output file must:
 3. Detect doc type using ordered rules above
 4. Read and sanitize source
 5. If `--use-repo-design` is provided, scan repo design context and decide whether confidence is high enough to apply
-6. Select layout from [references/html-layouts.md](references/html-layouts.md)
-7. Generate self-contained HTML — apply layout, optional high-confidence repo tokens, and the single-file rule
+6. Select layout from [references/html-layouts.md](references/html-layouts.md). If `--artifact-kind` is present, select that artifact pattern and hand-build the HTML. Otherwise, if the source uses only the Markdown features the script supports and the chosen layout matches the script's single sidebar+TL;DR shape, use the script. Otherwise hand-build the HTML.
+7. Generate self-contained HTML — single-file rule applies either way. High-confidence repo design tokens require hand-built HTML (the script accepts no design args).
 8. Write to resolved path; create directories; handle collisions
-9. Report output path, doc type, layout used, and repo design context when scanned
+9. For hand-built article-style layouts, run `scripts/verify-layout-artifact.js <doc-type-or-artifact-kind> <output.html>`.
+10. Report output path, doc type, layout used (script or hand-built), and repo design context when scanned
 
 ## Validation
 
@@ -117,6 +166,7 @@ Before reporting complete, verify:
 
 - The output file exists at the resolved path
 - Opening the file in a browser (or running `grep -c "http" <file>`) shows zero external URLs in `src=`, `href=`, or `url()` — the single-file rule holds
+- Hand-built article-style layouts pass `scripts/verify-layout-artifact.js <doc-type-or-artifact-kind> <output.html>`
 - The detected doc type matches what the source document actually is (not just a filename match)
 - If `--out` was provided, the file landed there, not at the default path
 - If `--use-repo-design` was provided, report discovered signals, applied tokens, and confidence
@@ -126,6 +176,7 @@ Before reporting complete, verify:
 ```
 Written: ~/agent-artifacts/agent-skills/task-docs/my-task.html (task-doc → jump-link layout)
 Written: ~/agent-artifacts/agent-skills/generic/notes.html (generic → generic layout)
+Written: ~/agent-artifacts/agent-skills/artifacts/diff-annotation/pr-review.html (diff-annotation hand-built layout)
 Repo design context: found Tailwind config and CSS variables; applied colors/radius; confidence high
 Repo design context: found Tailwind and MUI candidates; applied neutral default; confidence medium
 Repo design context: found multiple themes; applied neutral default; confidence low

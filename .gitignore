@@ -1,2 +1,6 @@
 .DS_Store
 .worktrees/
+.env
+.env.local
+*.env.local
+skills/publish-artifact/.env

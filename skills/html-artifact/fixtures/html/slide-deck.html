@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Faster Shipping</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f172a; color: #f8fafc; overflow: hidden; }
+    .stage { width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; padding: 4rem; }
+    [data-slide] { display: none; max-width: 900px; }
+    [data-slide].active { display: block; }
+    h1 { font-size: 3rem; line-height: 1.1; margin-bottom: 1rem; }
+    h2 { font-size: 2rem; line-height: 1.2; margin-bottom: 1.5rem; color: #38bdf8; }
+    p { font-size: 1.25rem; line-height: 1.5; margin-bottom: 1rem; color: #cbd5e1; }
+    ul { font-size: 1.15rem; line-height: 1.8; padding-left: 1.5rem; color: #cbd5e1; }
+    .kicker { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.15em; color: #64748b; margin-bottom: 1rem; }
+    .progress { position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%); display: flex; gap: 0.5rem; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: #334155; transition: background 0.2s; }
+    .dot.active { background: #38bdf8; }
+    .counter { position: fixed; top: 1.5rem; right: 1.5rem; font-size: 0.85rem; color: #64748b; }
+    .hint { position: fixed; bottom: 1.5rem; right: 1.5rem; font-size: 0.75rem; color: #475569; }
+  </style>
+</head>
+<body>
+  <div class="stage">
+    <section data-slide="1" class="active">
+      <div class="kicker">Engineering · 2026</div>
+      <h1>Ship Faster</h1>
+      <p>Four levers we've already pulled — and the one that still matters.</p>
+    </section>
+    <section data-slide="2">
+      <div class="kicker">Slide 2 of 4</div>
+      <h2>The bottleneck moved</h2>
+      <ul>
+        <li>Build time: 12 min → 3 min</li>
+        <li>Test time: 18 min → 6 min</li>
+        <li>Review wait: 2.5 days → still 2.5 days</li>
+      </ul>
+    </section>
+    <section data-slide="3">
+      <div class="kicker">Slide 3 of 4</div>
+      <h2>Why review wait won't fall</h2>
+      <p>Reviewers aren't slow. PRs are too large. Median PR: 380 lines changed.</p>
+      <p>Below 100 lines, median review wait is 4 hours.</p>
+    </section>
+    <section data-slide="4">
+      <div class="kicker">Slide 4 of 4</div>
+      <h2>The change</h2>
+      <ul>
+        <li>Cap PR size at 200 lines; warn at 100.</li>
+        <li>Pair anything larger.</li>
+        <li>Re-measure in 6 weeks.</li>
+      </ul>
+    </section>
+  </div>
+  <div class="counter"><span id="curr">1</span> / 4</div>
+  <div class="progress">
+    <span class="dot active" data-dot="1"></span>
+    <span class="dot" data-dot="2"></span>
+    <span class="dot" data-dot="3"></span>
+    <span class="dot" data-dot="4"></span>
+  </div>
+  <div class="hint">← → or space to navigate</div>
+  <script>
+    const slides = document.querySelectorAll('[data-slide]');
+    const dots = document.querySelectorAll('[data-dot]');
+    const counter = document.getElementById('curr');
+    let current = 1;
+    function showSlide(n) {
+      current = Math.max(1, Math.min(slides.length, n));
+      slides.forEach((s) => s.classList.toggle('active', Number(s.dataset.slide) === current));
+      dots.forEach((d) => d.classList.toggle('active', Number(d.dataset.dot) === current));
+      counter.textContent = current;
+    }
+    function nextSlide() { showSlide(current + 1); }
+    function prevSlide() { showSlide(current - 1); }
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'ArrowRight' || event.key === ' ') { event.preventDefault(); nextSlide(); }
+      else if (event.key === 'ArrowLeft') { event.preventDefault(); prevSlide(); }
+    });
+    document.addEventListener('click', nextSlide);
+  </script>
+</body>
+</html>

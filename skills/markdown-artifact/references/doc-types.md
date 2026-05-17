@@ -48,6 +48,14 @@ Use `None` only when a section truly has no content. Prefer concise, explicit as
 | `architecture-options` | `architecture-options.md` | Multiple technical approaches need comparison and recommendation |
 | `data-model-design` | `data-model-design.md` | Entities, relationships, lifecycle, migrations, or retention need a design |
 | `rollout-plan` | `rollout-plan.md` | Delivery sequencing, validation, rollout, rollback, or risk controls need a plan |
+| `approach-comparison` | `approach-comparison.md` | Multiple code, design, or architecture approaches need side-by-side comparison |
+| `annotated-review` | `annotated-review.md` | A PR, diff, or code review needs severity-tagged annotations |
+| `design-system-reference` | `design-system-reference.md` | Design tokens, component usage, or brand rules need a copyable browser reference |
+| `interactive-prototype` | `interactive-prototype.md` | A clickable flow, animation sandbox, or state walkthrough needs source content |
+| `diagram-explainer` | `diagram-explainer.md` | SVG figures, ring diagrams, flowcharts, or visual explainers need structured source |
+| `slide-deck-outline` | `slide-deck-outline.md` | A presentation deck needs slide-by-slide narrative source |
+| `report-brief` | `report-brief.md` | Status, metrics, incident, or research reports need chart-ready source content |
+| `editing-interface-spec` | `editing-interface-spec.md` | A prompt tuner, feature-flag editor, draggable board, or source/preview tool needs source requirements |
 | `learning-guide` | `learning-guide.md` | A topic needs structured explanation, examples, exercises, or study flow |
 | `tutorial` | `tutorial.md` | A user needs step-by-step instruction to complete a concrete outcome |
 | `task-plan` | `task-plan.md` | A person or computer-use agent needs operational steps, checkpoints, and fallbacks |
@@ -193,6 +201,159 @@ Required sections:
 - `## Owners Or Decision Points`
 - `## Open Questions`
 - `## Next Recommended Artifact Or Action`
+
+### approach-comparison
+
+Use for side-by-side code approaches, implementation alternatives, architecture options, or design directions.
+
+Required sections:
+
+- `## Comparison Goal`
+- `## Evaluation Criteria`
+- `## Approach A`
+- `## Approach B`
+- `## Approach C`
+- `## Tradeoff Matrix`
+- `## Recommendation`
+- `## HTML Artifact Notes`
+- `## Open Questions`
+- `## Next Recommended Artifact Or Action`
+
+HTML artifact notes should name `approach-comparison` when a browser companion is useful.
+
+### annotated-review
+
+Use for PR review writeups, annotated diffs, severity-tagged review findings, or code understanding notes.
+
+Required sections:
+
+- `## Review Context`
+- `## Files Or Diff Scope`
+- `## Summary Verdict`
+- `## Annotated Findings`
+- `## Severity Legend`
+- `## Suggested Reviewer Path`
+- `## Follow-Up Checks`
+- `## HTML Artifact Notes`
+- `## Open Questions`
+- `## Next Recommended Artifact Or Action`
+
+Include diff snippets only when the user provides them or repo context is inspected. Do not invent changed lines.
+
+### design-system-reference
+
+Use for design tokens, component usage, brand rules, copyable values, and living style references.
+
+Required sections:
+
+- `## Reference Goal`
+- `## Token Sources`
+- `## Color Tokens`
+- `## Typography Tokens`
+- `## Spacing Radius And Shadows`
+- `## Component Usage Notes`
+- `## Copyable Values`
+- `## HTML Artifact Notes`
+- `## Open Questions`
+- `## Next Recommended Artifact Or Action`
+
+Mark token values as assumptions unless they come from source files, user-provided values, or verified repo design context.
+
+### interactive-prototype
+
+Use for clickable flows, animation sandboxes, multi-screen prototypes, or interaction state walkthroughs.
+
+Required sections:
+
+- `## Prototype Goal`
+- `## Users And Scenario`
+- `## Screens States Or Steps`
+- `## Interaction Rules`
+- `## Controls And Tunable Values`
+- `## Content And Copy`
+- `## Edge States`
+- `## HTML Artifact Notes`
+- `## Open Questions`
+- `## Next Recommended Artifact Or Action`
+
+HTML artifact notes should choose `clickable-flow` for screen/state walkthroughs or `animation-sandbox` for tunable motion.
+
+### diagram-explainer
+
+Use for SVG figure sheets, ring diagrams, flowcharts, visual explainers, or annotated system diagrams.
+
+Required sections:
+
+- `## Explanation Goal`
+- `## Figure Inventory`
+- `## Entities Or Parts`
+- `## Relationships Or Flow`
+- `## Labels And Annotations`
+- `## Controls Or Variants`
+- `## Source Data Or Assumptions`
+- `## HTML Artifact Notes`
+- `## Open Questions`
+- `## Next Recommended Artifact Or Action`
+
+HTML artifact notes should name `svg-figure-sheet` when the figure should be interactive or tweakable.
+
+### slide-deck-outline
+
+Use for presentation decks, narrative walkthroughs, investor-style summaries, or training decks.
+
+Required sections:
+
+- `## Deck Goal`
+- `## Audience`
+- `## Narrative Arc`
+- `## Slide Outline`
+- `## Key Visuals`
+- `## Speaker Notes`
+- `## Appendix Or Backup Slides`
+- `## HTML Artifact Notes`
+- `## Open Questions`
+- `## Next Recommended Artifact Or Action`
+
+Each slide outline item should include title, purpose, main message, and visual direction.
+
+### report-brief
+
+Use for weekly status, incident reports, research summaries, metrics reports, and chart-ready dashboards.
+
+Required sections:
+
+- `## Report Goal`
+- `## Audience`
+- `## Headline Summary`
+- `## Metrics Or Evidence`
+- `## Timeline Or Trend`
+- `## Chart Opportunities`
+- `## Risks Blockers Or Incidents`
+- `## Source Caveats`
+- `## HTML Artifact Notes`
+- `## Open Questions`
+- `## Next Recommended Artifact Or Action`
+
+HTML artifact notes should name `chart-report` when inline SVG charts or report cards would help.
+
+### editing-interface-spec
+
+Use for prompt tuners, feature flag editors, draggable triage boards, grouped toggles, or source/preview workbenches.
+
+Required sections:
+
+- `## Interface Goal`
+- `## Primary User`
+- `## Editable Inputs`
+- `## Preview Or Output`
+- `## Validation And Warnings`
+- `## Controls And State`
+- `## Save Export Or Copy Behavior`
+- `## HTML Artifact Notes`
+- `## Open Questions`
+- `## Next Recommended Artifact Or Action`
+
+HTML artifact notes should choose `split-view-editor` for source/preview tools or `draggable-kanban` for board interfaces.
 
 ### learning-guide
 

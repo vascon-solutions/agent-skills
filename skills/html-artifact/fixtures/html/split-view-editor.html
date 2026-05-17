@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prompt Tuner</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8fafc; color: #0f172a; height: 100vh; display: flex; flex-direction: column; }
+    header { padding: 1rem 1.5rem; background: #fff; border-bottom: 1px solid #e2e8f0; }
+    header h1 { font-size: 1.1rem; }
+    header p { font-size: 0.8rem; color: #64748b; margin-top: 0.15rem; }
+    .layout { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: #e2e8f0; overflow: hidden; }
+    .pane { background: #fff; display: flex; flex-direction: column; overflow: hidden; }
+    .pane-head { padding: 0.6rem 1rem; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: #64748b; background: #f1f5f9; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; }
+    textarea { flex: 1; padding: 1rem; border: 0; outline: none; resize: none; font-family: 'SF Mono', 'Cascadia Code', Consolas, monospace; font-size: 13px; line-height: 1.6; color: #1e293b; }
+    [data-preview] { flex: 1; padding: 1rem 1.25rem; overflow-y: auto; font-size: 14px; line-height: 1.6; white-space: pre-wrap; }
+    .vars { padding: 0.75rem 1rem; background: #f8fafc; border-top: 1px solid #e2e8f0; display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; }
+    .vars label { font-size: 0.8rem; color: #475569; display: flex; align-items: center; gap: 0.35rem; }
+    .vars input { padding: 0.3rem 0.5rem; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.85rem; width: 120px; }
+    .warn { color: #b45309; font-size: 0.75rem; }
+    button { padding: 0.35rem 0.85rem; background: #0066cc; color: #fff; border: 0; border-radius: 4px; cursor: pointer; font-size: 0.75rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Prompt Tuner</h1>
+    <p>Edit the template on the left. Variables in <code>{{name}}</code> form are substituted in the preview.</p>
+  </header>
+  <div class="layout">
+    <div class="pane">
+      <div class="pane-head">Template</div>
+      <textarea id="source" oninput="updatePreview()">You are a {{role}} reviewing a pull request for {{project}}.
+
+Focus on:
+- correctness over style
+- the {{audience}} who will read this code
+- whether the change is minimal
+
+Return at most {{limit}} findings, ranked by severity.</textarea>
+      <div class="vars">
+        <label>role <input data-var="role" value="senior engineer" oninput="updatePreview()"></label>
+        <label>project <input data-var="project" value="agent-skills" oninput="updatePreview()"></label>
+        <label>audience <input data-var="audience" value="future maintainers" oninput="updatePreview()"></label>
+        <label>limit <input data-var="limit" value="5" oninput="updatePreview()"></label>
+      </div>
+    </div>
+    <div class="pane">
+      <div class="pane-head">
+        Preview
+        <button onclick="copyPreview()">Copy</button>
+      </div>
+      <div data-preview id="preview"></div>
+      <div class="vars"><span class="warn" id="warn"></span></div>
+    </div>
+  </div>
+  <script>
+    const source = document.getElementById('source');
+    const preview = document.getElementById('preview');
+    const warn = document.getElementById('warn');
+    function updatePreview() {
+      const vars = {};
+      document.querySelectorAll('[data-var]').forEach((input) => { vars[input.dataset.var] = input.value; });
+      let rendered = source.value;
+      const unresolved = [];
+      rendered = rendered.replace(/\{\{(\w+)\}\}/g, (match, key) => {
+        if (vars[key] !== undefined && vars[key] !== '') return vars[key];
+        unresolved.push(key);
+        return match;
+      });
+      preview.textContent = rendered;
+      warn.textContent = unresolved.length ? `Unresolved variables: ${[...new Set(unresolved)].join(', ')}` : '';
+    }
+    function copyPreview() { navigator.clipboard.writeText(preview.textContent); }
+    updatePreview();
+  </script>
+</body>
+</html>

@@ -110,7 +110,7 @@ For each file:
 1. Compute the local MD5 of the file.
 2. HEAD the existing S3 object: `aws s3api head-object --bucket "$ARTIFACTS_S3_BUCKET" --key "$key"`.
 3. If the object does not exist, upload it.
-4. If it exists, compare local file size to `ContentLength` and the local MD5 to the `x-amz-meta-content-md5` user-metadata field returned by HEAD. If either differs, upload. If `x-amz-meta-content-md5` is absent on the existing object (older upload, or first run against a pre-existing object), treat the file as changed and upload — this re-establishes the checksum metadata. **Do not rely on the S3 `ETag` for comparison.** ETag is only an MD5 for single-part uploads under the default 8 MB threshold; for multipart, SSE-KMS, SSE-C, or additional-checksum objects it is not an MD5, and naive comparison will trigger re-uploads on every run.
+4. If it exists, compare local file size to `ContentLength` and the local MD5 to `Metadata["content-md5"]` from the `head-object` JSON output. S3 stores this as the `x-amz-meta-content-md5` HTTP header, but the AWS CLI exposes user metadata under the top-level `Metadata` map. If either value differs, upload. If `Metadata["content-md5"]` is absent on the existing object (older upload, or first run against a pre-existing object), treat the file as changed and upload — this re-establishes the checksum metadata. **Do not rely on the S3 `ETag` for comparison.** ETag is only an MD5 for single-part uploads under the default 8 MB threshold; for multipart, SSE-KMS, SSE-C, or additional-checksum objects it is not an MD5, and naive comparison will trigger re-uploads on every run.
 5. Set `--content-type` based on extension:
    - `.md` → `text/markdown; charset=utf-8`
    - `.html` → `text/html; charset=utf-8`
@@ -162,7 +162,13 @@ After the presign step resolves a `--share` target to a concrete file, also crea
 
 If `--gist-visibility public` is passed, append `--public` to the `gh gist create` command.
 
-If a gist for the same file has been published before (recorded in `metadata.md`), prompt before re-creating. With `--force`, update the existing gist via `gh gist edit <gist-id> <file>` instead of creating a duplicate.
+If a gist for the same file has been published before (recorded in `metadata.md`), prompt before re-creating. With `--force`, update the existing gist instead of creating a duplicate:
+
+```
+gh gist edit <gist-id> --filename <gist-filename> <local-file>
+```
+
+Use the filename recorded in the gist, normally the basename of `<local-file>`, for `<gist-filename>`.
 
 If `gh auth status` fails, do not attempt gist operations. Report what was uploaded to S3 and skip gist steps with a note.
 
@@ -179,13 +185,12 @@ Update or append the `## Published` section in the workspace's `metadata.md`:
 
 ### Presigned share links
 
-- `markdown/<file>.md` — <url> (expires <YYYY-MM-DD HH:MM>Z)
-- `html/<file>.html` — <url> (expires <YYYY-MM-DD HH:MM>Z)
+- `<relative/path>` — <url> (expires <YYYY-MM-DD HH:MM>Z)
 
 ### Gist share links
 
-- `markdown/<file>.md` — https://gist.github.com/<user>/<id>
-- `html/<file>.html` — https://gist.github.com/<user>/<id>
+- `<relative/path>.md` — https://gist.github.com/<user>/<id>
+- `<relative/path>.html` — https://gist.github.com/<user>/<id>
 ```
 
 On each run, replace the existing `## Published` section. **Section boundaries:** the section starts at the literal line `## Published` and ends at the line immediately before the next `## ` heading or end-of-file, whichever comes first. Preserve everything before the section start line and after the section end line. If the workspace has no `metadata.md`, create one with only this section plus a minimal header (`# <slug> Metadata`).
@@ -230,7 +235,7 @@ Before reporting complete, verify:
 
 ## Output
 
-Report exactly:
+Report in this shape, using the actual workspace-relative paths for every requested share target. Omit a subsection only when it has no applicable rows; when a requested target does not produce a gist, include a short reason instead of pretending it was shared as a gist.
 
 ```text
 Workspace: ~/agent-artifacts/<slug>/
@@ -238,15 +243,18 @@ S3 archive: s3://<bucket>/[<prefix>/]<slug>/
 Files uploaded: <N> (skipped <M> unchanged)
 
 Share links (TTL: <ttl>):
-- markdown/<file>.md — <presigned-url>
-- html/<file>.html — <presigned-url>
+- <relative/path> — <presigned-url>
+- images/<file>.png — <presigned-url> (S3 only; no gist)
 
 Gists:
-- markdown/<file>.md — https://gist.github.com/<user>/<id>
-- html/<file>.html — https://gist.github.com/<user>/<id>
+- <relative/path>.md — https://gist.github.com/<user>/<id>
+- <relative/path>.html — https://gist.github.com/<user>/<id>
+- images/<file>.png — not created (images are S3-only)
 
 Metadata updated: ~/agent-artifacts/<slug>/metadata.md
 ```
+
+If `gh auth status` fails, keep the S3 share links and report `Gists: skipped (gh auth status failed)`.
 
 On a blocked secret scan:
 

@@ -2,6 +2,8 @@
 
 Layout guidance for each doc type. Every layout satisfies the single-file rule: inline CSS only, inline JS only, system fonts, zero network dependencies.
 
+Use `../fixtures/<doc-type>.md` as compact source examples when hand-building document layouts, and `../fixtures/html/<layout-type>.html` as minimal examples of required feature shape. After writing hand-built HTML, run `../scripts/verify-layout-artifact.js <doc-type-or-artifact-kind> <output.html>` to catch missing layout features, network references, and structural tag mismatches.
+
 ## Common Shell
 
 All layouts share this HTML shell:
@@ -331,3 +333,109 @@ Markdown rendering rules:
 - `**bold**` → `<strong>`, `*italic*` → `<em>`
 - `[text](url)` → `<a href="url">`
 - Paragraphs separated by blank lines → `<p>`
+
+---
+
+## Artifact Patterns
+
+Use these when the user wants a browser artifact whose source content is Markdown but whose value is spatial, interactive, or visual. These are hand-built layouts; the bundled render script does not generate them. Keep all CSS and JS inline and run `verify-layout-artifact.js <artifact-kind> <output.html>` before reporting complete.
+
+### approach-comparison
+
+Use for three code approaches, architecture options, or implementation alternatives.
+
+Required elements:
+- side-by-side cards or columns marked with `data-approach`
+- code snippets or pseudocode per approach when available
+- tradeoff matrix
+- recommendation or decision summary
+
+### diff-annotation
+
+Use for annotated PRs, code review explanations, or severity-tagged diffs.
+
+Required elements:
+- diff in `<pre><code>`
+- annotation rail or callouts marked with `data-annotation`
+- severity labels such as Critical, Major, Minor, or Note
+- summary of required reviewer action
+
+### design-system-tokens
+
+Use for living design-system references, copyable tokens, colors, spacing, typography, radius, and shadows.
+
+Required elements:
+- token rows or cards marked with `data-token`
+- visible swatches for color-like tokens
+- copy function such as `copyToken()` or `copyValue()`
+- grouped categories for color, spacing, typography, radius, or component usage
+
+### slide-deck
+
+Use for arrow-key presentation decks that should open as one standalone HTML file.
+
+Required elements:
+- one section per slide marked with `data-slide`
+- `showSlide()`, `nextSlide()`, or `prevSlide()` navigation
+- `keydown` listener for arrow keys
+- progress indicator or slide count when useful
+
+### animation-sandbox
+
+Use for tunable motion examples, easing demos, loading states, or interaction timing.
+
+Required elements:
+- range or numeric controls for duration, delay, distance, easing, or intensity
+- preview target marked with `data-preview`
+- `updateAnimation()` or equivalent inline JS
+- reset or preset controls when the source describes variants
+
+### clickable-flow
+
+Use for multi-screen prototypes, decision flows, onboarding sequences, and state walkthroughs.
+
+Required elements:
+- screens marked with `data-screen`
+- navigation buttons or hotspots
+- `showScreen()`, `goToScreen()`, or equivalent state-switching function
+- visible active state through class or ARIA attributes
+
+### svg-figure-sheet
+
+Use for tweakable SVG diagrams, icon sheets, vector illustrations, ring diagrams, or figure explainers.
+
+Required elements:
+- inline `<svg>` only, never remote SVG files
+- controls marked with `data-control` or ordinary inputs
+- update function such as `updateFigure()` when controls affect the SVG
+- labels explaining the figure parts
+
+### chart-report
+
+Use for weekly status, metrics summaries, lightweight dashboards, and report charts.
+
+Required elements:
+- inline SVG chart or chart area marked with `data-chart`
+- labels, legend, axes, or `data-series` markers
+- summary or insight section
+- source caveat when numbers are assumptions or copied from notes
+
+### draggable-kanban
+
+Use for ticket triage boards or prioritization boards that need drag-and-drop.
+
+Required elements:
+- columns marked with `data-col`
+- cards with `draggable="true"`
+- `dragstart`, `dragover`, and `drop` handling
+- export function when the board state should be copied back to Markdown
+
+### split-view-editor
+
+Use for prompt tuners, feature flag editors, configuration workbenches, or side-by-side source/preview tools.
+
+Required elements:
+- source editor using `<textarea>` or `contenteditable`
+- preview pane marked with `data-preview`
+- `updatePreview()` or `renderPreview()` inline JS
+- warnings, validation output, or sample result area when relevant

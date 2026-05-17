@@ -29,6 +29,19 @@ Accept any of:
 
 Do not invent source content. If required visual facts are missing, mark them as assumptions in the prompt plan or ask one focused question before generating.
 
+## Bundled Script
+
+Prefer the bundled helper for deterministic support tasks:
+
+```bash
+node <this-skill-dir>/scripts/image-artifact-helper.js prompt-pack <source.md> --workspace <workspace> [--kind <kind>] [--variants <n>]
+node <this-skill-dir>/scripts/image-artifact-helper.js prompt-plan <source.md> --workspace <workspace> [--kind <kind>] [--variants <n>]
+node <this-skill-dir>/scripts/image-artifact-helper.js metadata <workspace> --source <source.md> --output <image-or-prompt> --kind <kind> [--tool <name>]
+node <this-skill-dir>/scripts/image-artifact-helper.js validate <image-file> [<image-file>...]
+```
+
+The script does not generate images. It handles prompt plans, prompt-pack fallback files, metadata updates, path resolution, and file-level image validation.
+
 ## Output Kinds
 
 | Kind | Use when | Default filename |
@@ -203,13 +216,13 @@ If using the image-only `Type | Source | Output | Tool` table and creating it fr
 4. Resolve workspace and output destination.
 5. Read Markdown and extract the visual brief.
 6. If `--use-repo-design` is provided, scan repo design context and decide whether confidence is high enough to apply.
-7. Build a prompt plan with assumptions, variant definitions, and repo design context when needed.
+7. Build a prompt plan with assumptions, variant definitions, and repo design context when needed; use `scripts/image-artifact-helper.js prompt-plan` when possible.
 8. Handle existing target files: confirm replacement, honor `--force`, or choose a versioned filename.
-9. If generation is unavailable, write a `prompt-pack` Markdown file and stop.
+9. If generation is unavailable, write a `prompt-pack` Markdown file with `scripts/image-artifact-helper.js prompt-pack` when possible and stop.
 10. Generate the image artifact or artifacts with the available tool.
 11. Save outputs under `images/` or the explicit `--out`.
-12. Update `metadata.md` when using a workspace.
-13. Verify outputs.
+12. Update `metadata.md` when using a workspace; use `scripts/image-artifact-helper.js metadata` when possible.
+13. Verify outputs; use `scripts/image-artifact-helper.js validate` for file-level image checks when visual inspection is unavailable.
 14. Report concise paths and repo design context when scanned.
 
 ## Validation

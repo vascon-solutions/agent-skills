@@ -15,12 +15,13 @@ Use this skill when the user asks to publish or ship a branch, commit and push c
 - Stop and ask before pushing directly to `develop`, `main`, or any other default or integration branch unless the user explicitly requested that branch.
 - Stop and ask when a merge or ready-for-review PR would be unsafe because known checks are failing or the user explicitly wants manual validation first.
 - Stop and ask before any parallel workflow that would let more than one agent mutate the same git worktree or publish path.
-- If `gh auth status` is invalid, continue branch operations like inspect, stage, commit, and push. Only stop before PR creation and require the user to run `gh auth login -h github.com`.
+- If plain `gh auth status` is invalid, retry through the user's interactive shell before treating GitHub auth as unavailable. Continue branch operations like inspect, stage, commit, and push. Only stop before PR creation if both plain `gh` and the interactive-shell retry fail.
 
 ## Decision Rules
 
 - If the current branch is a default or integration branch such as `develop`, stay on it only when the user explicitly wants a direct push there. Otherwise create a feature branch first.
 - If the remote uses SSH and push fails with key or auth errors, retry with the environment's standard SSH bootstrap helper if one exists, for example `zsh -ic 'source ~/.zshrc; loadssh; git push ...'`.
+- If `gh auth status` fails in the non-interactive shell, retry with `zsh -ic 'gh auth status'`. When that succeeds, run PR commands through the same interactive shell, for example `zsh -ic 'gh pr create ...'`.
 - If the working tree is clean except for the intended files, stage explicit file paths when the scope is narrow. Use `git add -A` only after scope is confirmed.
 - If the user asked only for commit and push, do not open a PR automatically.
 - If the user asked for a publish or PR flow, open a draft PR by default. Only create a ready-for-review PR when the user explicitly asks for it.
@@ -38,7 +39,8 @@ Use this skill when the user asks to publish or ship a branch, commit and push c
 4. Check PR prerequisites only when a PR is requested:
    - Prefer the environment's existing GitHub integration or workflow.
    - If the flow relies on `gh`, run `gh --version` and `gh auth status`.
-   - If `gh` auth is invalid, continue branch operations and stop only before PR creation.
+   - If plain `gh` auth is invalid, retry with `zsh -ic 'gh auth status'`; if that succeeds, use `zsh -ic 'gh pr create ...'` for PR creation.
+   - If both plain `gh` and the interactive-shell retry are invalid, continue branch operations and stop only before PR creation.
 5. Stage only the intended files.
 6. Commit with a terse message that matches the actual change.
 7. Let repo hooks run on commit and push. Run extra manual validation only when the user asked for it, when hooks do not cover the risk, or when a high-risk change needs more confidence.

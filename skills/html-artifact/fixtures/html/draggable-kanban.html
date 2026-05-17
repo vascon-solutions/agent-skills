@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Incident Response Triage</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f1f5f9; color: #0f172a; padding: 1.5rem; }
+    header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; }
+    h1 { font-size: 1.25rem; }
+    button { padding: 0.4rem 0.9rem; background: #0066cc; color: #fff; border: 0; border-radius: 5px; cursor: pointer; font-size: 0.85rem; }
+    .board { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; align-items: start; }
+    .col { background: #fff; border-radius: 6px; overflow: hidden; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05); }
+    .col-head { padding: 0.5rem 0.85rem; font-weight: 600; font-size: 0.85rem; display: flex; justify-content: space-between; align-items: center; }
+    .col-body { padding: 0.5rem; min-height: 200px; display: flex; flex-direction: column; gap: 0.5rem; }
+    .col-body.drag-over { background: #e0f2fe; }
+    [data-col="Planned"] .col-head { background: #e0e7ff; color: #3730a3; }
+    [data-col="In Progress"] .col-head { background: #fef3c7; color: #92400e; }
+    [data-col="Done"] .col-head { background: #dcfce7; color: #166534; }
+    [data-col="Blocked"] .col-head { background: #fee2e2; color: #991b1b; }
+    .card { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 5px; padding: 0.55rem 0.75rem; font-size: 0.85rem; cursor: grab; user-select: none; }
+    .card:active { cursor: grabbing; }
+    .card.dragging { opacity: 0.4; }
+    .badge { display: inline-block; padding: 1px 6px; border-radius: 8px; font-size: 0.65rem; font-weight: 700; margin-right: 0.4rem; }
+    .sev-high { background: #fee2e2; color: #991b1b; }
+    .sev-med { background: #fef3c7; color: #92400e; }
+    .sev-low { background: #dcfce7; color: #166534; }
+    .count { background: rgba(0, 0, 0, 0.08); padding: 1px 7px; border-radius: 8px; font-size: 0.7rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Incident Response Triage</h1>
+    <button onclick="copyBoard()">Copy as Markdown</button>
+  </header>
+  <div class="board">
+    <section data-col="Planned">
+      <div class="col-head"><span>Planned</span><span class="count" data-count></span></div>
+      <div class="col-body" data-body ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
+        <article class="card" draggable="true" ondragstart="onDragStart(event)" ondragend="onDragEnd(event)"><span class="badge sev-med">MED</span>Add runbook for cache eviction storms</article>
+        <article class="card" draggable="true" ondragstart="onDragStart(event)" ondragend="onDragEnd(event)"><span class="badge sev-low">LOW</span>Document on-call rotation handoff</article>
+      </div>
+    </section>
+    <section data-col="In Progress">
+      <div class="col-head"><span>In Progress</span><span class="count" data-count></span></div>
+      <div class="col-body" data-body ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
+        <article class="card" draggable="true" ondragstart="onDragStart(event)" ondragend="onDragEnd(event)"><span class="badge sev-high">HIGH</span>Replay queue spike postmortem</article>
+        <article class="card" draggable="true" ondragstart="onDragStart(event)" ondragend="onDragEnd(event)"><span class="badge sev-med">MED</span>Alert threshold review for latency p99</article>
+      </div>
+    </section>
+    <section data-col="Done">
+      <div class="col-head"><span>Done</span><span class="count" data-count></span></div>
+      <div class="col-body" data-body ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
+        <article class="card" draggable="true" ondragstart="onDragStart(event)" ondragend="onDragEnd(event)"><span class="badge sev-low">LOW</span>Patch flaky integration test in billing</article>
+      </div>
+    </section>
+    <section data-col="Blocked">
+      <div class="col-head"><span>Blocked</span><span class="count" data-count></span></div>
+      <div class="col-body" data-body ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
+        <article class="card" draggable="true" ondragstart="onDragStart(event)" ondragend="onDragEnd(event)"><span class="badge sev-high">HIGH</span>Failover drill — waiting on staging access</article>
+      </div>
+    </section>
+  </div>
+  <script>
+    let dragged = null;
+    function onDragStart(event) {
+      dragged = event.currentTarget;
+      dragged.classList.add('dragging');
+      event.dataTransfer.effectAllowed = 'move';
+    }
+    function onDragEnd() {
+      if (dragged) dragged.classList.remove('dragging');
+      dragged = null;
+      document.querySelectorAll('.drag-over').forEach((el) => el.classList.remove('drag-over'));
+      refreshCounts();
+    }
+    function onDragOver(event) {
+      event.preventDefault();
+      event.currentTarget.classList.add('drag-over');
+    }
+    function onDragLeave(event) {
+      if (event.currentTarget === event.target) event.currentTarget.classList.remove('drag-over');
+    }
+    function onDrop(event) {
+      event.preventDefault();
+      if (!dragged) return;
+      event.currentTarget.classList.remove('drag-over');
+      event.currentTarget.appendChild(dragged);
+      refreshCounts();
+    }
+    function refreshCounts() {
+      document.querySelectorAll('[data-col]').forEach((col) => {
+        const count = col.querySelectorAll('.card').length;
+        col.querySelector('[data-count]').textContent = count;
+      });
+    }
+    function copyBoard() {
+      const lines = [];
+      document.querySelectorAll('[data-col]').forEach((col) => {
+        lines.push(`## ${col.dataset.col}`);
+        col.querySelectorAll('.card').forEach((card) => {
+          const text = card.textContent.replace(/\s+/g, ' ').trim();
+          lines.push(`- ${text}`);
+        });
+        lines.push('');
+      });
+      navigator.clipboard.writeText(lines.join('\n').trim());
+    }
+    refreshCounts();
+  </script>
+</body>
+</html>
