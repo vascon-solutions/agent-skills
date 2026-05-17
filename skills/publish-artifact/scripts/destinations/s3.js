@@ -144,7 +144,7 @@ async function syncFile({ file, workspace, prefix, env, runner, attemptedCommand
   return 'uploaded';
 }
 
-function buildMetadata({ workspace, archive, uploaded, skipped, shareLinks, gistLinks, now }) {
+function buildMetadataLines({ archive, uploaded, skipped, shareLinks, gistLinks, now }) {
   const lines = [
     `- S3 archive: \`${archive}\``,
     `- Last published: \`${formatUtc(now)}\``,
@@ -162,6 +162,11 @@ function buildMetadata({ workspace, archive, uploaded, skipped, shareLinks, gist
       lines.push(`- \`${link.relativePath}\` — ${link.url}`);
     }
   }
+  return lines;
+}
+
+function buildMetadata({ workspace, archive, uploaded, skipped, shareLinks, gistLinks, now }) {
+  const lines = buildMetadataLines({ archive, uploaded, skipped, shareLinks, gistLinks, now });
   return replacePublishedSection(readMetadata(workspace.workspacePath), workspace.slug, lines);
 }
 
@@ -329,6 +334,7 @@ const driver = {
     }
 
     const metadata = buildMetadata({ workspace, archive, uploaded, skipped, shareLinks, gistLinks, now: ctx.now });
+    const metadataLines = buildMetadataLines({ archive, uploaded, skipped, shareLinks, gistLinks, now: ctx.now });
     const metadataPath = path.join(workspace.workspacePath, 'metadata.md');
     fs.writeFileSync(metadataPath, metadata);
     const redacted = redactPublishedSection(metadata);
@@ -362,12 +368,36 @@ const driver = {
       noGist: flags.noGist,
       text,
       presignedByFile,
+      metadataLines,
     };
   },
 
   formatReport(result) {
     return (result && result.text) ? [result.text.replace(/\n$/, '')] : [];
   },
+};
+
+driver.uploadRedactedMetadata = async function uploadRedactedMetadata({ workspace, ctx }) {
+  const env = ctx.env;
+  const prefix = env.ARTIFACTS_S3_PREFIX || '';
+  const attemptedCommands = [];
+  const metadataPath = path.join(workspace.workspacePath, 'metadata.md');
+  const metadata = fs.readFileSync(metadataPath, 'utf8');
+  const redacted = redactPublishedSection(metadata);
+  validateRedactedMetadata(redacted);
+  const result = await putObject({
+    localContent: redacted,
+    relativePath: 'metadata.md',
+    key: s3Key(prefix, workspace.slug, 'metadata.md'),
+    contentType: 'text/markdown; charset=utf-8',
+    env,
+    runner: ctx.runner,
+    attemptedCommands,
+  });
+  validateAttemptedCommands(attemptedCommands);
+  if (result.status !== 0) {
+    throw new Error(`Upload failed for metadata.md: ${result.stderr || result.stdout}`);
+  }
 };
 
 driver.helpers = {

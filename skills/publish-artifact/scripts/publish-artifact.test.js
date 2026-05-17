@@ -353,3 +353,85 @@ test('parseArgs rejects --share when --to excludes s3', () => {
   assert.throws(() => publish.parseArgs(['demo', '--to', 'wiki', '--share', 'markdown']), /--share requires --to s3/);
   assert.doesNotThrow(() => publish.parseArgs(['demo', '--share', 'markdown']));
 });
+
+test('runPublish applies ClickUp and Google env defaults before validation', async () => {
+  const root = tempDir();
+  const workspace = path.join(root, 'demo');
+  write(path.join(workspace, 'markdown', 'doc.md'), '# Doc\n');
+
+  const clickup = await publish.runPublish({
+    argv: ['demo', '--workspace-root', root, '--to', 'clickup', '--dry-run'],
+    env: {
+      CLICKUP_API_TOKEN: 'pk_1_ABCDEFGHIJKLMNOPQRSTUVWXYZ123456',
+      CLICKUP_PARENT_TYPE: 'workspace',
+      CLICKUP_PARENT_ID: 'wid',
+    },
+    runner: async () => ({ stdout: '', stderr: '', status: 0 }),
+    now: new Date('2026-05-17T12:00:00Z'),
+  });
+  assert.match(clickup.output, /would create doc "demo"/);
+
+  const google = await publish.runPublish({
+    argv: ['demo', '--workspace-root', root, '--to', 'google-docs', '--dry-run'],
+    env: { GOOGLE_DRIVE_PARENT_ID: 'folder-abc' },
+    runner: async () => { throw new Error('dry-run should not fetch ADC token'); },
+    now: new Date('2026-05-17T12:00:00Z'),
+  });
+  assert.match(google.output, /would create doc "demo"/);
+});
+
+test('runPublish writes destination metadata for wiki-only publishes', async () => {
+  const root = tempDir();
+  const workspace = path.join(root, 'demo');
+  write(path.join(workspace, 'markdown', 'doc.md'), '# Doc\n');
+
+  await publish.runPublish({
+    argv: ['demo', '--workspace-root', root, '--to', 'wiki', '--wiki-repo', 'me/proj'],
+    env: {},
+    runner: async (cmd, args) => {
+      if (cmd === 'git' && args.includes('status')) return { stdout: 'A  markdown/doc.md\n', stderr: '', status: 0 };
+      return { stdout: '', stderr: '', status: 0 };
+    },
+    now: new Date('2026-05-17T12:00:00Z'),
+  });
+
+  const metadata = fs.readFileSync(path.join(workspace, 'metadata.md'), 'utf8');
+  assert.match(metadata, /## Published — wiki/);
+  assert.match(metadata, /https:\/\/github\.com\/me\/proj\/wiki\/doc/);
+});
+
+test('runPublish rewrites image refs when s3 is selected after ClickUp', async () => {
+  const root = tempDir();
+  const workspace = path.join(root, 'demo');
+  write(path.join(workspace, 'markdown', 'doc.md'), '![alt](../images/pic.png)\n');
+  write(path.join(workspace, 'images', 'pic.png'), 'png');
+  let clickupBody = '';
+  const httpClient = {
+    request: async (url, init = {}) => {
+      if (init.method === 'GET') return { json: async () => ({ docs: [] }) };
+      if (init.method === 'POST') {
+        clickupBody = init.body;
+        return { json: async () => ({ url: 'https://app.clickup.com/doc/1' }) };
+      }
+      throw new Error(`unexpected request: ${url}`);
+    },
+  };
+
+  await publish.runPublish({
+    argv: ['demo', '--workspace-root', root, '--to', 'clickup', '--to', 's3', '--clickup-parent', 'workspace:wid'],
+    env: {
+      CLICKUP_API_TOKEN: 'pk_1_ABCDEFGHIJKLMNOPQRSTUVWXYZ123456',
+      ARTIFACTS_S3_BUCKET: 'bucket',
+      ARTIFACTS_S3_REGION: 'us-east-1',
+    },
+    httpClient,
+    runner: async (cmd, args) => {
+      if (args.includes('head-object')) return { stdout: '', stderr: 'not found', status: 254 };
+      if (args.includes('presign')) return { stdout: 'https://signed.example/pic.png\n', stderr: '', status: 0 };
+      return { stdout: '', stderr: '', status: 0 };
+    },
+    now: new Date('2026-05-17T12:00:00Z'),
+  });
+
+  assert.match(JSON.parse(clickupBody).content, /https:\/\/signed\.example\/pic\.png/);
+});

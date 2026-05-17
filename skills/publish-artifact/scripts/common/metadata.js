@@ -23,11 +23,39 @@ function replacePublishedSection(existingContent, slug, lines) {
   return `${normalized.slice(0, start)}${section}${normalized.slice(end)}`;
 }
 
+function isPublishedHeading(line) {
+  return line === '## Published' || line.startsWith('## Published — ');
+}
+
+function replaceDestinationSections(existingContent, slug, sections) {
+  const base = existingContent || `# ${slug} Metadata\n`;
+  const lines = (base.endsWith('\n') ? base : `${base}\n`).split('\n');
+  const kept = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (!isPublishedHeading(line)) {
+      kept.push(line);
+      continue;
+    }
+    index += 1;
+    while (index < lines.length && !lines[index].startsWith('## ')) index += 1;
+    index -= 1;
+  }
+
+  const content = kept.join('\n').replace(/\n*$/, '\n\n');
+  const rendered = [];
+  for (const section of sections) {
+    if (!section || !section.destination || !section.lines || section.lines.length === 0) continue;
+    rendered.push(`## Published — ${section.destination}`, '', ...section.lines, '');
+  }
+  return `${content}${rendered.join('\n')}`.replace(/\n*$/, '\n');
+}
+
 function redactPublishedSection(metadata) {
   const lines = metadata.split('\n');
   let inPublished = false;
   return lines.map((line) => {
-    if (line === '## Published') { inPublished = true; return line; }
+    if (isPublishedHeading(line)) { inPublished = true; return line; }
     if (inPublished && line.startsWith('## ')) { inPublished = false; return line; }
     if (!inPublished) return line;
     if (line.includes('gist.github.com')) {
@@ -60,6 +88,7 @@ function findExistingGist(metadata, relativePath) {
 module.exports = {
   readMetadata,
   replacePublishedSection,
+  replaceDestinationSections,
   redactPublishedSection,
   extractPublishedSection,
   findExistingGist,

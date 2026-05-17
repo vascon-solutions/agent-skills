@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const { rewriteImagePaths } = require('../common/markdown-rewrite.js');
 
@@ -8,8 +9,9 @@ function assertCredentialsOutside(credPath, workspacePath, scriptDir) {
   const abs = path.resolve(credPath);
   const checks = [workspacePath];
   if (scriptDir) {
-    checks.push(scriptDir);
-    checks.push(path.dirname(path.dirname(scriptDir)));
+    const skillDir = path.dirname(scriptDir);
+    const skillsDir = path.dirname(skillDir);
+    checks.push(scriptDir, skillDir, skillsDir, path.dirname(skillsDir));
   }
   for (const root of checks) {
     if (!root) continue;
@@ -21,14 +23,61 @@ function assertCredentialsOutside(credPath, workspacePath, scriptDir) {
 }
 
 async function defaultAccessToken(env, runner) {
-  if (env.GOOGLE_APPLICATION_CREDENTIALS) {
-    throw new Error('Service-account JSON support without ADC is not implemented in v1; activate the account via `gcloud auth application-default login --impersonate-service-account` or set ADC directly.');
-  }
   const result = await runner('gcloud', ['auth', 'application-default', 'print-access-token'], { env });
   if (result.status !== 0) {
     throw new Error(`gcloud ADC token fetch failed: ${(result.stderr || result.stdout).trim()}`);
   }
   return result.stdout.trim();
+}
+
+function base64url(input) {
+  return Buffer.from(input).toString('base64')
+    .replace(/=/g, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_');
+}
+
+function signJwt(unsigned, privateKey) {
+  return crypto.createSign('RSA-SHA256').update(unsigned).sign(privateKey, 'base64')
+    .replace(/=/g, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_');
+}
+
+function createServiceAccountAssertion(creds, now, signer = signJwt) {
+  if (creds.type !== 'service_account' || !creds.client_email || !creds.private_key) {
+    throw new Error('GOOGLE_APPLICATION_CREDENTIALS must point to a service-account JSON with client_email and private_key');
+  }
+  const tokenUri = creds.token_uri || 'https://oauth2.googleapis.com/token';
+  const issuedAt = Math.floor(now.getTime() / 1000);
+  const header = base64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
+  const claims = base64url(JSON.stringify({
+    iss: creds.client_email,
+    scope: 'https://www.googleapis.com/auth/drive.file',
+    aud: tokenUri,
+    exp: issuedAt + 3600,
+    iat: issuedAt,
+  }));
+  const unsigned = `${header}.${claims}`;
+  return { assertion: `${unsigned}.${signer(unsigned, creds.private_key)}`, tokenUri };
+}
+
+async function serviceAccountAccessToken(env, httpClient, now, signer) {
+  const credPath = path.resolve(env.GOOGLE_APPLICATION_CREDENTIALS);
+  const creds = JSON.parse(fs.readFileSync(credPath, 'utf8'));
+  const { assertion, tokenUri } = createServiceAccountAssertion(creds, now, signer);
+  const body = new URLSearchParams({
+    grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+    assertion,
+  }).toString();
+  const res = await httpClient.request(tokenUri, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body,
+  });
+  const data = await res.json();
+  if (!data.access_token) throw new Error('Google service-account token response did not include access_token');
+  return data.access_token;
 }
 
 const driver = {
@@ -46,17 +95,27 @@ const driver = {
   async publish({ workspace, files, flags, ctx }) {
     assertCredentialsOutside(ctx.env.GOOGLE_APPLICATION_CREDENTIALS, workspace.workspacePath, ctx.scriptDir);
 
-    const token = ctx.fetchAccessToken
-      ? await ctx.fetchAccessToken()
-      : await defaultAccessToken(ctx.env, ctx.runner);
-    const authHeader = { Authorization: `Bearer ${token}` };
-
     const mdFiles = files.filter((f) => f.relativePath.startsWith('markdown/') && f.relativePath.endsWith('.md'));
+    const htmlFiles = files.filter((f) => f.relativePath.startsWith('html/') && f.relativePath.endsWith('.html'));
     const rewriteEnabled = (flags.to || []).includes('s3') && ctx.presignedByFile;
     const created = [];
     const updated = [];
-    const skipped = [];
+    const skipped = htmlFiles.map((file) => ({
+      relativePath: file.relativePath,
+      reason: 'google-docs does not ingest HTML',
+    }));
     const warnings = [];
+    let authHeader = null;
+    async function getAuthHeader() {
+      if (authHeader) return authHeader;
+      const token = ctx.fetchAccessToken
+        ? await ctx.fetchAccessToken()
+        : ctx.env.GOOGLE_APPLICATION_CREDENTIALS
+          ? await serviceAccountAccessToken(ctx.env, ctx.httpClient, ctx.now || new Date(), ctx.signJwt)
+          : await defaultAccessToken(ctx.env, ctx.runner);
+      authHeader = { Authorization: `Bearer ${token}` };
+      return authHeader;
+    }
 
     for (const file of mdFiles) {
       const raw = fs.readFileSync(file.fullPath, 'utf8');
@@ -69,7 +128,7 @@ const driver = {
         warnings.push(`Image references in ${file.relativePath} are not rewritten (add --to s3 to mint presigned URLs).`);
       }
 
-      const docName = flags.googleDoc || path.basename(file.relativePath, '.md');
+      const docName = flags.googleDoc || workspace.slug;
       if (flags.dryRun) {
         created.push({ relativePath: file.relativePath, dryRun: true, docName });
         continue;
@@ -77,7 +136,8 @@ const driver = {
 
       const q = encodeURIComponent(`name='${docName.replace(/'/g, "\\'")}' and '${flags.googleFolder}' in parents and mimeType='application/vnd.google-apps.document' and trashed=false`);
       const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${q}&supportsAllDrives=true&includeItemsFromAllDrives=true`;
-      const searchRes = await ctx.httpClient.request(searchUrl, { method: 'GET', headers: authHeader });
+      const headers = await getAuthHeader();
+      const searchRes = await ctx.httpClient.request(searchUrl, { method: 'GET', headers });
       const searchData = await searchRes.json();
       const match = (searchData.files || [])[0];
 
@@ -89,7 +149,7 @@ const driver = {
         const updateUrl = `https://www.googleapis.com/upload/drive/v3/files/${encodeURIComponent(match.id)}?uploadType=media&supportsAllDrives=true`;
         await ctx.httpClient.request(updateUrl, {
           method: 'PATCH',
-          headers: { ...authHeader, 'Content-Type': 'text/markdown' },
+          headers: { ...headers, 'Content-Type': 'text/markdown' },
           body: bodyContent,
         });
         updated.push({ relativePath: file.relativePath, docName, url: `https://docs.google.com/document/d/${match.id}/edit` });
@@ -103,7 +163,7 @@ const driver = {
         const uploadUrl = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true';
         const res = await ctx.httpClient.request(uploadUrl, {
           method: 'POST',
-          headers: { ...authHeader, 'Content-Type': `multipart/related; boundary=${boundary}` },
+          headers: { ...headers, 'Content-Type': `multipart/related; boundary=${boundary}` },
           body,
         });
         const data = await res.json();
@@ -111,7 +171,15 @@ const driver = {
       }
     }
 
-    return { created, updated, skipped, warnings };
+    const metadataLines = [
+      `- Google Drive folder: \`${flags.googleFolder}\``,
+      `- Last published: \`${(ctx.now || new Date()).toISOString().slice(0, 16).replace('T', ' ')}Z\``,
+    ];
+    for (const c of created) if (c.url) metadataLines.push(`- Created \`${c.relativePath}\` — ${c.url}`);
+    for (const u of updated) metadataLines.push(`- Updated \`${u.relativePath}\` — ${u.url}`);
+    for (const s of skipped) metadataLines.push(`- Skipped \`${s.relativePath}\` — ${s.reason}`);
+
+    return { created, updated, skipped, warnings, metadataLines };
   },
 
   formatReport(result) {

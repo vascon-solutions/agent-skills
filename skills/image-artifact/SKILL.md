@@ -42,7 +42,7 @@ node <this-skill-dir>/scripts/image-artifact-helper.js metadata <workspace> --so
 node <this-skill-dir>/scripts/image-artifact-helper.js validate <image-file> [<image-file>...]
 ```
 
-The script does not generate images. It handles prompt plans, prompt-pack fallback files, metadata updates, path resolution, and file-level image validation. Use `--format svg` only when exact-text static-image work needs deterministic SVG filename guidance. Validation recognizes deterministic SVG files and reads dimensions from `width`/`height` or `viewBox`.
+The script does not generate images. It handles prompt plans, prompt-pack fallback files, metadata updates, path resolution, and file-level image validation. It resolves repo Markdown sources to repo-aware `~/agent-artifacts/<repo-name>-<source-stem>/` workspaces by default. Use `--format svg` only when exact-text static-image work needs deterministic SVG filename guidance. Validation recognizes deterministic SVG files and reads dimensions from `width`/`height` or `viewBox`.
 
 ## Output Kinds
 
@@ -88,11 +88,14 @@ Resolve output paths in this order:
 3. `--workspace <path>` writes to `<workspace>/images/`.
 4. `--workspace <slug>` writes to `~/agent-artifacts/<slug>/images/`.
 5. If source is inside `~/agent-artifacts/<slug>/markdown/`, write to sibling `~/agent-artifacts/<slug>/images/`.
-6. Otherwise derive slug from source title/stem and write to `~/agent-artifacts/<slug>/images/`.
+6. If source is inside a Git repo, write to `~/agent-artifacts/<repo-name>-<source-stem>/images/`.
+7. Otherwise derive slug from source title/stem and write to `~/agent-artifacts/<slug>/images/`.
 
-Treat `--workspace` as a path when the value contains `/`, starts with `.`, or starts with `~`. Treat it as a slug only when it contains no path separators.
+Treat `--workspace` as a path when the value contains `/`, starts with `.`, or starts with `~`. Treat it as a slug only when it contains no path separators. Use `--workspace ./artifacts/<source-stem>` or `--out ./artifacts/<source-stem>/images/<file>` only when the user explicitly wants repo-local outputs.
 
-Create missing directories automatically. If a target file exists, ask before overwriting unless the user provided `--force` or explicitly requested replacement. When refreshing from changed Markdown without `--force`, write a versioned file such as `-2`, `-v2`, or a dated suffix. For variants, append `-variant-a`, `-variant-b`, or descriptive slugs.
+Create missing directories automatically. Default `~/agent-artifacts` outputs are artifact workspaces and may use metadata for provenance and publishing. Repo-local explicit outputs are lightweight image outputs; do not create `metadata.md` for simple one-image repo-local output unless the user asks for workspace metadata, publishability, or reproducibility.
+
+If a target file exists, ask before overwriting unless the user provided `--force` or explicitly requested replacement. If the user says "recreate", "regenerate", "refresh", "replace", or "update", overwrite the existing image and update only required sidecars. When refreshing from changed Markdown without replacement language or `--force`, write a versioned file such as `-2`, `-v2`, or a dated suffix. For variants, append `-variant-a`, `-variant-b`, or descriptive slugs.
 
 ## Repo Design Context
 
@@ -128,7 +131,7 @@ Before generating images, derive a short prompt plan from the Markdown:
 - variant source and count when generating multiple variants
 - repo design context and confidence when `--use-repo-design` is provided
 
-Write the prompt plan to `images/<source-stem>-prompt-plan.md` when generation is complex, has multiple variants, or image generation is unavailable.
+Do not write a prompt plan by default for a simple one-image artifact. Keep the final prompt or prompt summary in the response instead. Write `images/<source-stem>-prompt-plan.md` only when generation is complex, has multiple variants, image generation is unavailable, exact-text deterministic SVG is required, repo design context materially shapes the output, or the user asks for reproducibility.
 
 For variant outputs, define each variant explicitly:
 
@@ -146,6 +149,7 @@ For variant outputs, define each variant explicitly:
 Use the best available image-generation capability in the current environment.
 
 - Do not require a specific provider, model, API, or product.
+- In Codex, use the `imagegen` skill / built-in image generation path by default for low-text polished visual artifacts such as architecture infographics, concept posters, stakeholder visuals, and mood visuals.
 - Do not assume exact text rendering unless the active tool explicitly supports it.
 - Keep generated-image text short; prefer labels, headings, icons, layout, and visual hierarchy over paragraphs.
 - For text-heavy content, generate a visual summary or board and keep detailed text in Markdown or HTML.
@@ -177,7 +181,7 @@ When the user says "create an image artifact for this spec/doc/source" and the s
 
 ## Metadata
 
-Create or update `metadata.md` when using an artifact workspace.
+Create or update `metadata.md` for default `~/agent-artifacts` workspaces, publishing workflows, or explicit metadata requests. Do not create metadata for simple explicit repo-local outputs unless the user asks for workspace metadata, publishability, or reproducibility.
 
 If the existing metadata has the `markdown-artifact` table shape, update that table:
 
@@ -229,12 +233,12 @@ If using the image-only `Type | Source | Output | Tool` table and creating it fr
 4. Resolve workspace and output destination.
 5. Read Markdown and extract the visual brief.
 6. If `--use-repo-design` is provided, scan repo design context and decide whether confidence is high enough to apply.
-7. Build a prompt plan with assumptions, variant definitions, and repo design context when needed; use `scripts/image-artifact-helper.js prompt-plan` when possible.
+7. Build a prompt in memory. Write a prompt plan only when the Prompt Plan section requires one; use `scripts/image-artifact-helper.js prompt-plan` when a sidecar plan is needed.
 8. Handle existing target files: confirm replacement, honor `--force`, or choose a versioned filename.
 9. If generation is unavailable, write a `prompt-pack` Markdown file with `scripts/image-artifact-helper.js prompt-pack` when possible and stop.
 10. Generate the image artifact or artifacts with the available tool.
 11. Save outputs under `images/` or the explicit `--out`.
-12. Update `metadata.md` when using a workspace; use `scripts/image-artifact-helper.js metadata` when possible.
+12. Update `metadata.md` only when using a full artifact workspace, publishing workflow, or explicit metadata request; use `scripts/image-artifact-helper.js metadata` when possible.
 13. Verify outputs; use `scripts/image-artifact-helper.js validate` for file-level image checks when visual inspection is unavailable.
 14. Report concise paths and repo design context when scanned.
 
@@ -246,8 +250,10 @@ Before reporting complete, verify:
 - output path is inside the intended workspace or explicit `--out`
 - generated image file exists, or a prompt pack was written because generation was unavailable
 - no unrelated source Markdown was modified
-- `metadata.md` includes the image artifact when using a workspace
-- each variant file has a clear name and maps to the prompt plan
+- `metadata.md` includes the image artifact when a full artifact workspace or explicit metadata request is used
+- each variant file has a clear name and maps to its source-defined variant or prompt plan
+- no prompt-plan was created for simple one-image output unless required
+- no metadata sidecar was created for simple repo-local one-image output unless required
 - if `--use-repo-design` was provided, prompt plan and final report list discovered signals, applied context, and confidence
 
 When possible, visually inspect generated images or produce a thumbnail/contact-sheet check.
@@ -267,6 +273,9 @@ Report:
 ```text
 Written: ~/agent-artifacts/<slug>/images/<name>.png (<kind>)
 Written: ~/agent-artifacts/<slug>/images/<name>.svg (<kind>, deterministic SVG)
+Written: ~/agent-artifacts/<repo-name>-<source-stem>/images/<name>.png (<kind>)
+Written: ./artifacts/<source-stem>/images/<name>.png (<kind>, explicit repo-local output)
+Source: ./docs/<source>.md
 Source: ~/agent-artifacts/<slug>/markdown/<source>.md
 Metadata: ~/agent-artifacts/<slug>/metadata.md
 Repo design context: found Tailwind config and API service names; applied palette/service vocabulary; confidence high
@@ -288,6 +297,9 @@ Image generation unavailable in this environment.
 - Do not require a specific image-generation vendor, model, or API.
 - Do not claim exact UI fidelity unless the generated artifact was visually inspected.
 - Do not use images as the source of truth.
+- Do not default to deterministic SVG for polished low-text visuals when image generation is available.
+- Do not create prompt-plan sidecars for simple one-image output unless required.
+- Do not create metadata sidecars for simple repo-local one-image output unless required.
 - Do not overwrite image artifacts without confirmation or `--force`.
 - Do not create Git repos in artifact workspaces unless explicitly requested and confirmed.
 - Do not write to `docs/superpowers/` unless the user explicitly asks for a Superpowers spec or plan.

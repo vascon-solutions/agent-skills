@@ -4,6 +4,8 @@
 **Status:** Approved direction - ready for implementation planning
 **Source:** Brainstorming session on adding tool-agnostic image companions to artifact workspaces
 
+**Updated by:** `docs/superpowers/specs/2026-05-17-artifact-routing-design.md`. Repo Markdown sources now default to repo-aware `~/agent-artifacts/<repo-name>-<source-stem>/images/`, repo-local output is opt-in, simple one-image outputs do not create prompt-plan sidecars by default, and Codex uses the `imagegen` skill / built-in image generation path for polished low-text visuals when available.
+
 ---
 
 ## Purpose
@@ -38,7 +40,13 @@ The image-generation provider must be tool-agnostic. Use whatever image-generati
 
 Markdown remains the source of truth. Image files are derived artifacts.
 
-`image-artifact` may also run on a standalone Markdown file outside an artifact workspace. In that case, default output is:
+`image-artifact` may also run on a standalone Markdown file outside an artifact workspace. If the Markdown file is inside a Git repo, default output is repo-aware under `~/agent-artifacts`:
+
+```text
+~/agent-artifacts/<repo-name>-<source-stem>/images/
+```
+
+If the Markdown file is not inside a Git repo, default output is:
 
 ```text
 ~/agent-artifacts/<derived-slug>/images/
@@ -195,7 +203,8 @@ Resolution order:
 3. `--workspace <path>` writes to `<workspace>/images/`.
 4. `--workspace <slug>` writes to `~/agent-artifacts/<slug>/images/`.
 5. If source is inside `~/agent-artifacts/<slug>/markdown/`, write to sibling `~/agent-artifacts/<slug>/images/`.
-6. Otherwise derive slug from source title/stem and write to `~/agent-artifacts/<slug>/images/`.
+6. If source is inside a Git repo, write to `~/agent-artifacts/<repo-name>-<source-stem>/images/`.
+7. Otherwise derive slug from source title/stem and write to `~/agent-artifacts/<slug>/images/`.
 
 Treat `--workspace` as a path when the value contains `/`, starts with `.`, or starts with `~`. Treat it as a slug only when it contains no path separators.
 
@@ -205,7 +214,7 @@ Create missing directories automatically. If a target file exists, ask before ov
 
 ## Metadata
 
-Create or update `metadata.md` in the artifact workspace when using a workspace.
+Create or update `metadata.md` for default `~/agent-artifacts` workspaces, publishing workflows, or explicit metadata requests. Do not create metadata for simple explicit repo-local outputs unless the user asks for workspace metadata, publishability, or reproducibility.
 
 If `metadata.md` already has the `markdown-artifact` table shape, update that table instead of creating a second artifact table:
 
@@ -252,7 +261,7 @@ If the source metadata file already uses a different table shape, preserve its c
 8. If image generation is unavailable, write a `prompt-pack` Markdown file and stop.
 9. Generate the image artifact or artifacts with the available tool.
 10. Save outputs under `images/`.
-11. Update `metadata.md` when using a workspace.
+11. Update `metadata.md` only for default `~/agent-artifacts` workspaces, publishing workflows, or explicit metadata requests.
 12. Verify output files exist and pass the available visual or file-level checks.
 13. Report paths and source Markdown used.
 
@@ -266,7 +275,7 @@ Before reporting complete, verify:
 - output path is inside the intended workspace or explicit `--out`
 - generated image file exists
 - no unrelated source Markdown was modified
-- `metadata.md` includes the image artifact when using a workspace
+- `metadata.md` includes the image artifact when using a full artifact workspace, publishing workflow, or explicit metadata request
 - for variants, each generated file has a clear name and maps to the prompt plan
 - if image generation was unavailable, a prompt pack was written instead of claiming image output
 
@@ -340,8 +349,8 @@ Image generation unavailable in this environment.
 ## Success Criteria
 
 - A user can generate image companions from existing Markdown.
-- Image output lands in `~/agent-artifacts/<slug>/images/` by default.
+- Repo Markdown image output lands in `~/agent-artifacts/<repo-name>-<source-stem>/images/` by default.
 - The skill works with any available image-generation tool.
 - If image generation is unavailable, the skill produces a useful prompt pack instead.
-- Metadata tracks generated image outputs.
+- Metadata tracks generated image outputs when using a full artifact workspace, publishing workflow, or explicit metadata request.
 - `markdown-artifact` is updated after implementation to optionally offer `image-artifact` for visual docs.

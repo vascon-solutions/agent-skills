@@ -34,6 +34,26 @@ test('redactPublishedSection redacts presigned and gist URLs only inside Publish
   assert.match(redacted, /https:\/\/example.com\/still-keep/);
 });
 
+test('redactPublishedSection redacts URLs inside destination Published sections', () => {
+  const m = [
+    '## Published — wiki',
+    '',
+    '- `markdown/doc.md` — https://github.com/me/proj/wiki/doc',
+    '',
+    '## Published — clickup',
+    '',
+    '- Created `markdown/doc.md` — https://app.clickup.com/doc/123',
+    '',
+    '## Notes',
+    '',
+    'keep https://example.com/public',
+  ].join('\n');
+  const redacted = meta.redactPublishedSection(m);
+  assert.doesNotMatch(redacted, /https:\/\/github\.com/);
+  assert.doesNotMatch(redacted, /https:\/\/app\.clickup\.com/);
+  assert.match(redacted, /keep https:\/\/example.com\/public/);
+});
+
 test('findExistingGist returns id and url when present', () => {
   const m = '## Published\n\n- `markdown/doc.md` — https://gist.github.com/user/abc123\n';
   const hit = meta.findExistingGist(m, 'markdown/doc.md');

@@ -39,6 +39,16 @@ test('resolveWorkspace accepts a clean slug', () => {
   assert.equal(result.workspacePath, ws);
 });
 
+test('resolveWorkspace rejects absolute paths outside the workspace root', () => {
+  const root = tempDir();
+  const outside = tempDir();
+  write(path.join(outside, 'markdown', 'doc.md'), '# Doc\n');
+  assert.throws(
+    () => workspace.resolveWorkspace(outside, { workspaceRoot: root, homeDir: root }),
+    /outside workspace root/,
+  );
+});
+
 test('listUploadFiles excludes hidden, metadata, node_modules, and dist', () => {
   const ws = tempDir();
   write(path.join(ws, 'metadata.md'), '# Meta\n');

@@ -51,9 +51,9 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 | `task-doc`                 | Create durable task documents for feature-grade work and reject small work that should stay in normal plan mode                                                                                               |
 | `html-artifact`            | Convert any Markdown file into a self-contained, browser-ready HTML companion stored in `~/agent-artifacts/`. Supports task docs, roadmaps, QA handoffs, frontend handoffs, repo docs, and generic files |
 | `markdown-artifact`        | Create polished Markdown artifact workspaces under `~/agent-artifacts/<slug>/` from ideas, notes, UI/backend designs, learning topics, tutorials, task plans, and other early-stage source docs |
-| `image-artifact`           | Create static visual companions from existing Markdown, including summary cards, UI variant boards, comparison boards, decision boards, concept posters, architecture diagrams, and API flow images |
+| `image-artifact`           | Create static visual companions from existing Markdown, including summary cards, UI variant boards, comparison boards, decision boards, concept posters, architecture diagrams, and API flow images. Repo Markdown defaults to `~/agent-artifacts/<repo-name>-<source-stem>/images/` |
 | `repo-design-context`      | Discover whether local repo styling, design tokens, brand assets, or architecture vocabulary can safely inform generated artifacts |
-| `publish-artifact`         | Publish a `~/agent-artifacts/<slug>/` workspace to a private S3 archive; optionally produce presigned URLs and secret GitHub gists for Markdown and HTML. Explicit command only |
+| `publish-artifact`         | Publish a `~/agent-artifacts/<slug>/` workspace to S3, GitHub Wikis, ClickUp Docs, or Google Docs/Drive with explicit destination flags. Explicit command only |
 
 ## Link Targets
 
@@ -159,7 +159,7 @@ The link script is idempotent — it skips symlinks that already point to the co
 
 ### Generating image artifact companions
 
-1. `image-artifact` — convert existing Markdown into static visual companions under `~/agent-artifacts/<slug>/images/`. Use it for shareable summaries, UI variant boards, comparison boards, decision boards, concept posters, architecture diagrams, and API flow images.
+1. `image-artifact` — convert existing Markdown into static visual companions. Repo Markdown defaults to `~/agent-artifacts/<repo-name>-<source-stem>/images/`; explicit `--workspace ./artifacts/<source-stem>` or `--out ./artifacts/<source-stem>/images/<file>` keeps outputs in the repo when desired. Use it for shareable summaries, UI variant boards, comparison boards, decision boards, concept posters, architecture diagrams, and API flow images.
 
 ### Applying repo design context to artifacts
 
@@ -167,7 +167,7 @@ The link script is idempotent — it skips symlinks that already point to the co
 
 ### Publishing artifact workspaces externally
 
-1. `publish-artifact` — push a `~/agent-artifacts/<slug>/` workspace to a private S3 archive. Use `--share markdown` or `--share html` to also generate a secret GitHub gist and an S3 presigned URL you can send to someone. Bucket access is never modified; sharing is link-based with a TTL.
+1. `publish-artifact` — push a `~/agent-artifacts/<slug>/` workspace to one or more destinations with `--to s3`, `--to wiki`, `--to clickup`, or `--to google-docs`. With no `--to`, it preserves the private S3 archive flow; `--share markdown` or `--share html` still creates an S3 presigned URL and optional secret gist. Bucket access is never modified.
 
 ### Creating Markdown artifact workspaces
 

@@ -34,3 +34,26 @@ test('redactToken replaces a known token with REDACTED', () => {
   const env = { CLICKUP_API_TOKEN: 'pk_1_ABCDEFGHIJKL' };
   assert.equal(redactToken('Bearer pk_1_ABCDEFGHIJKL fail', env), 'Bearer <REDACTED:CLICKUP_API_TOKEN> fail');
 });
+
+test('redactToken masks token-shaped strings even when absent from env', () => {
+  assert.equal(
+    redactToken('request failed for pk_123_ABCDEFGHIJKLMNOPQRSTUVWXYZ123456'),
+    'request failed for <REDACTED:TOKEN>',
+  );
+});
+
+test('createHttpClient rejects request bodies over the size cap before fetch', async () => {
+  let called = false;
+  const client = createHttpClient({
+    maxBodyBytes: 5,
+    fetchImpl: async () => {
+      called = true;
+      return { ok: true, status: 200, text: async () => '' };
+    },
+  });
+  await assert.rejects(
+    client.request('https://api.example.com/x', { method: 'POST', body: 'too large' }),
+    /body exceeds/,
+  );
+  assert.equal(called, false);
+});

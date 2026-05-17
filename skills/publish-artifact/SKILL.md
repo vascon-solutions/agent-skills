@@ -48,7 +48,7 @@ Select one or more with repeatable `--to <name>` flags. With no `--to`, the scri
 - `clickup` — create or update a ClickUp Doc per Markdown file. Required env: `CLICKUP_API_TOKEN`. Required flag (or `CLICKUP_PARENT_TYPE` + `CLICKUP_PARENT_ID`): `--clickup-parent <type:id>` where type is `workspace`, `space`, `folder`, or `list`.
 - `google-docs` — create or update a Google Doc per Markdown file under a Drive folder. Required: active ADC (`gcloud auth application-default print-access-token`) or `GOOGLE_APPLICATION_CREDENTIALS` pointing to a service-account JSON outside the repo and workspace. Required flag (or `GOOGLE_DRIVE_PARENT_ID`): `--google-folder <drive-folder-id>`.
 
-Image references in Markdown files are rewritten to S3 presigned URLs only when `--to s3` is also selected. Without `s3`, image refs are left as-is and the report includes a warning. HTML files are not pushed to wiki/clickup/google-docs; they remain S3 + gist only.
+Image references in Markdown files are rewritten to S3 presigned URLs only when `--to s3` is also selected. Without `s3`, image refs are left as-is and the report includes a warning. Wiki mirrors `markdown/`, `html/`, `images/`, and `assets/`; ClickUp and Google Docs ingest Markdown only and report HTML files as skipped.
 
 Manual smoke tests (each gated behind explicit env vars so they are never run accidentally in CI):
 
@@ -70,7 +70,7 @@ node skills/publish-artifact/scripts/publish-artifact.js demo \
 
 Required:
 
-- `<slug>` — workspace directory name under `~/agent-artifacts/`, or an absolute/`~` path to a workspace directory.
+- `<slug>` — workspace directory name under `~/agent-artifacts/`, or an absolute/`~` path that still resolves under the workspace root.
 
 Flags:
 
@@ -83,9 +83,9 @@ Flags:
 - `--no-gist` — generate only S3 presigned URLs for share targets.
 - `--wiki-repo <owner/repo>` — explicit wiki target. Optional if `gh repo view` can detect the repo from cwd.
 - `--clickup-parent <type:id>` — ClickUp Doc parent. `type` is `workspace`, `space`, `folder`, or `list`. Falls back to `CLICKUP_PARENT_TYPE` + `CLICKUP_PARENT_ID` envs.
-- `--clickup-doc <name>` — Doc name. Defaults to the Markdown filename stem.
+- `--clickup-doc <name>` — Doc name. Defaults to `<slug>`.
 - `--google-folder <drive-folder-id>` — Drive folder that hosts the Doc. Falls back to `GOOGLE_DRIVE_PARENT_ID`.
-- `--google-doc <name>` — Doc name. Defaults to the Markdown filename stem.
+- `--google-doc <name>` — Doc name. Defaults to `<slug>`.
 - `--workspace-root <path>` — advanced/test flag that overrides the default `~/agent-artifacts` root for slug resolution.
 
 Invalid:
@@ -203,12 +203,13 @@ Local `metadata.md` is authoritative and keeps full presigned and gist URLs. If 
 ## Published
 ```
 
-On each publish, the script replaces the `## Published` section. The section starts at the literal line `## Published` and ends before the next `## ` heading or end-of-file.
+Default S3 publishes preserve the legacy `## Published` section. Explicit multi-destination and non-S3 publishes write one `## Published — <destination>` section per destination that ran, replacing prior publish sections while preserving other metadata headings.
 
 The S3 copy of `metadata.md` is redacted in memory before upload:
 
 - presigned URLs become `<presigned URL — see local metadata>`
 - gist URLs become `<gist URL — see local metadata>`
+- destination Doc/wiki URLs in explicit destination sections are redacted from the S3-uploaded copy when S3 is selected
 
 Do not write the redacted copy back to the local workspace.
 
@@ -274,6 +275,7 @@ Before reporting completion:
 
 ```sh
 node --test skills/publish-artifact/scripts/publish-artifact.test.js
+node --test skills/publish-artifact/scripts/common/*.test.js skills/publish-artifact/scripts/destinations/*.test.js
 ```
 
 For manual smoke checks, create a temporary workspace and run:
@@ -298,7 +300,7 @@ These rules are non-negotiable. Tests enforce the ones that can be enforced stat
 
 - No credential is ever read from a CLI flag, written to `metadata.md`, or printed in logs or error output. Token-shaped strings are redacted before any error is surfaced.
 - All HTTP calls are HTTPS-only. The shared `common/http.js` wrapper rejects `http://` URLs and never sets `NODE_TLS_REJECT_UNAUTHORIZED=0`.
-- HTTP requests use native `fetch` (Node 18+), a per-call timeout, and exponential backoff with jitter on 429 and 5xx responses. Other 4xx responses fail fast.
+- HTTP requests use native `fetch` (Node 18+), a per-call timeout, a 25 MB request-body cap, and exponential backoff with jitter on 429 and 5xx responses. Other 4xx responses fail fast.
 - Workspace slugs must match `^[A-Za-z0-9._-]+$` and resolve under `~/agent-artifacts/`. Path-traversal attempts fail at slug resolution.
 - `--wiki-repo` must match `^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$`.
 - The secret scan blocks before any destination publishes when it sees AWS, GitHub, Anthropic/OpenAI, Slack, JWT, private-key, ClickUp, Google API, or service-account JSON markers.

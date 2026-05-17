@@ -9,6 +9,7 @@ const { scanSecrets, IMAGE_EXTENSIONS } = require('./common/secret-scan.js');
 const {
   readMetadata,
   replacePublishedSection,
+  replaceDestinationSections,
   redactPublishedSection,
   extractPublishedSection,
   findExistingGist,
@@ -182,9 +183,24 @@ function selectDrivers(names) {
   });
 }
 
+function markdownFilesHaveImageRefs(files) {
+  return files.some((file) => {
+    if (!file.relativePath.startsWith('markdown/') || !file.relativePath.endsWith('.md')) return false;
+    const content = fs.readFileSync(file.fullPath, 'utf8');
+    return /!\[[^\]]*\]\([^)\s]+\)|<img\b/.test(content);
+  });
+}
+
 async function runPublish({ argv, env = process.env, runner = defaultRunner, now = new Date(), scriptDir = __dirname, httpClient } = {}) {
   const options = parseArgs(argv || process.argv.slice(2));
   const loadedEnv = loadEnvFiles(env, scriptDir);
+
+  if (!options.clickupParent && loadedEnv.CLICKUP_PARENT_TYPE && loadedEnv.CLICKUP_PARENT_ID) {
+    options.clickupParent = `${loadedEnv.CLICKUP_PARENT_TYPE}:${loadedEnv.CLICKUP_PARENT_ID}`;
+  }
+  if (!options.googleFolder && loadedEnv.GOOGLE_DRIVE_PARENT_ID) {
+    options.googleFolder = loadedEnv.GOOGLE_DRIVE_PARENT_ID;
+  }
 
   const drivers = selectDrivers(options.to);
   for (const driver of drivers) {
@@ -192,13 +208,6 @@ async function runPublish({ argv, env = process.env, runner = defaultRunner, now
       if (!loadedEnv[key]) throw new Error(`Missing ${key}`);
     }
     driver.validateFlags(options);
-  }
-
-  if (!options.clickupParent && loadedEnv.CLICKUP_PARENT_TYPE && loadedEnv.CLICKUP_PARENT_ID) {
-    options.clickupParent = `${loadedEnv.CLICKUP_PARENT_TYPE}:${loadedEnv.CLICKUP_PARENT_ID}`;
-  }
-  if (!options.googleFolder && loadedEnv.GOOGLE_DRIVE_PARENT_ID) {
-    options.googleFolder = loadedEnv.GOOGLE_DRIVE_PARENT_ID;
   }
 
   const workspaceRoot = options.workspaceRoot || path.join(loadedEnv.HOME || process.env.HOME, 'agent-artifacts');
@@ -219,14 +228,43 @@ async function runPublish({ argv, env = process.env, runner = defaultRunner, now
     dryRun: options.dryRun,
     force: options.force,
     presignedByFile: {},
-    imageRefsNeeded: drivers.some((d) => d.needsPresignedImages === true),
+    imageRefsNeeded: drivers.some((d) => d.needsPresignedImages === true) && markdownFilesHaveImageRefs(uploadFiles),
   };
 
   const outputs = [];
-  for (const driver of drivers) {
-    const result = await driver.publish({ workspace, files: uploadFiles, flags: options, ctx });
+  const results = [];
+  const prepublished = new Map();
+  const s3Index = drivers.findIndex((d) => d.name === 's3');
+  const firstImageConsumerIndex = drivers.findIndex((d) => d.needsPresignedImages === true);
+  if (!options.dryRun && ctx.imageRefsNeeded && s3Index !== -1 && firstImageConsumerIndex !== -1 && firstImageConsumerIndex < s3Index) {
+    const result = await drivers[s3Index].publish({ workspace, files: uploadFiles, flags: options, ctx });
     if (result && result.presignedByFile) Object.assign(ctx.presignedByFile, result.presignedByFile);
+    prepublished.set(s3Index, result);
+  }
+
+  for (const [index, driver] of drivers.entries()) {
+    const result = prepublished.has(index)
+      ? prepublished.get(index)
+      : await driver.publish({ workspace, files: uploadFiles, flags: options, ctx });
+    if (result && result.presignedByFile) Object.assign(ctx.presignedByFile, result.presignedByFile);
+    results.push({ driver, result });
     outputs.push(...driver.formatReport(result));
+  }
+
+  const destinationSections = results
+    .filter(({ result }) => result && result.metadataLines && result.metadataLines.length > 0)
+    .map(({ driver, result }) => ({ destination: driver.name, lines: result.metadataLines }));
+  const shouldWriteDestinationMetadata = !options.dryRun
+    && destinationSections.length > 0
+    && options.to.length > 0
+    && !(drivers.length === 1 && drivers[0].name === 's3');
+  if (shouldWriteDestinationMetadata) {
+    const metadataPath = path.join(workspace.workspacePath, 'metadata.md');
+    const metadata = replaceDestinationSections(readMetadata(workspace.workspacePath), workspace.slug, destinationSections);
+    fs.writeFileSync(metadataPath, metadata);
+    if (drivers.some((driver) => driver.name === 's3')) {
+      await s3.uploadRedactedMetadata({ workspace, ctx });
+    }
   }
   return { output: outputs.join('\n') + '\n' };
 }

@@ -19,6 +19,10 @@ Update the artifact skills so agents route Markdown-derived artifacts by the kin
 - Use `image-artifact` when the output should be a low-text visual companion.
 - When a user asks for an image artifact from a text-heavy source, interpret the image as an illustrative concept visual unless they explicitly ask for exact text in the image.
 - When exact wording is required in visual form, recommend HTML first. Use deterministic SVG only when the user explicitly needs a single static image file.
+- When the source Markdown is inside a Git repo, default `image-artifact` output to `~/agent-artifacts/<repo-name>-<source-stem>/images/` instead of generic `~/agent-artifacts/<source-title>/images/`.
+- Repo-local output is opt-in through explicit `--workspace ./artifacts/<source-stem>` or `--out ./artifacts/<source-stem>/images/<file>`.
+- For simple one-image output, create the image only by default. Prompt plans and metadata are sidecars for complex, reproducible, publishable, or workspace-oriented artifacts. Metadata is still reasonable for default `~/agent-artifacts` workspaces when publishing/provenance is needed.
+- In Codex, use the `imagegen` skill / built-in image generation path by default for polished low-text visuals. Reserve deterministic SVG for exact-text static images or environments where image generation is unavailable.
 
 This applies to all Markdown sources, including specs, task docs, roadmap docs, QA handoffs, frontend handoffs, architecture notes, implementation plans, meeting notes, PR summaries, learning guides, and feature proposals.
 
@@ -85,7 +89,7 @@ If the user explicitly asks for exact text, labels, route names, commands, or ta
 
 ## Generative Image Tool Preference
 
-Keep the skill portable across agent environments. The universal rule: use the best available image-generation capability in the current environment for low-text illustrative artifacts. Do not name or require any specific vendor, model, API, or product.
+Keep the skill portable across agent environments. The universal rule: use the best available image-generation capability in the current environment for low-text illustrative artifacts. In Codex, that means invoking the `imagegen` skill / built-in image generation path when available. Do not require a specific vendor, model, API, or product.
 
 ## Expected Skill Changes
 
@@ -107,15 +111,18 @@ No other changes to this file.
 
 ### `image-artifact`
 
-Five small touches:
+Eight updates:
 
 1. **`## Purpose` / preamble.** After the existing `For browser-readable or interactive companions, use html-artifact instead` line, add one paragraph stating this skill is for low-text visual companionship (concept posters, illustrations, comparison boards, UI variant boards, architecture diagrams, mood and stakeholder visuals), and that an ambiguous "image artifact for this spec/doc/source" request from a text-heavy source defaults to a low-text illustrative companion and recommends `html-artifact` if the user needs exact wording.
 2. **`## Output Kinds` table.** Change the `summary-card` row description to: `Concise low-text visual summary; for dense text prefer html-artifact`. This is a wording change only. Default filename, inference rules, and routing for an explicit `--kind summary-card` request are unchanged.
 3. **`## Generation Contract` bullets.** Append: (a) when the user explicitly requires exact text/route names/commands/tables inside a static image, recommend `html-artifact` first; (b) if a single static image file is genuinely required for exact text, hand-write deterministic SVG with real SVG text rather than relying on a generative model.
 4. **New `### Ambiguous Image-Artifact Requests` subsection at the end of `## Generation Contract`.** Encodes the four-step handler from "Ambiguous Image-Artifact Requests" above.
 5. **Helper and validation support for SVG.** Update the bundled helper docs and script only as needed so prompt plans/prompt packs can suggest `.svg` filenames for exact-text static-image work, and file-level validation recognizes deterministic SVG files and reads dimensions from `width`/`height` or `viewBox`.
+6. **Output destination.** For source Markdown inside a Git repo, default output to `~/agent-artifacts/<repo-name>-<source-stem>/images/`. Keep `--out` and explicit `--workspace` overrides first. Use repo-local `./artifacts/...` only when explicitly requested.
+7. **Sidecar policy.** Do not write `prompt-plan.md` for simple one-image generation unless complexity, variants, image-generation unavailability, exact-text SVG, repo-design context, reproducibility, or a user request requires it. Create metadata for full artifact workspaces when useful for publishing/provenance, but skip metadata for simple explicit repo-local output unless requested.
+8. **Regeneration policy.** If the user says "recreate", "regenerate", "refresh", "replace", or "update", replace the existing target image and update only required sidecars. Otherwise version new outputs when the target exists.
 
-No changes to `Inputs`, `Variants`, `Output Destination`, `Repo Design Context`, `Metadata`, or `Cautions`.
+No changes to `Inputs`, `Variants`, or `Repo Design Context`.
 
 ## Examples
 
@@ -132,6 +139,8 @@ Expected behavior:
 - Create a low-text illustrative concept image, such as a poster or visual summary with minimal labels.
 - Say that HTML is recommended for exact-reading details.
 - Do not create a dense image packed with paragraphs, routes, and commands.
+- If the source is in a Git repo, write the image under `~/agent-artifacts/<repo-name>-<source-stem>/images/` by default.
+- Do not create a prompt-plan sidecar for a simple one-image output unless needed.
 
 ### Exact Reading Need
 
@@ -167,6 +176,10 @@ After implementation, validate by reviewing the changed skill text against these
 - A text-heavy Markdown source should route to HTML unless the user clearly wants a low-text visual.
 - An "image artifact for this spec/doc/source" request should create or recommend a low-text concept visual, not a dense rendered text card.
 - A request for exact routes or commands should not rely on generative image text.
-- The skills should remain tool-agnostic. No vendor, model, API, or product name appears in either SKILL.md.
+- A repo source such as `ncdmb-procurement-ui/docs/architecture.md` should default to `~/agent-artifacts/ncdmb-procurement-ui-architecture/images/`, not `~/agent-artifacts/architecture/images/` and not repo-local `./artifacts/architecture/images/`.
+- Simple image generation should not create prompt-plan sidecars by default.
+- Simple explicit repo-local image generation should not create metadata sidecars by default.
+- In Codex, a low-text architecture infographic should prefer the `imagegen` skill / built-in image generation path over hand-written SVG.
+- The skills should remain vendor-agnostic. No vendor, model, API, or product name is required in either SKILL.md.
 
-No runtime code changes are required unless existing helper scripts encode conflicting assumptions.
+Runtime helper changes are required for repo-aware default workspace resolution and SVG validation support.

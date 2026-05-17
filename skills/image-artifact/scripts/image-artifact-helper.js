@@ -98,6 +98,15 @@ function sourceWorkspace(sourcePath) {
   return null;
 }
 
+function findRepoRoot(sourcePath) {
+  let dir = fs.statSync(sourcePath).isDirectory() ? sourcePath : path.dirname(sourcePath);
+  while (dir && dir !== path.dirname(dir)) {
+    if (fs.existsSync(path.join(dir, '.git'))) return dir;
+    dir = path.dirname(dir);
+  }
+  return null;
+}
+
 function resolveWorkspace(flags, sourcePath, markdown) {
   if (flags.workspace) {
     const raw = expandHome(flags.workspace);
@@ -106,6 +115,12 @@ function resolveWorkspace(flags, sourcePath, markdown) {
   }
   const fromSource = sourceWorkspace(sourcePath);
   if (fromSource) return fromSource;
+  const repoRoot = findRepoRoot(sourcePath);
+  if (repoRoot) {
+    const repoName = path.basename(repoRoot);
+    const sourceStem = path.basename(sourcePath, path.extname(sourcePath));
+    return path.join(process.env.HOME, 'agent-artifacts', slugify(`${repoName}-${sourceStem}`));
+  }
   return path.join(process.env.HOME, 'agent-artifacts', slugify(extractTitle(markdown, path.basename(sourcePath, path.extname(sourcePath)))));
 }
 

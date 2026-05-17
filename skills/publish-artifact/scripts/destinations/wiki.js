@@ -124,7 +124,15 @@ const driver = {
         return { relativePath: f.relativePath, url: `https://github.com/${owner}/${repo}/wiki/${encodeURIComponent(page)}` };
       });
 
-    return { owner, repo, url, pushed: true, pageUrls };
+    const metadataLines = [
+      `- Wiki repo: \`${url}\``,
+      `- Last published: \`${ctx.now.toISOString().slice(0, 16).replace('T', ' ')}Z\``,
+    ];
+    for (const page of pageUrls) {
+      metadataLines.push(`- \`${page.relativePath}\` — ${page.url}`);
+    }
+
+    return { owner, repo, url, pushed: true, pageUrls, metadataLines };
   },
 
   formatReport(result) {

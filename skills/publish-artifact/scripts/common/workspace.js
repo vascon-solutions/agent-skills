@@ -15,9 +15,12 @@ function normalizeRelative(filePath) {
 
 function resolveWorkspace(slug, options = {}) {
   const homeDir = options.homeDir || process.env.HOME;
-  const workspaceRoot = options.workspaceRoot || path.join(homeDir, 'agent-artifacts');
+  const workspaceRoot = path.resolve(expandHome(options.workspaceRoot || path.join(homeDir, 'agent-artifacts'), homeDir));
   const expanded = expandHome(slug, homeDir);
-  const isPath = path.isAbsolute(expanded) || expanded.includes(path.sep);
+  if (!path.isAbsolute(expanded) && expanded.includes(path.sep)) {
+    throw new Error(`Invalid slug: ${slug}`);
+  }
+  const isPath = path.isAbsolute(expanded);
   const workspacePath = isPath ? path.resolve(expanded) : path.join(workspaceRoot, expanded);
 
   if (!isPath && !SLUG_PATTERN.test(expanded)) {
@@ -26,6 +29,11 @@ function resolveWorkspace(slug, options = {}) {
 
   if (!fs.existsSync(workspacePath) || !fs.statSync(workspacePath).isDirectory()) {
     throw new Error(`Workspace not found: ${workspacePath}`);
+  }
+  const realRoot = fs.existsSync(workspaceRoot) ? fs.realpathSync(workspaceRoot) : workspaceRoot;
+  const realWorkspace = fs.realpathSync(workspacePath);
+  if (realWorkspace !== realRoot && !realWorkspace.startsWith(realRoot + path.sep)) {
+    throw new Error(`Workspace outside workspace root: ${workspacePath}`);
   }
 
   const hasMetadata = fs.existsSync(path.join(workspacePath, 'metadata.md'));

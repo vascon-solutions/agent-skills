@@ -67,7 +67,7 @@ test('clickup driver refuses to overwrite an existing Doc without --force', asyn
   fs.mkdirSync(path.join(workspace, 'markdown'), { recursive: true });
   fs.writeFileSync(path.join(workspace, 'markdown', 'doc.md'), '# Hello\n');
   const { request } = mockHttpClient([
-    [/\/docs\?/, { body: JSON.stringify({ docs: [{ id: 'doc-existing', name: 'doc', url: 'https://app.clickup.com/x/doc/doc-existing' }] }) }],
+    [/\/docs\?/, { body: JSON.stringify({ docs: [{ id: 'doc-existing', name: 'demo', url: 'https://app.clickup.com/x/doc/doc-existing' }] }) }],
   ]);
   const result = await clickup.publish({
     workspace: { workspacePath: workspace, slug: 'demo' },

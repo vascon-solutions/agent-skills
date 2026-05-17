@@ -1,5 +1,4 @@
 const fs = require('fs');
-const path = require('path');
 
 const { rewriteImagePaths } = require('../common/markdown-rewrite.js');
 
@@ -46,10 +45,14 @@ const driver = {
     };
 
     const mdFiles = files.filter((f) => f.relativePath.startsWith('markdown/') && f.relativePath.endsWith('.md'));
+    const htmlFiles = files.filter((f) => f.relativePath.startsWith('html/') && f.relativePath.endsWith('.html'));
     const rewriteEnabled = (flags.to || []).includes('s3') && ctx.presignedByFile;
     const created = [];
     const updated = [];
-    const skipped = [];
+    const skipped = htmlFiles.map((file) => ({
+      relativePath: file.relativePath,
+      reason: 'clickup does not ingest HTML',
+    }));
     const warnings = [];
 
     for (const file of mdFiles) {
@@ -63,7 +66,7 @@ const driver = {
         warnings.push(`Image references in ${file.relativePath} are not rewritten (add --to s3 to mint presigned URLs).`);
       }
 
-      const docName = flags.clickupDoc || path.basename(file.relativePath, '.md');
+      const docName = flags.clickupDoc || workspace.slug;
       if (flags.dryRun) {
         created.push({ relativePath: file.relativePath, dryRun: true, docName });
         continue;
@@ -99,7 +102,15 @@ const driver = {
       }
     }
 
-    return { created, updated, skipped, warnings };
+    const metadataLines = [
+      '- ClickUp destination: Docs',
+      `- Last published: \`${(ctx.now || new Date()).toISOString().slice(0, 16).replace('T', ' ')}Z\``,
+    ];
+    for (const c of created) if (c.url) metadataLines.push(`- Created \`${c.relativePath}\` — ${c.url}`);
+    for (const u of updated) metadataLines.push(`- Updated \`${u.relativePath}\` — ${u.url}`);
+    for (const s of skipped) metadataLines.push(`- Skipped \`${s.relativePath}\` — ${s.reason}`);
+
+    return { created, updated, skipped, warnings, metadataLines };
   },
 
   formatReport(result) {
