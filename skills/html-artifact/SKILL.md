@@ -17,6 +17,19 @@ Convert any Markdown document into a rich, self-contained HTML companion. The Ma
 - After task-doc, roadmap-todo, prepare-qa-handoff, or prepare-frontend-handoff writes its output (opt-in)
 - Standalone on any Markdown file — repo docs, specs, notes, handoffs
 
+## When To Use vs. image-artifact
+
+Use `html-artifact` instead of `image-artifact` when the source or requested output must preserve faithful readable text: paragraphs, detailed prose, tables, route lists, command lists, links, acceptance criteria, implementation steps, exact decisions, exact labels, detailed comparison criteria, or anything the reader must quote, copy, inspect, or verify precisely.
+
+Example prompts:
+
+- "Turn this spec into a readable artifact."
+- "Create an artifact for this task doc."
+- "Make a browser companion for this roadmap."
+- "I need the routes, commands, tables, and decisions to remain exact."
+
+Use `image-artifact` when the user wants a low-text concept visual such as a poster, illustration, mood image, or UI atmosphere.
+
 ## When Not To Use
 
 - To generate Markdown from scratch — use task-doc, roadmap-todo, or prepare-qa-handoff

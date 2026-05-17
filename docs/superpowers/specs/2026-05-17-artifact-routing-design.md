@@ -18,7 +18,7 @@ Update the artifact skills so agents route Markdown-derived artifacts by the kin
 - Use `html-artifact` when the output must preserve faithful readable text.
 - Use `image-artifact` when the output should be a low-text visual companion.
 - When a user asks for an image artifact from a text-heavy source, interpret the image as an illustrative concept visual unless they explicitly ask for exact text in the image.
-- When exact wording is required in visual form, recommend HTML first. Use deterministic SVG or HTML-rendered image output only when the user explicitly needs a static image file.
+- When exact wording is required in visual form, recommend HTML first. Use deterministic SVG only when the user explicitly needs a single static image file.
 
 This applies to all Markdown sources, including specs, task docs, roadmap docs, QA handoffs, frontend handoffs, architecture notes, implementation plans, meeting notes, PR summaries, learning guides, and feature proposals.
 
@@ -66,7 +66,7 @@ The HTML output should remain the readable companion. It can include visual hier
 
 The image should keep generated text short. Prefer composition, layout, icons, UI silhouettes, badges, color, and hierarchy over paragraphs.
 
-### Ambiguous "Image Artifact" Requests
+### Ambiguous Image-Artifact Requests
 
 When the user says "create an image artifact for this spec/doc/source" and the source is text-heavy:
 
@@ -80,44 +80,42 @@ When the user says "create an image artifact for this spec/doc/source" and the s
 If the user explicitly asks for exact text, labels, route names, commands, or tables inside a static image:
 
 1. Recommend `html-artifact` first when a browser-readable artifact is acceptable.
-2. If the user still needs a static image, create deterministic SVG or HTML-rendered image output rather than relying on a generative image model.
+2. If the user still needs a single static image file, hand-write deterministic SVG with real SVG text rather than relying on a generative image model.
 3. Validate dimensions and visually inspect the result when possible.
 
 ## Generative Image Tool Preference
 
-Keep the skill portable across agent environments:
-
-- Universal rule: use the best available generative image tool for low-text illustrative artifacts.
-- Codex-specific note: when ChatGPT image generation is available in Codex, prefer it for concept posters, illustrations, UI mood visuals, and low-text stakeholder visuals.
-
-Do not make the global skill depend on a single vendor or product name. The skill should still work in environments where another image-generation capability is available.
+Keep the skill portable across agent environments. The universal rule: use the best available image-generation capability in the current environment for low-text illustrative artifacts. Do not name or require any specific vendor, model, API, or product.
 
 ## Expected Skill Changes
 
+These edits are compact in-place additions inside the two artifact skills. Do not create a new skill or shared reference file.
+
 ### `html-artifact`
 
-Add a decision-boundary section near "When To Use" that says `html-artifact` is preferred over image artifacts for text-heavy Markdown sources and exact-reading use cases.
+Add a single new top-level section (`##` heading) between `## When To Use` and `## When Not To Use`, titled `When To Use vs. image-artifact`. Content:
 
-Add examples such as:
+- The routing rule from "Use `html-artifact` For Faithful Reading" above (paragraphs, tables, route lists, command lists, links, acceptance criteria, implementation steps, decisions, exact labels, anything the reader must quote/copy/inspect).
+- Example prompts:
+  - "Turn this spec into a readable artifact."
+  - "Create an artifact for this task doc."
+  - "Make a browser companion for this roadmap."
+  - "I need the routes, commands, tables, and decisions to remain exact."
+- A closing line that points to `image-artifact` for low-text concept visuals (poster, illustration, mood image, UI atmosphere).
 
-- "Turn this spec into a readable artifact."
-- "Create an artifact for this task doc."
-- "Make a browser companion for this roadmap."
-- "I need the routes, commands, tables, and decisions to remain exact."
-
-Add a cross-reference that says if the user wants a low-text concept visual, use `image-artifact`.
+No other changes to this file.
 
 ### `image-artifact`
 
-Tighten the purpose and generation contract:
+Five small touches:
 
-- Static images are for visual companionship, not faithful rendering of dense source text.
-- For text-heavy Markdown, default to a low-text concept illustration if the user asked for an image.
-- Recommend `html-artifact` when the user needs exact readable text.
-- Prefer the available generative image tool for low-text illustrative outputs; in Codex, prefer ChatGPT image generation when available.
-- Use deterministic SVG or HTML-rendered output only when exact static-image text is explicitly required.
+1. **`## Purpose` / preamble.** After the existing `For browser-readable or interactive companions, use html-artifact instead` line, add one paragraph stating this skill is for low-text visual companionship (concept posters, illustrations, comparison boards, UI variant boards, architecture diagrams, mood and stakeholder visuals), and that an ambiguous "image artifact for this spec/doc/source" request from a text-heavy source defaults to a low-text illustrative companion and recommends `html-artifact` if the user needs exact wording.
+2. **`## Output Kinds` table.** Change the `summary-card` row description to: `Concise low-text visual summary; for dense text prefer html-artifact`. This is a wording change only. Default filename, inference rules, and routing for an explicit `--kind summary-card` request are unchanged.
+3. **`## Generation Contract` bullets.** Append: (a) when the user explicitly requires exact text/route names/commands/tables inside a static image, recommend `html-artifact` first; (b) if a single static image file is genuinely required for exact text, hand-write deterministic SVG with real SVG text rather than relying on a generative model.
+4. **New `### Ambiguous Image-Artifact Requests` subsection at the end of `## Generation Contract`.** Encodes the four-step handler from "Ambiguous Image-Artifact Requests" above.
+5. **Helper and validation support for SVG.** Update the bundled helper docs and script only as needed so prompt plans/prompt packs can suggest `.svg` filenames for exact-text static-image work, and file-level validation recognizes deterministic SVG files and reads dimensions from `width`/`height` or `viewBox`.
 
-Update output-kind guidance so `summary-card` does not imply dense text rendering. A `summary-card` should still be concise and visual; dense summaries belong in HTML.
+No changes to `Inputs`, `Variants`, `Output Destination`, `Repo Design Context`, `Metadata`, or `Cautions`.
 
 ## Examples
 
@@ -158,7 +156,7 @@ Create a static image diagram that includes these exact route names.
 
 Expected behavior:
 
-- Use deterministic SVG or HTML-rendered image output.
+- Hand-write deterministic SVG with real SVG text.
 - Validate and visually inspect the image.
 - Keep Markdown or HTML as the source of truth when possible.
 
@@ -169,6 +167,6 @@ After implementation, validate by reviewing the changed skill text against these
 - A text-heavy Markdown source should route to HTML unless the user clearly wants a low-text visual.
 - An "image artifact for this spec/doc/source" request should create or recommend a low-text concept visual, not a dense rendered text card.
 - A request for exact routes or commands should not rely on generative image text.
-- The skills should remain tool-agnostic, with only a Codex-specific preference note for ChatGPT image generation when available.
+- The skills should remain tool-agnostic. No vendor, model, API, or product name appears in either SKILL.md.
 
 No runtime code changes are required unless existing helper scripts encode conflicting assumptions.

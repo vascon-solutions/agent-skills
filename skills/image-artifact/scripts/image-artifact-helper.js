@@ -17,8 +17,8 @@ const KIND_FILENAMES = {
 function usage(exitCode = 0) {
   const out = exitCode === 0 ? process.stdout : process.stderr;
   out.write(`Usage:
-  image-artifact-helper.js prompt-pack <source.md> [--workspace <slug-or-path>] [--out <path>] [--kind <kind>] [--variants <n>] [--repo-design <summary>]
-  image-artifact-helper.js prompt-plan <source.md> [--workspace <slug-or-path>] [--out <path>] [--kind <kind>] [--variants <n>] [--repo-design <summary>]
+  image-artifact-helper.js prompt-pack <source.md> [--workspace <slug-or-path>] [--out <path>] [--kind <kind>] [--variants <n>] [--format png|svg] [--repo-design <summary>]
+  image-artifact-helper.js prompt-plan <source.md> [--workspace <slug-or-path>] [--out <path>] [--kind <kind>] [--variants <n>] [--format png|svg] [--repo-design <summary>]
   image-artifact-helper.js metadata <workspace> --source <source.md> --output <image-or-prompt> --kind <kind> [--tool <name>] [--repo-design <summary>]
   image-artifact-helper.js validate <image-file> [<image-file>...]
 
@@ -127,6 +127,12 @@ function targetBaseName(stem, kind) {
   return `${stem}-${KIND_FILENAMES[kind] || kind}`;
 }
 
+function outputExtension(flags) {
+  const format = flags.format || 'png';
+  if (!['png', 'svg'].includes(format)) die(`Unsupported --format: ${format}`);
+  return format;
+}
+
 function resolvePromptOutput(flags, source, workspace, command) {
   const out = flags.out ? path.resolve(expandHome(flags.out)) : null;
   const defaultName = command === 'prompt-pack' ? `${source.stem}-image-prompts.md` : `${source.stem}-prompt-plan.md`;
@@ -176,9 +182,11 @@ function buildPromptPlan(source, kind, flags) {
   const bullets = extractBullets(source.markdown, 6);
   const variants = variantNames(source.markdown, flags, kind);
   const repoDesign = flags['repo-design'] || 'not scanned or not provided';
+  const extension = outputExtension(flags);
   const assumptions = [];
   if (!flags.kind) assumptions.push(`Output kind inferred as \`${kind}\`.`);
   if (repoDesign === 'not scanned or not provided') assumptions.push('Neutral visual direction; no repo design context applied.');
+  if (extension === 'svg') assumptions.push('Static exact-text output should be hand-written as deterministic SVG with real SVG text.');
   const lines = [
     `# ${title} Image Prompt Plan`,
     '',
@@ -222,7 +230,7 @@ function buildPromptPlan(source, kind, flags) {
     '',
     `## Suggested Filenames`,
     '',
-    `- \`${targetBaseName(source.stem, kind)}.png\``,
+    `- \`${targetBaseName(source.stem, kind)}.${extension}\``,
     '',
   ];
   if (variants.length) {
@@ -238,6 +246,7 @@ function buildPromptPack(source, kind, flags) {
   const plan = buildPromptPlan(source, kind, flags);
   const variants = variantNames(source.markdown, flags, kind);
   const prompts = variants.length ? variants : [kind];
+  const extension = outputExtension(flags);
   const promptLines = prompts.map((name, index) => {
     const label = variants.length ? name : kind;
     return [
@@ -245,7 +254,7 @@ function buildPromptPack(source, kind, flags) {
       '',
       `Create a ${kind} from the source Markdown. Use the key message, required elements, assumptions, and visual style from the prompt plan. Keep text concise and preserve Markdown as the source of truth.`,
       '',
-      `Suggested filename: \`${variants.length ? `${source.stem}-${slugify(label)}.png` : `${targetBaseName(source.stem, kind)}.png`}\``,
+      `Suggested filename: \`${variants.length ? `${source.stem}-${slugify(label)}.${extension}` : `${targetBaseName(source.stem, kind)}.${extension}`}\``,
       '',
     ].join('\n');
   });
@@ -328,6 +337,18 @@ function updateMetadata(args) {
 function imageInfo(filePath) {
   const buffer = fs.readFileSync(filePath);
   if (buffer.length === 0) throw new Error('empty file');
+  const textHead = buffer.slice(0, 512).toString('utf8').trimStart();
+  if (/^(<\?xml\b[^>]*>\s*)?<svg\b/i.test(textHead)) {
+    const text = buffer.toString('utf8');
+    const svgTag = text.match(/<svg\b[^>]*>/i);
+    const tag = svgTag ? svgTag[0] : '';
+    const widthMatch = tag.match(/\bwidth=["']?([0-9.]+)/i);
+    const heightMatch = tag.match(/\bheight=["']?([0-9.]+)/i);
+    const viewBoxMatch = tag.match(/\bviewBox=["']\s*[-0-9.]+\s+[-0-9.]+\s+([0-9.]+)\s+([0-9.]+)\s*["']/i);
+    const width = widthMatch ? Number(widthMatch[1]) : viewBoxMatch ? Number(viewBoxMatch[1]) : null;
+    const height = heightMatch ? Number(heightMatch[1]) : viewBoxMatch ? Number(viewBoxMatch[2]) : null;
+    return { mime: 'image/svg+xml', width, height };
+  }
   if (buffer.length >= 24 && buffer.slice(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
     return { mime: 'image/png', width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) };
   }

@@ -13,6 +13,8 @@ This is a rendering companion, not a source generator. If the source Markdown do
 
 For browser-readable or interactive companions, use `html-artifact` instead. Use both when the workspace needs a readable HTML artifact and a shareable static visual.
 
+This skill is for low-text visual companionship: concept posters, illustrations, comparison boards, UI variant boards, architecture diagrams, mood visuals, and stakeholder visuals. When a user asks for an "image artifact for this spec/doc/source" and the source is text-heavy, default to a low-text illustrative companion and recommend `html-artifact` if the user needs exact wording.
+
 ## Inputs
 
 Accept any of:
@@ -34,19 +36,19 @@ Do not invent source content. If required visual facts are missing, mark them as
 Prefer the bundled helper for deterministic support tasks:
 
 ```bash
-node <this-skill-dir>/scripts/image-artifact-helper.js prompt-pack <source.md> --workspace <workspace> [--kind <kind>] [--variants <n>]
-node <this-skill-dir>/scripts/image-artifact-helper.js prompt-plan <source.md> --workspace <workspace> [--kind <kind>] [--variants <n>]
+node <this-skill-dir>/scripts/image-artifact-helper.js prompt-pack <source.md> --workspace <workspace> [--kind <kind>] [--variants <n>] [--format png|svg]
+node <this-skill-dir>/scripts/image-artifact-helper.js prompt-plan <source.md> --workspace <workspace> [--kind <kind>] [--variants <n>] [--format png|svg]
 node <this-skill-dir>/scripts/image-artifact-helper.js metadata <workspace> --source <source.md> --output <image-or-prompt> --kind <kind> [--tool <name>]
 node <this-skill-dir>/scripts/image-artifact-helper.js validate <image-file> [<image-file>...]
 ```
 
-The script does not generate images. It handles prompt plans, prompt-pack fallback files, metadata updates, path resolution, and file-level image validation.
+The script does not generate images. It handles prompt plans, prompt-pack fallback files, metadata updates, path resolution, and file-level image validation. Use `--format svg` only when exact-text static-image work needs deterministic SVG filename guidance. Validation recognizes deterministic SVG files and reads dimensions from `width`/`height` or `viewBox`.
 
 ## Output Kinds
 
 | Kind | Use when | Default filename |
 |---|---|---|
-| `summary-card` | Concise shareable visual summary | `<source-stem>-summary.png` |
+| `summary-card` | Concise low-text visual summary; for dense text prefer html-artifact | `<source-stem>-summary.png` |
 | `comparison-board` | Options, variants, or tradeoffs | `<source-stem>-comparison-board.png` |
 | `ui-variant-board` | UI component or flow variants | `<source-stem>-variant-board.png` |
 | `architecture-diagram` | Systems, services, APIs, or data flow | `<source-stem>-architecture.png` |
@@ -148,6 +150,8 @@ Use the best available image-generation capability in the current environment.
 - Keep generated-image text short; prefer labels, headings, icons, layout, and visual hierarchy over paragraphs.
 - For text-heavy content, generate a visual summary or board and keep detailed text in Markdown or HTML.
 - If a provider cannot reliably render required text, produce a `prompt-pack` or suggest `html-artifact`.
+- When the user explicitly requires exact text, route names, commands, or tables inside a static image, recommend `html-artifact` first.
+- If a single static image file is genuinely required for exact text, hand-write deterministic SVG with real SVG text rather than relying on a generative model. Use `--format svg` for helper-generated prompt plans or prompt packs.
 - Respect the active tool's safety, copyright, and content limits.
 
 If image generation is unavailable, or the user requests `--kind prompt-pack`, write `images/<source-stem>-image-prompts.md` instead of claiming image output.
@@ -161,6 +165,15 @@ Prompt packs must include:
 - suggested output filenames
 - one prompt per requested image or variant
 - notes about text that should stay short or be rendered outside the image
+
+### Ambiguous Image-Artifact Requests
+
+When the user says "create an image artifact for this spec/doc/source" and the source is text-heavy:
+
+1. Treat the requested image as a low-text illustrative companion by default.
+2. Keep exact wording in the Markdown source or recommend an HTML companion for faithful reading.
+3. Mention that HTML is the better medium for detailed text if the user appears to need exact wording.
+4. Do not produce a dense text-heavy generated image unless the user explicitly asks for it.
 
 ## Metadata
 
@@ -243,7 +256,7 @@ If visual inspection is impossible, perform file-level fallback validation:
 
 - file size is greater than 0 bytes
 - MIME type or file signature identifies the output as an image
-- dimensions are readable through an available image utility, metadata reader, or provider response
+- dimensions are readable through an available image utility, metadata reader, provider response, or SVG `width`/`height` or `viewBox`
 
 State when only file-level validation was possible. Do not claim exact visual fidelity unless the generated artifact was visually inspected.
 
@@ -253,6 +266,7 @@ Report:
 
 ```text
 Written: ~/agent-artifacts/<slug>/images/<name>.png (<kind>)
+Written: ~/agent-artifacts/<slug>/images/<name>.svg (<kind>, deterministic SVG)
 Source: ~/agent-artifacts/<slug>/markdown/<source>.md
 Metadata: ~/agent-artifacts/<slug>/metadata.md
 Repo design context: found Tailwind config and API service names; applied palette/service vocabulary; confidence high
