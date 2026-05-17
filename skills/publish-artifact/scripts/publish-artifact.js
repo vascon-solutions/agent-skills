@@ -142,6 +142,22 @@ function loadEnvFiles(baseEnv = process.env, scriptDir = __dirname) {
       if (env[key] === undefined || env[key] === '') env[key] = value;
     }
   }
+  applyEnvMappings(env);
+  return env;
+}
+
+function applyEnvMappings(env) {
+  const mappings = [
+    ['S3_BUCKET_NAME', 'ARTIFACTS_S3_BUCKET'],
+    ['S3_REGION', 'ARTIFACTS_S3_REGION'],
+    ['S3_ACCESS_KEY_ID', 'AWS_ACCESS_KEY_ID'],
+    ['S3_SECRET_ACCESS_KEY', 'AWS_SECRET_ACCESS_KEY'],
+  ];
+  for (const [source, target] of mappings) {
+    if ((env[target] === undefined || env[target] === '') && env[source]) {
+      env[target] = env[source];
+    }
+  }
   return env;
 }
 
@@ -301,13 +317,18 @@ function defaultRunner(command, args, options = {}) {
     let stderr = '';
     child.stdout.on('data', (chunk) => { stdout += chunk; });
     child.stderr.on('data', (chunk) => { stderr += chunk; });
+    if (options.input !== undefined) {
+      child.stdin.end(options.input);
+    } else {
+      child.stdin.end();
+    }
     child.on('close', (status) => resolve({ stdout, stderr, status }));
   });
 }
 
-async function runAws(runner, args, env, attemptedCommands) {
+async function runAws(runner, args, env, attemptedCommands, options = {}) {
   attemptedCommands.push(['aws', args]);
-  return runner('aws', args, { env: { ...env, AWS_REGION: env.ARTIFACTS_S3_REGION } });
+  return runner('aws', args, { ...options, env: { ...env, AWS_REGION: env.ARTIFACTS_S3_REGION } });
 }
 
 async function runGh(runner, args, env, attemptedCommands) {
@@ -398,7 +419,7 @@ async function runPublish({ argv, env = process.env, runner = defaultRunner, now
   }
   uploaded += 1;
 
-  validateAttemptedCommands(attemptedCommands, loadedEnv);
+  validateAttemptedCommands(attemptedCommands);
   const output = finalOutput({ workspace, archive, uploaded, skipped, shareLinks, gistLinks, ttlLabel, ghAuthed, noGist: options.noGist });
   validateNoCredentialLeak(output + metadata, loadedEnv);
   return { output };
@@ -429,10 +450,20 @@ async function syncFile({ file, workspace, prefix, env, runner, attemptedCommand
 }
 
 async function putObject({ localPath, localContent, key, contentType, metadataMd5, env, runner, attemptedCommands }) {
-  const bodyArgs = localPath
-    ? ['--body', localPath]
-    : ['--body', '-'];
-  const md5 = metadataMd5 || crypto.createHash('md5').update(localContent).digest('hex');
+  if (localContent !== undefined) {
+    const md5 = crypto.createHash('md5').update(localContent).digest('hex');
+    return runAws(runner, [
+      's3',
+      'cp',
+      '-',
+      `s3://${env.ARTIFACTS_S3_BUCKET}/${key}`,
+      '--content-type',
+      contentType,
+      '--metadata',
+      `content-md5=${md5}`,
+    ], env, attemptedCommands, { input: localContent });
+  }
+
   return runAws(runner, [
     's3api',
     'put-object',
@@ -440,11 +471,12 @@ async function putObject({ localPath, localContent, key, contentType, metadataMd
     env.ARTIFACTS_S3_BUCKET,
     '--key',
     key,
-    ...bodyArgs,
+    '--body',
+    localPath,
     '--content-type',
     contentType,
     '--metadata',
-    `content-md5=${md5}`,
+    `content-md5=${metadataMd5}`,
   ], env, attemptedCommands);
 }
 
@@ -547,16 +579,13 @@ function extractPublishedSection(metadata) {
   return lines.slice(start, end === -1 ? lines.length : end).join('\n');
 }
 
-function validateAttemptedCommands(commands, env) {
-  for (const [command, args] of commands) {
+function validateAttemptedCommands(commands) {
+  for (const [, args] of commands) {
     const joined = args.join(' ');
     if (joined.includes('put-bucket-acl') || joined.includes('put-bucket-policy') || joined.includes('put-public-access-block')) {
       throw new Error(`Forbidden AWS command invoked: ${joined}`);
     }
     if (args.includes('--acl')) throw new Error(`Forbidden ACL flag invoked: ${joined}`);
-    if (command === 'aws' && env.AWS_REGION !== env.ARTIFACTS_S3_REGION) {
-      throw new Error('AWS_REGION did not match ARTIFACTS_S3_REGION');
-    }
   }
 }
 

@@ -61,6 +61,8 @@ Invalid:
 
 ## Configuration
 
+The script shells out to the AWS CLI for S3 operations. Install and authenticate `aws` before any non-dry-run publish.
+
 Required environment:
 
 ```sh
@@ -72,6 +74,7 @@ Optional:
 
 ```sh
 ARTIFACTS_S3_PREFIX=
+AWS_PROFILE=artifacts
 ```
 
 The script reads shell environment first. Missing values may be filled from ignored local env files:
@@ -80,6 +83,32 @@ The script reads shell environment first. Missing values may be filled from igno
 2. `<canonical repoRoot>/.env.local`
 
 Commit only `.env.example`. Never commit real `.env` values.
+
+Recommended local `skills/publish-artifact/.env` shape:
+
+```sh
+ARTIFACTS_S3_BUCKET=<bucket-name>
+ARTIFACTS_S3_REGION=<region>
+AWS_PROFILE=artifacts
+```
+
+Do not put `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, or `S3_SECRET_ACCESS_KEY` in repo-local env files, even when those files are ignored. Configure a named AWS profile outside the repo, for example:
+
+```sh
+aws configure --profile artifacts
+```
+
+Rotate or revoke exposed keys in AWS IAM first; `aws configure` only stores the replacement credentials locally.
+
+If reusing an existing S3 config, the script accepts these compatibility aliases only when the canonical variable is missing. Use credential aliases only from a shell environment or external secret source, not from `skills/publish-artifact/.env`:
+
+```text
+S3_BUCKET_NAME       -> ARTIFACTS_S3_BUCKET
+S3_REGION            -> ARTIFACTS_S3_REGION
+S3_ACCESS_KEY_ID     -> AWS_ACCESS_KEY_ID
+S3_SECRET_ACCESS_KEY -> AWS_SECRET_ACCESS_KEY
+S3_BASE_URL          -> not used
+```
 
 AWS credentials come from the standard AWS credential chain outside this repo: shell env, AWS profiles, SSO, IAM role, or container/instance credentials. GitHub credentials come from `gh auth login`. This skill does not manage or print credential values.
 
