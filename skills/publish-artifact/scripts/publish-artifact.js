@@ -535,8 +535,16 @@ function finalOutput({ workspace, archive, uploaded, skipped, shareLinks, gistLi
 }
 
 function validateRedactedMetadata(metadata) {
-  const published = metadata.split(/^## Published$/m)[1] || '';
+  const published = extractPublishedSection(metadata);
   if (/https?:\/\/\S+/.test(published)) throw new Error('Redacted metadata still contains a URL in Published section');
+}
+
+function extractPublishedSection(metadata) {
+  const lines = metadata.split('\n');
+  const start = lines.findIndex((line) => line === '## Published');
+  if (start === -1) return '';
+  const end = lines.findIndex((line, index) => index > start && line.startsWith('## '));
+  return lines.slice(start, end === -1 ? lines.length : end).join('\n');
 }
 
 function validateAttemptedCommands(commands, env) {
