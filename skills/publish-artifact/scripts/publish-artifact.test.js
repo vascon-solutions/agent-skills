@@ -333,3 +333,23 @@ test('runPublish uploads redacted metadata through stdin while local metadata ke
   assert.match(metadataUpload.input, /<presigned URL — see local metadata>/);
   assert.doesNotMatch(metadataUpload.input, /https:\/\/signed\.example\/doc/);
 });
+
+test('runPublish with --to s3 matches default behavior byte-for-byte for dry-run', async () => {
+  const root = tempDir();
+  const workspace = path.join(root, 'demo');
+  write(path.join(workspace, 'markdown', 'doc.md'), '# Doc\n');
+
+  const base = {
+    env: { ARTIFACTS_S3_BUCKET: 'bucket', ARTIFACTS_S3_REGION: 'us-east-1' },
+    runner: async () => ({ stdout: '', stderr: '', status: 0 }),
+    now: new Date('2026-05-17T12:00:00Z'),
+  };
+  const defaultOut = (await publish.runPublish({ ...base, argv: ['demo', '--workspace-root', root, '--dry-run'] })).output;
+  const explicitOut = (await publish.runPublish({ ...base, argv: ['demo', '--workspace-root', root, '--to', 's3', '--dry-run'] })).output;
+  assert.equal(defaultOut, explicitOut);
+});
+
+test('parseArgs rejects --share when --to excludes s3', () => {
+  assert.throws(() => publish.parseArgs(['demo', '--to', 'wiki', '--share', 'markdown']), /--share requires --to s3/);
+  assert.doesNotThrow(() => publish.parseArgs(['demo', '--share', 'markdown']));
+});
