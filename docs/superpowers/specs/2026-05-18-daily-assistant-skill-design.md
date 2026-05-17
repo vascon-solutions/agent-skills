@@ -20,6 +20,8 @@ Version one focuses on:
 - role-aware organization
 - delegation and resume briefs
 - end-of-day digests
+- coding-agent session analytics
+- daily technical practice prompts
 - dashboard-ready Markdown structure
 - reminder intent records for Google Calendar, phone calendar notifications, Gmail/email, and dashboard alerts
 
@@ -30,6 +32,7 @@ The first implementation should be small and file-based:
 - `SKILL.md`: teaches Codex when and how to use the daily assistant workflow.
 - daily Markdown template: defines the stable command center, role lanes, capture entries, action queues, and digest sections.
 - optional helper script: creates or updates the current day's workspace, appends normalized captures, and keeps metadata in sync.
+- session analytics helper: imports or records coding-agent session summaries and groups them by app, repo, skill, outcome, and learning signal.
 - dashboard renderer: reads `markdown/day.md` and `metadata.json` to generate `html/index.html`.
 
 The skill should avoid hidden global state. The daily workspace is the durable state boundary.
@@ -48,10 +51,14 @@ Default daily workspace:
 │   ├── voice-notes/
 │   ├── images/
 │   └── mood-board/
+├── sessions/
+│   └── coding-agents.jsonl
 └── metadata.json
 ```
 
 `markdown/day.md` is authoritative. `metadata.json` stores machine-friendly state for theme inference, sync status, source IDs, and dashboard settings. The `html/index.html` file is generated from Markdown and metadata.
+
+`sessions/coding-agents.jsonl` stores optional normalized session records when the user asks the skill to summarize coding-agent work across the day. Each line represents one session or one imported session summary.
 
 ## Data Flow
 
@@ -71,6 +78,21 @@ Review flow:
 3. User chooses an item to brainstorm, delegate, schedule, turn into a spec, or park.
 4. Skill updates the same daily workspace instead of creating a separate note unless the user asks for a promoted artifact.
 
+Coding-agent analytics flow:
+
+1. User invokes a session summary, end-of-day coding-agent review, or points the skill at available session notes/logs.
+2. Skill records each session by agent, app/repo, task, files or artifacts touched when known, outcome, blockers, follow-ups, and learning signals.
+3. Skill groups sessions by app, project, stack, and role lane.
+4. Skill produces a daily coding-agent insight summary: what shipped, what improved, what patterns repeated, what needs follow-up, and what the user learned.
+5. Skill adds any useful learning or teaching items to the Learning / Teaching lane.
+
+Daily technical practice flow:
+
+1. Skill reads today's coding-agent sessions, captured learning items, active projects, and the user's tech-stack profile.
+2. Skill proposes one short trivia question, one system-design or DevOps prompt, and one focused reading or tutorial suggestion.
+3. When recommending external resources, skill verifies current resources online and prefers official documentation or high-signal primary sources where possible.
+4. Skill records completed practice items and follow-up reading in the daily artifact.
+
 ## Role Lanes
 
 The skill recognizes these initial lanes:
@@ -81,6 +103,7 @@ The skill recognizes these initial lanes:
 - Perfume Enthusiast: personal collection, scent taste profile, wishlist, vendors, reviews, layering experiments, content ideas, app research dataset.
 - Music / Mood / Joy: general daily vibe, Apple Music listening context, gospel music, accomplishments, happiness signals.
 - Learning / Teaching: things learned, AI coding insights, teachable moments, tweet/post/blog/video ideas, internal lessons, audience framing.
+- Coding-Agent Analytics: session summaries, app-by-app progress, agent usage patterns, implementation improvements, repeated blockers, and skill growth.
 - Meta-System: improvements to the assistant, dashboard, skills, artifact workflows, voice capture, reminders, and future app ideas.
 
 The skill may infer lanes, but it should preserve the raw note so bad classification can be corrected later.
@@ -97,6 +120,8 @@ The daily dashboard should open with a stable command center before showing deta
 6. Delegations: who owns what, expected output, and follow-up point.
 7. Capture Inbox: unsorted thoughts, transcripts, links, perfume notes, learning notes, and family notes.
 8. Good Day Scorecard: tasks completed, apps advanced, PRs reviewed, features completed, delegations made, bugs handled, business wins, and mood.
+9. Coding-Agent Insights: sessions summarized, apps touched, artifacts created, patterns learned, and follow-ups.
+10. Daily Technical Practice: trivia, system-design prompt, DevOps prompt, and reading/tutorial suggestion.
 
 Below the command center, the dashboard shows role lanes. The core cards remain stable, but each day can have an inferred visual design.
 
@@ -107,10 +132,10 @@ Every capture should store:
 ```yaml
 id: YYYYMMDD-HHMM-slug
 created_at: ISO timestamp with timezone
-source: text | voice-note | link | standup | client-feedback | personal-observation | browsing | learning-source
+source: text | voice-note | link | standup | client-feedback | personal-observation | browsing | learning-source | coding-agent-session | technical-practice
 lane: inferred role lane
-type: task | idea | question | learning | memory | risk | content-seed | research | perfume-record | delegation | reminder
-action: brainstorm | delegate | remind | schedule | create-spec | create-task-doc | research | implement | turn-into-content | track | park | remember
+type: task | idea | question | learning | memory | risk | content-seed | research | perfume-record | delegation | reminder | session-summary | practice-prompt
+action: brainstorm | delegate | remind | schedule | create-spec | create-task-doc | research | implement | turn-into-content | track | park | remember | summarize-session | recommend-reading
 priority: low | medium | high
 status: captured | tracking | delegated | scheduled | in-progress | resolved | parked
 owner: optional person or team
@@ -160,6 +185,78 @@ Primary sections:
 - Roadmap and Task Planning
 
 The skill should help convert rough client feedback into feature artifacts, specs, task docs, coding-agent briefs, developer handoffs, and progress reports.
+
+## Coding-Agent Analytics Model
+
+The coding-agent analytics lane captures how the user uses Codex, Claude Code, and other coding agents across apps and sessions.
+
+Primary sections:
+
+- Session Summaries
+- Apps / Repos Touched
+- Artifacts Created
+- PRs Reviewed or Repaired
+- Specs / Skills Written
+- Implementation Patterns
+- Repeated Blockers
+- Follow-Up Tasks
+- Learning Signals
+- Teaching Candidates
+
+Each session record should capture:
+
+```yaml
+session_id: optional tool/session identifier
+agent: codex | claude-code | other
+app_or_repo: optional app, repo, or client project
+task: concise task description
+role_lane: CTO at Vascon | Software Engineering / Side Gigs | Learning / Teaching | Meta-System
+outcome: shipped | reviewed | repaired | planned | explored | blocked | delegated
+artifacts: specs, plans, skills, PRs, files, diagrams, or dashboards created
+technologies: JavaScript, TypeScript, React, Next.js, TanStack Router, TanStack Query, React Hook Form, server components, DevOps, system design, or other detected stack
+improvement_signal: what got better because of the session
+follow_ups: what to revisit
+learning_items: what the user learned or should teach
+```
+
+The skill should not assume it can automatically read every historical coding-agent session. If session data is unavailable, it should accept pasted summaries, exported logs, local paths, or manual "summarize this session" input.
+
+End-of-day analytics should answer:
+
+- Which apps or repos moved today?
+- What did each coding-agent session accomplish?
+- What specs, skills, artifacts, PRs, or implementation changes were produced?
+- What repeated blockers or workflow friction appeared?
+- What did the user improve at?
+- What should be followed up tomorrow?
+- What should become a teaching note or tutorial?
+
+## Daily Technical Practice Model
+
+The assistant should help the user keep a sharp JavaScript/software-engineering mind with small daily drills tied to real work.
+
+Initial tech-stack profile:
+
+- JavaScript
+- TypeScript when relevant
+- React
+- Next.js and React Server Components
+- TanStack Router
+- TanStack Query / React Query
+- React Hook Form
+- system design
+- DevOps
+- AI coding agents and practical AI engineering
+
+Daily practice output should be short enough to fit into a busy day:
+
+- one trivia or recall question
+- one "explain this simply" prompt
+- one system-design or DevOps scenario
+- one focused reading/tutorial recommendation
+- optional five-to-fifteen-minute mini tutorial based on a session from the day
+
+When the user asks for actual reading resources, tutorials, or current library behavior, the assistant should search the internet and prefer official docs, release notes, source repositories, or other primary sources before recommending links.
 
 ## Family Model
 
@@ -260,6 +357,8 @@ Required dashboard capabilities for the first useful version:
 - show reminder queue and active focus block
 - show capture inbox for unsorted notes
 - show good-day scorecard
+- show coding-agent session insights and app-by-app progress
+- show daily technical practice prompts and completion state
 - support visual theme inference per day
 
 The dashboard may later edit, reorder, and tag cards, then sync changes back into Markdown. The design must preserve Markdown as the source of truth until round-trip sync is reliable.
@@ -298,6 +397,10 @@ The skill should support these user intents:
 - Turn this into a spec.
 - Turn this into teaching content.
 - Add perfume record.
+- Summarize this coding-agent session.
+- Show coding-agent insights for today.
+- Give me today's JavaScript/system-design drill.
+- Recommend a short reading or tutorial based on today's work.
 - End-of-day review.
 
 The skill should make reasonable inferences, ask at most one clarification when the capture would otherwise be misfiled or cause an external side effect, and always preserve the raw note.
@@ -343,5 +446,7 @@ The implementation should be validated with realistic daily captures:
 6. Reminder-only follow-up.
 7. Time-block focus task.
 8. End-of-day digest.
+9. Coding-agent session summary grouped by app/repo.
+10. Daily technical practice prompt based on the user's stack and today's work.
 
 The generated Markdown should remain readable without the dashboard, and the dashboard should render the command center and role lanes from the same source data.
