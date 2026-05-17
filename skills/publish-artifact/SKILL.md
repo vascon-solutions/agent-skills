@@ -1,13 +1,13 @@
 ---
 name: publish-artifact
-description: Publish a ~/agent-artifacts/<slug>/ workspace to a private S3 archive and optionally produce shareable presigned URLs or secret GitHub gists for Markdown and HTML. Explicit command only — never auto-triggered, never flips the S3 bucket public.
+description: Publish a ~/agent-artifacts/<slug>/ workspace to one or more destinations (S3, GitHub Wikis, ClickUp Docs, Google Docs/Drive). Explicit command only — never auto-triggered, never makes any S3 bucket public.
 ---
 
 # publish-artifact
 
 ## Purpose
 
-Publish an existing artifact workspace from `~/agent-artifacts/<slug>/` to a private S3 archive. When requested with `--share`, generate temporary S3 presigned URLs and, for Markdown/HTML targets, secret GitHub gists.
+Publish an existing artifact workspace from `~/agent-artifacts/<slug>/` to one or more destinations selected by repeatable `--to` flags. Default destination (no `--to`) is a private S3 archive plus optional presigned URLs and secret GitHub gists, which preserves prior behavior. Additional destinations are `wiki` (GitHub Wikis), `clickup` (ClickUp Docs), and `google-docs` (Google Docs/Drive).
 
 This skill does not create artifacts. Use `markdown-artifact`, `html-artifact`, or `image-artifact` first.
 
@@ -35,9 +35,36 @@ The script resolves symlinks with `fs.realpathSync(__dirname)`, so local env-fil
 ## When Not To Use
 
 - Do not use this to create artifacts.
-- Do not use this for Google Drive, ClickUp, Google Docs, or native-format conversion.
+- Do not use this for Notion, Confluence, or generic webhook destinations in v1.
 - Do not use this for automatic syncing or filesystem watching.
 - Do not use this unless the user explicitly asks to publish/share/archive an artifact workspace.
+
+## Destinations
+
+Select one or more with repeatable `--to <name>` flags. With no `--to`, the script runs the S3 + optional gist flow exactly as the previous version.
+
+- `s3` — private S3 archive plus optional presigned URLs and secret gists. Required env: `ARTIFACTS_S3_BUCKET`, `ARTIFACTS_S3_REGION`.
+- `wiki` — push workspace contents to `<owner>/<repo>.wiki.git` as a single atomic commit. Auth via `gh` or SSH agent. Required flag (optional if auto-detectable via `gh repo view`): `--wiki-repo <owner/repo>`.
+- `clickup` — create or update a ClickUp Doc per Markdown file. Required env: `CLICKUP_API_TOKEN`. Required flag (or `CLICKUP_PARENT_TYPE` + `CLICKUP_PARENT_ID`): `--clickup-parent <type:id>` where type is `workspace`, `space`, `folder`, or `list`.
+- `google-docs` — create or update a Google Doc per Markdown file under a Drive folder. Required: active ADC (`gcloud auth application-default print-access-token`) or `GOOGLE_APPLICATION_CREDENTIALS` pointing to a service-account JSON outside the repo and workspace. Required flag (or `GOOGLE_DRIVE_PARENT_ID`): `--google-folder <drive-folder-id>`.
+
+Image references in Markdown files are rewritten to S3 presigned URLs only when `--to s3` is also selected. Without `s3`, image refs are left as-is and the report includes a warning. HTML files are not pushed to wiki/clickup/google-docs; they remain S3 + gist only.
+
+Manual smoke tests (each gated behind explicit env vars so they are never run accidentally in CI):
+
+```sh
+# Wiki (requires gh auth; reads repo from cwd if --wiki-repo absent)
+node skills/publish-artifact/scripts/publish-artifact.js demo --to wiki --wiki-repo me/proj --dry-run
+
+# ClickUp (requires CLICKUP_API_TOKEN and a parent id you control)
+CLICKUP_API_TOKEN=$CLICKUP_API_TOKEN \
+  node skills/publish-artifact/scripts/publish-artifact.js demo \
+  --to clickup --clickup-parent workspace:$CLICKUP_WORKSPACE_ID --dry-run
+
+# Google Docs (requires ADC; folder ID for the parent)
+node skills/publish-artifact/scripts/publish-artifact.js demo \
+  --to google-docs --google-folder $GOOGLE_DRIVE_PARENT_ID --dry-run
+```
 
 ## Inputs
 
@@ -47,12 +74,18 @@ Required:
 
 Flags:
 
-- `--share <target>` — repeatable. Valid values: `markdown`, `html`, or a workspace-relative filename such as `markdown/report.md`, `html/report.html`, or `images/summary.png`.
+- `--to <name>` — repeatable. Selects destinations: `s3`, `wiki`, `clickup`, `google-docs`. With no `--to`, defaults to S3 + optional gist (legacy behavior).
+- `--share <target>` — repeatable. Valid values: `markdown`, `html`, or a workspace-relative filename such as `markdown/report.md`, `html/report.html`, or `images/summary.png`. Requires S3 (default behavior or `--to s3`).
 - `--ttl <duration>` — presigned URL TTL. Grammar: `<integer><unit>` where unit is `s`, `m`, `h`, or `d`. Default: `7d`. Maximum: `7d`.
-- `--force` — override secret-scan blocks and update existing recorded gists instead of creating duplicates.
+- `--force` — override secret-scan blocks, update existing recorded gists instead of creating duplicates, and overwrite an existing ClickUp Doc or Google Doc when a name collision is detected.
 - `--dry-run` — show planned work without local or remote writes.
 - `--gist-visibility <secret|public>` — default: `secret`. `public` appends `--public` when creating new gists.
 - `--no-gist` — generate only S3 presigned URLs for share targets.
+- `--wiki-repo <owner/repo>` — explicit wiki target. Optional if `gh repo view` can detect the repo from cwd.
+- `--clickup-parent <type:id>` — ClickUp Doc parent. `type` is `workspace`, `space`, `folder`, or `list`. Falls back to `CLICKUP_PARENT_TYPE` + `CLICKUP_PARENT_ID` envs.
+- `--clickup-doc <name>` — Doc name. Defaults to the Markdown filename stem.
+- `--google-folder <drive-folder-id>` — Drive folder that hosts the Doc. Falls back to `GOOGLE_DRIVE_PARENT_ID`.
+- `--google-doc <name>` — Doc name. Defaults to the Markdown filename stem.
 - `--workspace-root <path>` — advanced/test flag that overrides the default `~/agent-artifacts` root for slug resolution.
 
 Invalid:
@@ -259,9 +292,25 @@ Expected:
 - no live AWS or GitHub command is required for tests
 - no AWS credentials appear in output or metadata
 
+## Security
+
+These rules are non-negotiable. Tests enforce the ones that can be enforced statically; reviewers enforce the rest.
+
+- No credential is ever read from a CLI flag, written to `metadata.md`, or printed in logs or error output. Token-shaped strings are redacted before any error is surfaced.
+- All HTTP calls are HTTPS-only. The shared `common/http.js` wrapper rejects `http://` URLs and never sets `NODE_TLS_REJECT_UNAUTHORIZED=0`.
+- HTTP requests use native `fetch` (Node 18+), a per-call timeout, and exponential backoff with jitter on 429 and 5xx responses. Other 4xx responses fail fast.
+- Workspace slugs must match `^[A-Za-z0-9._-]+$` and resolve under `~/agent-artifacts/`. Path-traversal attempts fail at slug resolution.
+- `--wiki-repo` must match `^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$`.
+- The secret scan blocks before any destination publishes when it sees AWS, GitHub, Anthropic/OpenAI, Slack, JWT, private-key, ClickUp, Google API, or service-account JSON markers.
+- `GOOGLE_APPLICATION_CREDENTIALS` must point to a file outside the repo and the workspace. The driver refuses to start otherwise.
+- Subprocess calls (`aws`, `gh`, `git`, `gcloud`) use argv arrays, never shell strings.
+- No new runtime dependency is introduced. The skill relies only on Node built-ins and the installed CLIs above.
+
 ## Cautions
 
 - Presigned URLs are bearer tokens. Treat them as sensitive until they expire.
 - Secret gists are unlisted, not access-controlled. Anyone with the URL can read them.
 - Gists retain edit history. Delete a gist if an old revision contained sensitive data.
 - The secret scan is a safety net, not a guarantee. Users remain responsible for what they publish.
+- ClickUp Personal API tokens grant full account access; rotate them like any production secret and avoid binding them to your primary user when a service account works.
+- Google `drive.file` scope means the skill only sees Docs it created itself; Docs created outside this skill will not be found by name search and will not be updated.
