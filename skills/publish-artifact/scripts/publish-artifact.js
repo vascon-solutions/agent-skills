@@ -20,12 +20,13 @@ const s3 = require('./destinations/s3.js');
 const wiki = require('./destinations/wiki.js');
 const clickup = require('./destinations/clickup.js');
 const googleDocs = require('./destinations/google-docs.js');
+const googleDrive = require('./destinations/google-drive.js');
 
-const VALID_TO = new Set(['s3', 'wiki', 'clickup', 'google-docs']);
+const VALID_TO = new Set(['s3', 'wiki', 'clickup', 'google-docs', 'google-drive']);
 
 function usage(exitCode = 0) {
   const out = exitCode === 0 ? process.stdout : process.stderr;
-  out.write(`Usage: publish-artifact.js <slug-or-path> [--to <s3|wiki|clickup|google-docs>]... [--share <target>] [--ttl <duration>] [--force] [--dry-run] [--gist-visibility <secret|public>] [--no-gist] [--wiki-repo <owner/repo>] [--clickup-parent <type:id>] [--clickup-doc <name>] [--google-folder <id>] [--google-doc <name>] [--workspace-root <path>]\n`);
+  out.write(`Usage: publish-artifact.js <slug-or-path> [--to <s3|wiki|clickup|google-docs|google-drive>]... [--share <target>] [--ttl <duration>] [--force] [--dry-run] [--gist-visibility <secret|public>] [--no-gist] [--wiki-repo <owner/repo>] [--clickup-parent <type:id>] [--clickup-doc <name>] [--google-folder <id>] [--google-doc <name>] [--workspace-root <path>]\n`);
   process.exit(exitCode);
 }
 
@@ -174,7 +175,7 @@ function defaultRunner(command, args, options = {}) {
 }
 
 function selectDrivers(names) {
-  const byName = { s3, wiki, clickup, 'google-docs': googleDocs };
+  const byName = { s3, wiki, clickup, 'google-docs': googleDocs, 'google-drive': googleDrive };
   const list = names.length > 0 ? names : ['s3'];
   return list.map((n) => {
     const d = byName[n];

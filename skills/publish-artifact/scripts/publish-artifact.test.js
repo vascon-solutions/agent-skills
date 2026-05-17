@@ -354,6 +354,24 @@ test('parseArgs rejects --share when --to excludes s3', () => {
   assert.doesNotThrow(() => publish.parseArgs(['demo', '--share', 'markdown']));
 });
 
+test('runPublish accepts google-drive destination and env parent default in dry-run', async () => {
+  const root = tempDir();
+  const workspace = path.join(root, 'demo');
+  write(path.join(workspace, 'markdown', 'doc.md'), '# Doc\n');
+  write(path.join(workspace, 'images', 'pic.png'), 'png');
+
+  const result = await publish.runPublish({
+    argv: ['demo', '--workspace-root', root, '--to', 'google-drive', '--dry-run'],
+    env: { GOOGLE_DRIVE_PARENT_ID: 'parent-folder' },
+    runner: async () => { throw new Error('dry-run should not fetch auth'); },
+    now: new Date('2026-05-17T12:00:00Z'),
+  });
+
+  assert.match(result.output, /\[dry-run\] Google Drive folder: demo under parent-folder/);
+  assert.match(result.output, /would upload raw file markdown\/doc.md/);
+  assert.match(result.output, /would upload raw file images\/pic.png/);
+});
+
 test('runPublish applies ClickUp and Google env defaults before validation', async () => {
   const root = tempDir();
   const workspace = path.join(root, 'demo');

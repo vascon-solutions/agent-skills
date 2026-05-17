@@ -53,7 +53,7 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 | `markdown-artifact`        | Create polished Markdown artifact workspaces under `~/agent-artifacts/<slug>/` from ideas, notes, UI/backend designs, learning topics, tutorials, task plans, and other early-stage source docs |
 | `image-artifact`           | Create static visual companions from existing Markdown, including summary cards, UI variant boards, comparison boards, decision boards, concept posters, architecture diagrams, and API flow images. Repo Markdown defaults to `~/agent-artifacts/<repo-name>-<source-stem>/images/` |
 | `repo-design-context`      | Discover whether local repo styling, design tokens, brand assets, or architecture vocabulary can safely inform generated artifacts |
-| `publish-artifact`         | Publish a `~/agent-artifacts/<slug>/` workspace to S3, GitHub Wikis, ClickUp Docs, or Google Docs/Drive with explicit destination flags. Explicit command only |
+| `publish-artifact`         | Publish a `~/agent-artifacts/<slug>/` workspace to S3, GitHub Wikis, ClickUp Docs, native Google Docs, or raw Google Drive folders with explicit destination flags. Explicit command only |
 
 ## Link Targets
 
@@ -167,7 +167,7 @@ The link script is idempotent — it skips symlinks that already point to the co
 
 ### Publishing artifact workspaces externally
 
-1. `publish-artifact` — push a `~/agent-artifacts/<slug>/` workspace to one or more destinations with `--to s3`, `--to wiki`, `--to clickup`, or `--to google-docs`. With no `--to`, it preserves the private S3 archive flow; `--share markdown` or `--share html` still creates an S3 presigned URL and optional secret gist. Bucket access is never modified.
+1. `publish-artifact` — push a `~/agent-artifacts/<slug>/` workspace to one or more destinations with `--to s3`, `--to wiki`, `--to clickup`, `--to google-docs`, or `--to google-drive`. With no `--to`, it preserves the private S3 archive flow; `--share markdown` or `--share html` still creates an S3 presigned URL and optional secret gist. Bucket access is never modified.
 
 ### Creating Markdown artifact workspaces
 

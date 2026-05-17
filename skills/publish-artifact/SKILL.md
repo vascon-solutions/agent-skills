@@ -1,13 +1,13 @@
 ---
 name: publish-artifact
-description: Publish a ~/agent-artifacts/<slug>/ workspace to one or more destinations (S3, GitHub Wikis, ClickUp Docs, Google Docs/Drive). Explicit command only — never auto-triggered, never makes any S3 bucket public.
+description: Publish a ~/agent-artifacts/<slug>/ workspace to one or more destinations (S3, GitHub Wikis, ClickUp Docs, Google Docs, Google Drive folders). Explicit command only — never auto-triggered, never makes any S3 bucket public.
 ---
 
 # publish-artifact
 
 ## Purpose
 
-Publish an existing artifact workspace from `~/agent-artifacts/<slug>/` to one or more destinations selected by repeatable `--to` flags. Default destination (no `--to`) is a private S3 archive plus optional presigned URLs and secret GitHub gists, which preserves prior behavior. Additional destinations are `wiki` (GitHub Wikis), `clickup` (ClickUp Docs), and `google-docs` (Google Docs/Drive).
+Publish an existing artifact workspace from `~/agent-artifacts/<slug>/` to one or more destinations selected by repeatable `--to` flags. Default destination (no `--to`) is a private S3 archive plus optional presigned URLs and secret GitHub gists, which preserves prior behavior. Additional destinations are `wiki` (GitHub Wikis), `clickup` (ClickUp Docs), `google-docs` (native Google Docs), and `google-drive` (raw Drive folder/file upload).
 
 This skill does not create artifacts. Use `markdown-artifact`, `html-artifact`, or `image-artifact` first.
 
@@ -46,9 +46,10 @@ Select one or more with repeatable `--to <name>` flags. With no `--to`, the scri
 - `s3` — private S3 archive plus optional presigned URLs and secret gists. Required env: `ARTIFACTS_S3_BUCKET`, `ARTIFACTS_S3_REGION`.
 - `wiki` — push workspace contents to `<owner>/<repo>.wiki.git` as a single atomic commit. Auth via `gh` or SSH agent. Required flag (optional if auto-detectable via `gh repo view`): `--wiki-repo <owner/repo>`.
 - `clickup` — create or update a ClickUp Doc per Markdown file. Required env: `CLICKUP_API_TOKEN`. Required flag (or `CLICKUP_PARENT_TYPE` + `CLICKUP_PARENT_ID`): `--clickup-parent <type:id>` where type is `workspace`, `space`, `folder`, or `list`.
-- `google-docs` — create or update a Google Doc per Markdown file under a Drive folder. Required: active ADC (`gcloud auth application-default print-access-token`) or `GOOGLE_APPLICATION_CREDENTIALS` pointing to a service-account JSON outside the repo and workspace. Required flag (or `GOOGLE_DRIVE_PARENT_ID`): `--google-folder <drive-folder-id>`.
+- `google-docs` — create or update a native Google Doc per Markdown file under a Drive folder. Required: active ADC (`gcloud auth application-default print-access-token`) or `GOOGLE_APPLICATION_CREDENTIALS` pointing to a service-account JSON outside the repo and workspace. Required flag (or `GOOGLE_DRIVE_PARENT_ID`): `--google-folder <drive-folder-id>`.
+- `google-drive` — create or update a Drive folder named `<slug>` under a parent folder and upload workspace files as raw files, preserving `markdown/`, `html/`, `images/`, and `assets/` structure. Required auth is the same as `google-docs`. Required flag (or `GOOGLE_DRIVE_PARENT_ID`): `--google-folder <drive-folder-id>`.
 
-Image references in Markdown files are rewritten to S3 presigned URLs only when `--to s3` is also selected. Without `s3`, image refs are left as-is and the report includes a warning. Wiki mirrors `markdown/`, `html/`, `images/`, and `assets/`; ClickUp and Google Docs ingest Markdown only and report HTML files as skipped.
+Image references in Markdown files are rewritten to S3 presigned URLs only when `--to s3` is also selected for ClickUp or Google Docs. Without `s3`, image refs are left as-is and the report includes a warning. Wiki mirrors `markdown/`, `html/`, `images/`, and `assets/`; Google Drive uploads those files directly; ClickUp and Google Docs ingest Markdown only and report HTML files as skipped.
 
 Manual smoke tests (each gated behind explicit env vars so they are never run accidentally in CI):
 
@@ -64,6 +65,10 @@ CLICKUP_API_TOKEN=$CLICKUP_API_TOKEN \
 # Google Docs (requires ADC; folder ID for the parent)
 node skills/publish-artifact/scripts/publish-artifact.js demo \
   --to google-docs --google-folder $GOOGLE_DRIVE_PARENT_ID --dry-run
+
+# Google Drive raw folder upload (requires ADC; folder ID for the parent)
+node skills/publish-artifact/scripts/publish-artifact.js demo \
+  --to google-drive --google-folder $GOOGLE_DRIVE_PARENT_ID --dry-run
 ```
 
 ## Inputs
@@ -74,7 +79,7 @@ Required:
 
 Flags:
 
-- `--to <name>` — repeatable. Selects destinations: `s3`, `wiki`, `clickup`, `google-docs`. With no `--to`, defaults to S3 + optional gist (legacy behavior).
+- `--to <name>` — repeatable. Selects destinations: `s3`, `wiki`, `clickup`, `google-docs`, `google-drive`. With no `--to`, defaults to S3 + optional gist (legacy behavior).
 - `--share <target>` — repeatable. Valid values: `markdown`, `html`, or a workspace-relative filename such as `markdown/report.md`, `html/report.html`, or `images/summary.png`. Requires S3 (default behavior or `--to s3`).
 - `--ttl <duration>` — presigned URL TTL. Grammar: `<integer><unit>` where unit is `s`, `m`, `h`, or `d`. Default: `7d`. Maximum: `7d`.
 - `--force` — override secret-scan blocks, update existing recorded gists instead of creating duplicates, and overwrite an existing ClickUp Doc or Google Doc when a name collision is detected.
@@ -84,7 +89,7 @@ Flags:
 - `--wiki-repo <owner/repo>` — explicit wiki target. Optional if `gh repo view` can detect the repo from cwd.
 - `--clickup-parent <type:id>` — ClickUp Doc parent. `type` is `workspace`, `space`, `folder`, or `list`. Falls back to `CLICKUP_PARENT_TYPE` + `CLICKUP_PARENT_ID` envs.
 - `--clickup-doc <name>` — Doc name. Defaults to `<slug>`.
-- `--google-folder <drive-folder-id>` — Drive folder that hosts the Doc. Falls back to `GOOGLE_DRIVE_PARENT_ID`.
+- `--google-folder <drive-folder-id>` — Drive folder that hosts Google Docs or raw Google Drive uploads. Falls back to `GOOGLE_DRIVE_PARENT_ID`.
 - `--google-doc <name>` — Doc name. Defaults to `<slug>`.
 - `--workspace-root <path>` — advanced/test flag that overrides the default `~/agent-artifacts` root for slug resolution.
 

@@ -1,84 +1,8 @@
 const fs = require('fs');
 const path = require('path');
-const crypto = require('crypto');
 
+const { assertCredentialsOutside, getAccessToken } = require('../common/google-auth.js');
 const { rewriteImagePaths } = require('../common/markdown-rewrite.js');
-
-function assertCredentialsOutside(credPath, workspacePath, scriptDir) {
-  if (!credPath) return;
-  const abs = path.resolve(credPath);
-  const checks = [workspacePath];
-  if (scriptDir) {
-    const skillDir = path.dirname(scriptDir);
-    const skillsDir = path.dirname(skillDir);
-    checks.push(scriptDir, skillDir, skillsDir, path.dirname(skillsDir));
-  }
-  for (const root of checks) {
-    if (!root) continue;
-    const absRoot = path.resolve(root);
-    if (abs === absRoot || abs.startsWith(absRoot + path.sep)) {
-      throw new Error('GOOGLE_APPLICATION_CREDENTIALS must live outside the repo and workspace');
-    }
-  }
-}
-
-async function defaultAccessToken(env, runner) {
-  const result = await runner('gcloud', ['auth', 'application-default', 'print-access-token'], { env });
-  if (result.status !== 0) {
-    throw new Error(`gcloud ADC token fetch failed: ${(result.stderr || result.stdout).trim()}`);
-  }
-  return result.stdout.trim();
-}
-
-function base64url(input) {
-  return Buffer.from(input).toString('base64')
-    .replace(/=/g, '')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_');
-}
-
-function signJwt(unsigned, privateKey) {
-  return crypto.createSign('RSA-SHA256').update(unsigned).sign(privateKey, 'base64')
-    .replace(/=/g, '')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_');
-}
-
-function createServiceAccountAssertion(creds, now, signer = signJwt) {
-  if (creds.type !== 'service_account' || !creds.client_email || !creds.private_key) {
-    throw new Error('GOOGLE_APPLICATION_CREDENTIALS must point to a service-account JSON with client_email and private_key');
-  }
-  const tokenUri = creds.token_uri || 'https://oauth2.googleapis.com/token';
-  const issuedAt = Math.floor(now.getTime() / 1000);
-  const header = base64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
-  const claims = base64url(JSON.stringify({
-    iss: creds.client_email,
-    scope: 'https://www.googleapis.com/auth/drive.file',
-    aud: tokenUri,
-    exp: issuedAt + 3600,
-    iat: issuedAt,
-  }));
-  const unsigned = `${header}.${claims}`;
-  return { assertion: `${unsigned}.${signer(unsigned, creds.private_key)}`, tokenUri };
-}
-
-async function serviceAccountAccessToken(env, httpClient, now, signer) {
-  const credPath = path.resolve(env.GOOGLE_APPLICATION_CREDENTIALS);
-  const creds = JSON.parse(fs.readFileSync(credPath, 'utf8'));
-  const { assertion, tokenUri } = createServiceAccountAssertion(creds, now, signer);
-  const body = new URLSearchParams({
-    grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-    assertion,
-  }).toString();
-  const res = await httpClient.request(tokenUri, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body,
-  });
-  const data = await res.json();
-  if (!data.access_token) throw new Error('Google service-account token response did not include access_token');
-  return data.access_token;
-}
 
 const driver = {
   name: 'google-docs',
@@ -110,9 +34,15 @@ const driver = {
       if (authHeader) return authHeader;
       const token = ctx.fetchAccessToken
         ? await ctx.fetchAccessToken()
-        : ctx.env.GOOGLE_APPLICATION_CREDENTIALS
-          ? await serviceAccountAccessToken(ctx.env, ctx.httpClient, ctx.now || new Date(), ctx.signJwt)
-          : await defaultAccessToken(ctx.env, ctx.runner);
+        : await getAccessToken({
+          env: ctx.env,
+          workspacePath: workspace.workspacePath,
+          scriptDir: ctx.scriptDir,
+          runner: ctx.runner,
+          httpClient: ctx.httpClient,
+          now: ctx.now || new Date(),
+          signJwt: ctx.signJwt,
+        });
       authHeader = { Authorization: `Bearer ${token}` };
       return authHeader;
     }
