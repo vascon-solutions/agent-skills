@@ -12,6 +12,138 @@
 
 ---
 
+## Source Context
+
+Synthesized from the approved local artifact workbench design spec and codebase review of existing artifact skills and `publish-artifact` workspace helpers.
+
+## Design Reference
+
+- Source Spec: `docs/superpowers/specs/2026-05-18-artifact-workbench-design.md`
+- Existing skill installation guidance: `README.md`
+- Existing skill symlink registry: `bin/link-skills.sh`
+
+## Architecture Summary
+
+Add a dedicated `skills/artifact-workbench/` micro-skill with a dependency-free Node CLI and colocated `node:test` suite. Workspace mode must delegate slug/path resolution and default upload-set listing to `publish-artifact`'s shared workspace helper, then serve a generated runtime-only index for permitted artifact directories. Single HTML mode serves one explicit `.html` file from its parent directory without generating a workspace index. The server is read-only, localhost-only, and must not publish, mutate metadata, watch files, or contact remote services.
+
+## Code Evidence
+
+| Behavior | Source |
+|---|---|
+| Skill installation is controlled by the `SKILL_NAMES` list, so the new skill must be added there. | `bin/link-skills.sh:21-40` |
+| README lists the canonical skill tree, skill table, and artifact workflow sections that need updates. | `README.md:7-57`, `README.md:156-176` |
+| `publish-artifact` already exports `resolveWorkspace`, which validates slugs/paths under the workspace root and rejects non-artifact directories. | `skills/publish-artifact/scripts/common/workspace.js:16-49` |
+| `publish-artifact` already exports `listUploadFiles`, which skips dotfiles, `metadata.md`, `node_modules`, and `dist` when producing the default upload set. | `skills/publish-artifact/scripts/common/workspace.js:51-69` |
+| `publish-artifact` exports `expandHome` and `normalizeRelative`, which the workbench can reuse for path handling and route-safe relative paths. | `skills/publish-artifact/scripts/common/workspace.js:6-14`, `skills/publish-artifact/scripts/common/workspace.js:71` |
+| Artifact skill docs already expose sections where optional workbench references can be inserted. | `skills/html-artifact/SKILL.md:50`, `skills/html-artifact/SKILL.md:176`, `skills/markdown-artifact/SKILL.md:176`, `skills/image-artifact/SKILL.md:228`, `skills/image-artifact/SKILL.md:269`, `skills/publish-artifact/SKILL.md:28-35` |
+
+## Current Behavior To Preserve
+
+- `publish-artifact` workspace resolution and upload-file selection must keep their existing behavior; this task may consume the helper but must not alter its contract except for verified defects directly caused by this work.
+- Generated HTML artifacts must remain self-contained, offline-capable, and directly openable from disk. Localhost preview must not replace direct file-open or `html-artifact` validation.
+- Artifact workspaces must remain publishable through `publish-artifact`; the workbench must not write metadata, create upload side effects, or run destination-specific logic.
+- `bin/link-skills.sh` must remain idempotent and continue linking existing skills.
+- Existing artifact skills must keep their primary generation/publishing behavior; new workbench mentions are optional review affordances only.
+
+## Prerequisites
+
+- The approved source spec exists at `docs/superpowers/specs/2026-05-18-artifact-workbench-design.md`.
+- Node.js supports `node:test` and global `fetch` for the prescribed route tests.
+- The implementing branch may already contain unrelated worktree changes; do not stage, revert, or rewrite unrelated files.
+
+## Scope
+
+- Create the `artifact-workbench` skill and dependency-free Node CLI.
+- Support workspace slug/path mode under `~/agent-artifacts` and explicit single `.html` file mode.
+- Generate a runtime-only index for present workspace sections, default publish upload set, and conservative HTML reference warnings.
+- Serve permitted routes with no-store/nosniff headers, path traversal protection, and symlink escape protection.
+- Add cross-platform `--open` helper behavior.
+- Add focused `node:test` coverage and manual smoke verification.
+- Register and document the new skill in the link script, README, and related artifact skill docs.
+
+## Excluded
+
+- Remote sharing, non-localhost binding, QR codes, tunnels, or LAN/mobile serving.
+- Screenshot automation, browser automation, annotations, approval capture, or live reload.
+- Publishing, upload simulation, secret scanning, destination-specific transformations, gist creation, or metadata mutation.
+- Changing `html-artifact` output rules or weakening direct file/self-contained validation.
+- Adding npm dependencies, bundlers, package metadata, or a long-running daemon.
+- General-purpose static file serving outside the explicit workspace and single HTML modes.
+
+## Assumptions
+
+- The existing `publish-artifact` workspace helper remains the source of truth for artifact workspace resolution and default upload set discovery.
+- `metadata.md` should be served as `text/plain; charset=utf-8` because the source spec explicitly calls for plain text.
+- Workspace index sections for absent artifact folders or absent `metadata.md` should be omitted cleanly. Counts in the startup report should still show zero for absent sections.
+- A single explicit `.html` file may live outside `~/agent-artifacts`; non-HTML directories outside `~/agent-artifacts` remain rejected.
+
+## Pre-Implementation Verification
+
+- Re-open `docs/superpowers/specs/2026-05-18-artifact-workbench-design.md` and confirm the route, safety, documentation, and test-plan requirements have not changed.
+- Re-open `skills/publish-artifact/scripts/common/workspace.js` and confirm `resolveWorkspace`, `listUploadFiles`, `expandHome`, and `normalizeRelative` are still exported with compatible behavior.
+- Re-open `bin/link-skills.sh` and `README.md` to confirm insertion locations still match this plan.
+- Re-open the related artifact skill docs and confirm the target headings still exist before applying documentation snippets.
+- Check `git status --short` before staging anything so unrelated current worktree changes are preserved.
+
+## Likely Files To Touch
+
+- `skills/artifact-workbench/SKILL.md`
+- `skills/artifact-workbench/scripts/serve-artifact-workbench.js`
+- `skills/artifact-workbench/scripts/serve-artifact-workbench.test.js`
+- `bin/link-skills.sh`
+- `README.md`
+- `skills/html-artifact/SKILL.md`
+- `skills/markdown-artifact/SKILL.md`
+- `skills/image-artifact/SKILL.md`
+- `skills/publish-artifact/SKILL.md`
+
+## Decisions Required Before Implementation
+
+None. The source spec resolves v1 scope, workspace boundaries, metadata handling, preview isolation, and deferred follow-ups.
+
+## Execution Rules
+
+- Do not implement any excluded follow-up behavior.
+- Use Node built-ins only.
+- Bind only to `127.0.0.1`.
+- Keep the generated workbench index runtime-only; do not write it to the workspace.
+- Treat `metadata.md` as local-only operational metadata and serve it as plain text.
+- Omit absent workspace sections from the index, while preserving zero counts in the startup report.
+- Keep commits scoped to each task and do not stage unrelated worktree changes.
+
+## Deliverables
+
+- New `artifact-workbench` skill with CLI, tests, and skill documentation.
+- README and related artifact skill documentation updated to reference optional local preview.
+- Passing workbench tests, related publish workspace helper tests, manual smoke checks, and link-script verification.
+
+## Completion Verification
+
+- `node --test skills/artifact-workbench/scripts/serve-artifact-workbench.test.js` passes.
+- `node --test skills/publish-artifact/scripts/common/workspace.test.js` passes.
+- Manual smoke for an outside workspace path exits non-zero.
+- Manual smoke for a workspace under `~/agent-artifacts` prints the local URL, counts, and expected HTML warning.
+- `bin/link-skills.sh` exits 0 and reports `artifact-workbench` for each target directory.
+- `git status --short` shows only intended changes staged/committed for this work, plus any pre-existing unrelated changes left untouched.
+
+## Approval Gates
+
+None. This task does not change auth, permissions, compliance, finance, destructive data behavior, or deployment infrastructure.
+
+## Completion Criteria
+
+The task is complete when the new skill is registered, documented, covered by tests, manually smoke-checked, and verified to preserve read-only localhost behavior and existing artifact publishing/self-contained HTML contracts.
+
+## Follow-ups
+
+- Remote/mobile preview or QR-code flows.
+- Live reload.
+- Screenshot automation.
+- Editable annotations or approval capture.
+- Destination-specific publish simulation.
+
+---
+
 ## File Structure
 
 Create:
@@ -755,6 +887,7 @@ test('createRequestHandler serves workspace index and files with no-store', asyn
 
     const metadata = await fetch(`${baseUrl}/metadata.md`);
     assert.equal(metadata.status, 200);
+    assert.match(metadata.headers.get('content-type'), /text\/plain/);
     assert.match(await metadata.text(), /Metadata/);
 
     const svg = await fetch(`${baseUrl}/images/pic.svg`);
@@ -781,6 +914,20 @@ test('workspace preview route isolates html asset requests', async () => {
     const rawAsset = await fetch(`${baseUrl}/images/pic.png`);
     assert.equal(rawAsset.status, 200);
   });
+});
+
+test('buildIndexHtml omits absent workspace sections cleanly', () => {
+  const ws = tempDir();
+  write(path.join(ws, 'html', 'a.html'), '<!doctype html><h1>A</h1>');
+  const info = workbench.discoverWorkspace(ws);
+
+  const html = workbench.buildIndexHtml({ workspacePath: ws, slug: 'demo', info });
+
+  assert.match(html, /HTML/);
+  assert.doesNotMatch(html, /Markdown/);
+  assert.doesNotMatch(html, /Images/);
+  assert.doesNotMatch(html, /Assets/);
+  assert.doesNotMatch(html, /Metadata/);
 });
 
 test('single html mode serves direct file without workspace index', async () => {
@@ -840,13 +987,13 @@ function section(title, body) {
   return `<section><h2>${escapeHtml(title)}</h2>${body}</section>`;
 }
 
-function listSection(title, files, baseRoute, emptyLabel) {
-  if (!files || files.length === 0) return section(title, `<p>${escapeHtml(emptyLabel)}</p>`);
+function listSection(title, files, baseRoute) {
+  if (!files || files.length === 0) return '';
   return section(title, `<ul>${files.map((file) => fileLink(file, baseRoute)).join('\n')}</ul>`);
 }
 
 function htmlSection(files, checks) {
-  if (!files || files.length === 0) return section('HTML', '<p>No HTML files found.</p>');
+  if (!files || files.length === 0) return '';
   const warningsByFile = new Map(checks.map((check) => [check.file.relativePath, check.warnings]));
   const items = files.map((file) => {
     const relativeName = file.relativePath.replace(/^html\//, '');
@@ -866,7 +1013,7 @@ function htmlSection(files, checks) {
 }
 
 function imageSection(files) {
-  if (!files || files.length === 0) return section('Images', '<p>No image files found.</p>');
+  if (!files || files.length === 0) return '';
   const items = files.map((file) => {
     const relativeName = file.relativePath.replace(/^images\//, '');
     const href = `/images/${encodeURI(relativeName)}`;
@@ -881,7 +1028,7 @@ function imageSection(files) {
 }
 
 function metadataSection(metadata) {
-  if (!metadata) return section('Metadata', '<p>No metadata.md file found.</p>');
+  if (!metadata) return '';
   return section(
     'Metadata',
     '<p>Local-only operational metadata. It may contain destination IDs, presigned URLs, gist URLs, or internal references.</p><ul><li><a href="/metadata.md">metadata.md</a></li></ul>',
@@ -939,9 +1086,9 @@ function buildIndexHtml({ workspacePath, slug, info }) {
   </header>
   <main>
     ${htmlSection(info.files.html, info.htmlChecks)}
-    ${listSection('Markdown', info.files.markdown, 'markdown', 'No Markdown files found.')}
+    ${listSection('Markdown', info.files.markdown, 'markdown')}
     ${imageSection(info.files.images)}
-    ${listSection('Assets', info.files.assets, 'assets', 'No asset files found.')}
+    ${listSection('Assets', info.files.assets, 'assets')}
     ${metadataSection(info.metadata)}
     ${uploadSetSection(info.uploadFiles)}
     ${htmlChecksSection(info.htmlChecks)}
@@ -1006,7 +1153,8 @@ function routeWorkspaceRequest(target, req, res) {
   }
   if (pathname === '/metadata.md') {
     try {
-      return sendFile(res, safeResolve(target.workspacePath, 'metadata.md'));
+      const metadataPath = safeResolve(target.workspacePath, 'metadata.md');
+      return send(res, 200, fs.readFileSync(metadataPath), 'text/plain; charset=utf-8');
     } catch {
       return notFound(res);
     }

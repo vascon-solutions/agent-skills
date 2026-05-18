@@ -26,6 +26,12 @@ test('parseArgs rejects bare image share keyword', () => {
   assert.throws(() => publish.parseArgs(['artifact', '--share', 'images']), /explicit image filename/);
 });
 
+test('defaultRunner reports missing commands instead of crashing', async () => {
+  const result = await publish.defaultRunner('__publish_artifact_missing_command__', [], { env: { PATH: '' } });
+  assert.equal(result.status, 127);
+  assert.match(result.stderr, /not found|ENOENT|spawn/i);
+});
+
 test('resolveWorkspace supports slug, absolute path, and workspace-root validation', () => {
   const root = tempDir();
   const workspace = path.join(root, 'artifact-one');

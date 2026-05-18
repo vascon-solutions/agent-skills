@@ -71,6 +71,19 @@ node skills/publish-artifact/scripts/publish-artifact.js demo \
   --to google-drive --google-folder $GOOGLE_DRIVE_PARENT_ID --dry-run
 ```
 
+For non-dry-run Google publishes, the local CLI needs Google Drive REST credentials. The connected Google Drive app used by Codex can create/import native Docs, Sheets, and Slides, but it does not expose raw PNG/file upload credentials to this Node script.
+
+Use one of these local auth paths:
+
+```sh
+# User ADC auth
+gcloud auth application-default login
+
+# Or service-account auth. Share the target Drive folder with the
+# service account email before publishing.
+export GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/outside/repo/service-account.json
+```
+
 ## Inputs
 
 Required:

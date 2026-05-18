@@ -23,7 +23,16 @@ function assertCredentialsOutside(credPath, workspacePath, scriptDir) {
 async function defaultAccessToken(env, runner) {
   const result = await runner('gcloud', ['auth', 'application-default', 'print-access-token'], { env });
   if (result.status !== 0) {
-    throw new Error(`gcloud ADC token fetch failed: ${(result.stderr || result.stdout).trim()}`);
+    const detail = (result.stderr || result.stdout || '').trim();
+    throw new Error([
+      'Google Drive publishing requires local Google auth.',
+      '',
+      'Set up one of these credential sources, then rerun:',
+      '1. Install Google Cloud SDK and run: gcloud auth application-default login',
+      '2. Or set GOOGLE_APPLICATION_CREDENTIALS to a service-account JSON outside this repo/workspace, then share the target Drive folder with that service account email.',
+      '',
+      `gcloud ADC token fetch failed${detail ? `: ${detail}` : ''}`,
+    ].join('\n'));
   }
   return result.stdout.trim();
 }

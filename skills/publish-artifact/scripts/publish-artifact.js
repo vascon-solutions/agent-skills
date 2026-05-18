@@ -170,6 +170,9 @@ function defaultRunner(command, args, options = {}) {
     } else {
       child.stdin.end();
     }
+    child.on('error', (error) => {
+      resolve({ stdout, stderr: stderr || error.message, status: error.code === 'ENOENT' ? 127 : 1 });
+    });
     child.on('close', (status) => resolve({ stdout, stderr, status }));
   });
 }
@@ -283,6 +286,7 @@ module.exports = {
   buildGistCreateArgs: s3.helpers.buildGistCreateArgs,
   buildGistUpdateArgs: s3.helpers.buildGistUpdateArgs,
   contentTypeFor: s3.helpers.contentTypeFor,
+  defaultRunner,
   dryRunOutput: s3.helpers.dryRunOutput,
   listUploadFiles,
   loadEnvFiles,

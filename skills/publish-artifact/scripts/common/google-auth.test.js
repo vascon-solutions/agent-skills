@@ -79,3 +79,16 @@ test('getAccessToken falls back to ADC when no service-account path is set', asy
 
   assert.equal(token, 'adc-token');
 });
+
+test('getAccessToken explains local auth setup when gcloud ADC is unavailable', async () => {
+  await assert.rejects(
+    googleAuth.getAccessToken({
+      env: {},
+      workspacePath: tempDir(),
+      scriptDir: path.join(process.cwd(), 'skills', 'publish-artifact', 'scripts'),
+      runner: async () => ({ stdout: '', stderr: 'spawn gcloud ENOENT', status: 127 }),
+      httpClient: { request: async () => { throw new Error('should not call'); } },
+    }),
+    /Google Drive publishing requires local Google auth[\s\S]*gcloud auth application-default login[\s\S]*GOOGLE_APPLICATION_CREDENTIALS/,
+  );
+});

@@ -12,6 +12,7 @@ Add a separate `google-drive` destination instead of overloading `google-docs`.
 - `--to google-drive` creates or reuses a Drive folder named `<slug>` under `--google-folder` / `GOOGLE_DRIVE_PARENT_ID`.
 - The raw Drive upload preserves workspace structure for `markdown/`, `html/`, `images/`, `assets/`, and any existing `metadata.md`.
 - Existing Google auth behavior is shared by both destinations: ADC or `GOOGLE_APPLICATION_CREDENTIALS` outside the repo/workspace.
+- The connected Google Drive app is not used for this path because it does not expose raw folder/file upload credentials to the local Node CLI.
 
 ## CLI
 
@@ -20,6 +21,14 @@ publish-artifact <slug> --to google-drive --google-folder <drive-folder-id>
 ```
 
 `GOOGLE_DRIVE_PARENT_ID` remains the environment fallback for `--google-folder`.
+
+Non-dry-run publishes require one local auth source:
+
+```sh
+gcloud auth application-default login
+# or
+export GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/outside/repo/service-account.json
+```
 
 ## Driver Behavior
 
