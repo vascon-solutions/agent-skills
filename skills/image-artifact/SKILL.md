@@ -241,6 +241,7 @@ If using the image-only `Type | Source | Output | Tool` table and creating it fr
 12. Update `metadata.md` only when using a full artifact workspace, publishing workflow, or explicit metadata request; use `scripts/image-artifact-helper.js metadata` when possible.
 13. Verify outputs; use `scripts/image-artifact-helper.js validate` for file-level image checks when visual inspection is unavailable.
 14. Report concise paths and repo design context when scanned.
+15. If the user wants to inspect image companions, variant boards, or related HTML in the same workspace, offer `artifact-workbench` as a read-only local preview.
 
 ## Validation
 
@@ -281,6 +282,7 @@ Metadata: ~/agent-artifacts/<slug>/metadata.md
 Repo design context: found Tailwind config and API service names; applied palette/service vocabulary; confidence high
 Repo design context: found likely app theme and duplicate service names; applied neutral default; confidence medium
 Repo design context: found multiple themes; applied neutral default; confidence low
+Local preview: run `artifact-workbench ~/agent-artifacts/<slug>` when the user wants browser review of the workspace.
 ```
 
 If generation is unavailable:

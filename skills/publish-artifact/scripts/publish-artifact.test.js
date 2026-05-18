@@ -159,6 +159,40 @@ test('gist command builders handle public create and forced update', () => {
   );
 });
 
+test('buildHtmlPreviewUrl converts a gist URL to a htmlpreview.github.io URL or returns null', () => {
+  assert.equal(
+    publish.buildHtmlPreviewUrl('https://gist.github.com/octo/abc123', 'doc.html'),
+    'https://htmlpreview.github.io/?https://gist.githubusercontent.com/octo/abc123/raw/doc.html',
+  );
+  assert.equal(publish.buildHtmlPreviewUrl('not-a-url', 'doc.html'), null);
+  assert.equal(publish.buildHtmlPreviewUrl('', 'doc.html'), null);
+});
+
+test('runPublish appends htmlpreview URL to HTML gist output and metadata', async () => {
+  const root = tempDir();
+  const workspace = path.join(root, 'demo');
+  write(path.join(workspace, 'html', 'doc.html'), '<h1>Doc</h1>\n');
+
+  const result = await publish.runPublish({
+    argv: ['demo', '--workspace-root', root, '--share', 'html'],
+    env: { ARTIFACTS_S3_BUCKET: 'bucket', ARTIFACTS_S3_REGION: 'us-east-1' },
+    runner: async (cmd, args) => {
+      if (cmd === 'gh' && args[0] === 'auth') return { stdout: '', stderr: '', status: 0 };
+      if (cmd === 'gh' && args[0] === 'gist' && args[1] === 'create') {
+        return { stdout: 'https://gist.github.com/octo/abc123\n', stderr: '', status: 0 };
+      }
+      if (args.includes('head-object')) return { stdout: '', stderr: 'not found', status: 254 };
+      if (args.includes('presign')) return { stdout: 'https://signed.example/doc\n', stderr: '', status: 0 };
+      return { stdout: '', stderr: '', status: 0 };
+    },
+    now: new Date('2026-05-17T12:00:00Z'),
+  });
+
+  assert.match(result.output, /preview: https:\/\/htmlpreview\.github\.io\/\?https:\/\/gist\.githubusercontent\.com\/octo\/abc123\/raw\/doc\.html/);
+  const metadata = fs.readFileSync(path.join(workspace, 'metadata.md'), 'utf8');
+  assert.match(metadata, /  - preview: https:\/\/htmlpreview\.github\.io\/\?https:\/\/gist\.githubusercontent\.com\/octo\/abc123\/raw\/doc\.html/);
+});
+
 test('runPublish dry-run prints stable output without mutating metadata or running commands', async () => {
   const root = tempDir();
   const workspace = path.join(root, 'demo');

@@ -79,6 +79,12 @@ function buildGistUpdateArgs(gistId, gistFilename, localFile) {
   return ['gist', 'edit', gistId, '--filename', gistFilename, localFile];
 }
 
+function buildHtmlPreviewUrl(gistUrl, filename) {
+  const match = /^https:\/\/gist\.github\.com\/([^/]+)\/([a-f0-9]+)/.exec(String(gistUrl || ''));
+  if (!match) return null;
+  return `https://htmlpreview.github.io/?https://gist.githubusercontent.com/${match[1]}/${match[2]}/raw/${filename}`;
+}
+
 async function runAws(runner, args, env, attemptedCommands, options = {}) {
   attemptedCommands.push(['aws', args]);
   return runner('aws', args, { ...options, env: { ...env, AWS_REGION: env.ARTIFACTS_S3_REGION } });
@@ -160,6 +166,7 @@ function buildMetadataLines({ archive, uploaded, skipped, shareLinks, gistLinks,
     lines.push('', '### Gist share links', '');
     for (const link of gistLinks) {
       lines.push(`- \`${link.relativePath}\` — ${link.url}`);
+      if (link.preview) lines.push(`  - preview: ${link.preview}`);
     }
   }
   return lines;
@@ -213,7 +220,10 @@ function finalOutput({ workspace, archive, uploaded, skipped, shareLinks, gistLi
   }
   if (gistLinks.length > 0) {
     lines.push('', 'Gists:');
-    for (const link of gistLinks) lines.push(`- ${link.relativePath} — ${link.url}`);
+    for (const link of gistLinks) {
+      lines.push(`- ${link.relativePath} — ${link.url}`);
+      if (link.preview) lines.push(`  preview: ${link.preview}`);
+    }
   } else if (!ghAuthed && !noGist) {
     lines.push('', 'Gists: skipped (gh auth status failed)');
   }
@@ -317,7 +327,14 @@ const driver = {
           : await runGh(runner, buildGistCreateArgs(target.fullPath, workspace.slug, target.kind, flags.gistVisibility), env, attemptedCommands);
         if (gistResult.status !== 0) throw new Error(`Gist failed for ${target.relativePath}: ${gistResult.stderr || gistResult.stdout}`);
         const gistUrl = gistResult.stdout.trim() || (existing && existing.url);
-        if (gistUrl) gistLinks.push({ ...target, url: gistUrl });
+        if (gistUrl) {
+          const link = { ...target, url: gistUrl };
+          if (target.extension === '.html') {
+            const preview = buildHtmlPreviewUrl(gistUrl, path.basename(target.relativePath));
+            if (preview) link.preview = preview;
+          }
+          gistLinks.push(link);
+        }
       }
     }
 
@@ -403,6 +420,7 @@ driver.uploadRedactedMetadata = async function uploadRedactedMetadata({ workspac
 driver.helpers = {
   buildGistCreateArgs,
   buildGistUpdateArgs,
+  buildHtmlPreviewUrl,
   contentTypeFor,
   dryRunOutput,
   resolveShareTarget,

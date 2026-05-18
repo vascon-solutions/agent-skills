@@ -28,6 +28,7 @@ rewrite-docs-from-code
 repair-agent-files
 review-doc-changes
 review-task-docs
+implementation-map
 repo-skill-scan
 roadmap-todo
 scaffold-repo-skill
@@ -35,6 +36,7 @@ task-doc
 html-artifact
 markdown-artifact
 image-artifact
+artifact-workbench
 repo-design-context
 publish-artifact
 "

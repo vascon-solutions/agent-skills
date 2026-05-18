@@ -218,6 +218,18 @@ image-artifact ~/agent-artifacts/<slug>/markdown/<doc-type>.md --workspace ~/age
 
 If Markdown was written through `--out`, substitute the resolved Markdown path as the source argument. If a workspace exists, still place images under that workspace's `images/` folder. Do not offer this for every artifact by default.
 
+### Local Workbench
+
+After Markdown, HTML, or image companions exist in a workspace, offer local preview only when the user wants browser review, variant comparison, screenshots, or pre-publish inspection:
+
+> "Local workbench available. Run `artifact-workbench` on this workspace for read-only browser preview. (yes / skip)"
+
+If the user says yes, invoke:
+
+```text
+artifact-workbench ~/agent-artifacts/<slug>
+```
+
 ## Workflow
 
 1. Receive prompt, notes, path, or codebase context.

@@ -285,6 +285,7 @@ if (require.main === module) {
 module.exports = {
   buildGistCreateArgs: s3.helpers.buildGistCreateArgs,
   buildGistUpdateArgs: s3.helpers.buildGistUpdateArgs,
+  buildHtmlPreviewUrl: s3.helpers.buildHtmlPreviewUrl,
   contentTypeFor: s3.helpers.contentTypeFor,
   defaultRunner,
   dryRunOutput: s3.helpers.dryRunOutput,

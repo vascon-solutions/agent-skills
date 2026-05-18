@@ -31,10 +31,12 @@ The script resolves symlinks with `fs.realpathSync(__dirname)`, so local env-fil
 - You need a temporary presigned URL for a workspace file.
 - You need a secret gist URL for a Markdown or HTML artifact.
 - You want to mirror an artifact workspace as it changes.
+- Before publishing, use `artifact-workbench` if the user wants local inspection of Markdown, HTML, images, assets, metadata, or the default upload set.
 
 ## When Not To Use
 
 - Do not use this to create artifacts.
+- Do not use this for local preview. Use `artifact-workbench` for read-only localhost inspection.
 - Do not use this for Notion, Confluence, or generic webhook destinations in v1.
 - Do not use this for automatic syncing or filesystem watching.
 - Do not use this unless the user explicitly asks to publish/share/archive an artifact workspace.
@@ -252,6 +254,8 @@ gh gist edit <gist-id> --filename <gist-filename> <local-file>
 
 Images and other non-Markdown/HTML files are S3-only. If `gh auth status` fails, S3 upload and presigned URLs still proceed and gist actions are skipped.
 
+For HTML gists, the script also emits a `htmlpreview.github.io` URL that renders the gist as a live page. The preview URL is printed under the gist line and recorded as a sub-bullet in `metadata.md` under `### Gist share links`.
+
 ## Output
 
 The script reports in this shape, omitting empty sections:
@@ -268,6 +272,7 @@ Share links (TTL: <ttl>):
 Gists:
 - <relative/path>.md — https://gist.github.com/<user>/<id>
 - <relative/path>.html — https://gist.github.com/<user>/<id>
+  preview: https://htmlpreview.github.io/?https://gist.githubusercontent.com/<user>/<id>/raw/<filename>
 
 Metadata updated: ~/agent-artifacts/<slug>/metadata.md
 ```

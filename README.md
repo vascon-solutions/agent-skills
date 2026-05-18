@@ -21,12 +21,14 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
     ├── repair-agent-files/
     ├── review-doc-changes/
     ├── review-task-docs/
+    ├── implementation-map/
     ├── repo-skill-scan/
     ├── roadmap-todo/
     ├── scaffold-repo-skill/
     ├── html-artifact/
     ├── markdown-artifact/
     ├── image-artifact/
+    ├── artifact-workbench/
     ├── repo-design-context/
     ├── publish-artifact/
     └── task-doc/
@@ -45,6 +47,7 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 | `repair-agent-files`       | Create or align `AGENTS.md` and `CLAUDE.md` as a matched pair                                                                                                                                                 |
 | `review-doc-changes`       | Second-pass review of recent doc changes; verify against code                                                                                                                                                 |
 | `review-task-docs`         | Independently review task docs for executability, scope control, and whether they should be split                                                                                                             |
+| `implementation-map`       | Produce a code-grounded Markdown map of an existing feature or module — entry points, runtime flow, ownership boundaries, tests, refactoring candidates, and HTML/image artifact decisions. Rejects work too small to justify a map |
 | `repo-skill-scan`          | Scan a repo for repeated patterns; recommend skills, commands, or no action                                                                                                                                   |
 | `roadmap-todo`             | Create and maintain durable roadmap or todo files for feature-grade work across repos                                                                                                                         |
 | `scaffold-repo-skill`      | Write an approved skill, command, or script candidate with correct structure and wiring                                                                                                                       |
@@ -52,6 +55,7 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 | `html-artifact`            | Convert any Markdown file into a self-contained, browser-ready HTML companion stored in `~/agent-artifacts/`. Supports task docs, roadmaps, QA handoffs, frontend handoffs, repo docs, and generic files |
 | `markdown-artifact`        | Create polished Markdown artifact workspaces under `~/agent-artifacts/<slug>/` from ideas, notes, UI/backend designs, learning topics, tutorials, task plans, and other early-stage source docs |
 | `image-artifact`           | Create static visual companions from existing Markdown, including summary cards, UI variant boards, comparison boards, decision boards, concept posters, architecture diagrams, and API flow images. Repo Markdown defaults to `~/agent-artifacts/<repo-name>-<source-stem>/images/` |
+| `artifact-workbench`       | Serve an artifact workspace or single HTML artifact through a read-only localhost workbench for variant comparison, browser QA, and pre-publish inspection |
 | `repo-design-context`      | Discover whether local repo styling, design tokens, brand assets, or architecture vocabulary can safely inform generated artifacts |
 | `publish-artifact`         | Publish a `~/agent-artifacts/<slug>/` workspace to S3, GitHub Wikis, ClickUp Docs, native Google Docs, or raw Google Drive folders with explicit destination flags. Explicit command only |
 
@@ -161,19 +165,33 @@ The link script is idempotent — it skips symlinks that already point to the co
 
 1. `image-artifact` — convert existing Markdown into static visual companions. Repo Markdown defaults to `~/agent-artifacts/<repo-name>-<source-stem>/images/`; explicit `--workspace ./artifacts/<source-stem>` or `--out ./artifacts/<source-stem>/images/<file>` keeps outputs in the repo when desired. Use it for shareable summaries, UI variant boards, comparison boards, decision boards, concept posters, architecture diagrams, and API flow images.
 
+### Previewing artifact workspaces locally
+
+1. `artifact-workbench` — serve a `~/agent-artifacts/<slug>/` workspace or single HTML artifact through a read-only localhost workbench. Use it to compare HTML variants, inspect Markdown/images/assets/metadata, and review the default publish upload set before running `publish-artifact`.
+
+```bash
+node skills/artifact-workbench/scripts/serve-artifact-workbench.js <workspace-or-html-file> [--open]
+```
+
 ### Applying repo design context to artifacts
 
 1. `repo-design-context` — shared helper for `html-artifact --use-repo-design` and `image-artifact --use-repo-design`. It discovers local design tokens or architecture vocabulary, applies only high-confidence results, and falls back to neutral output otherwise.
 
 ### Publishing artifact workspaces externally
 
+0. Optional preflight: `artifact-workbench` — inspect the workspace locally before publishing.
 1. `publish-artifact` — push a `~/agent-artifacts/<slug>/` workspace to one or more destinations with `--to s3`, `--to wiki`, `--to clickup`, `--to google-docs`, or `--to google-drive`. With no `--to`, it preserves the private S3 archive flow; `--share markdown` or `--share html` still creates an S3 presigned URL and optional secret gist. Bucket access is never modified.
+
+### Mapping an existing feature's implementation
+
+1. `implementation-map` — produce a code-grounded Markdown map of how an existing feature is wired (entry points, runtime flow, ownership boundaries, tests, refactoring candidates). The skill writes Markdown first, records whether `html-artifact`, `image-artifact`, both, or neither will improve understanding, then invokes the selected companion skill when useful. Use after implementation or before maintenance work; reject for one-file changes or pure styling edits.
 
 ### Creating Markdown artifact workspaces
 
 1. `markdown-artifact` — turn rough ideas, notes, learning topics, UI/backend design options, feature proposals, tutorials, or operational task plans into polished Markdown under `~/agent-artifacts/<slug>/markdown/`.
 2. Optional follow-up: `html-artifact` — render the Markdown into the same workspace's `html/` folder with an explicit `--out` path.
 3. Optional follow-up: `image-artifact` — render the Markdown into the same workspace's `images/` folder when it clearly benefits from a visual summary, diagram, option board, or variant board.
+4. Optional follow-up: `artifact-workbench` — serve the workspace locally for read-only review, variant comparison, screenshots, or pre-publish inspection.
 
 ## How To Add a Skill
 

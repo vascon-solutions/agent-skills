@@ -56,6 +56,12 @@ node <this-skill-dir>/scripts/render-html-artifact.js <source.md> --out <output.
 node <this-skill-dir>/scripts/verify-layout-artifact.js <doc-type-or-artifact-kind> <output.html>
 ```
 
+Optional local preview after HTML exists:
+
+```bash
+node <artifact-workbench-skill-dir>/scripts/serve-artifact-workbench.js <workspace-or-html-file> [--open]
+```
+
 What the script does:
 
 - Renders a single sidebar-nav + TL;DR layout regardless of doc-type. `--doc-type` only picks the default output folder and a meta line.
@@ -183,6 +189,7 @@ Before reporting complete, verify:
 - The detected doc type matches what the source document actually is (not just a filename match)
 - If `--out` was provided, the file landed there, not at the default path
 - If `--use-repo-design` was provided, report discovered signals, applied tokens, and confidence
+- Local `artifact-workbench` preview is optional and never replaces self-contained HTML validation. If a workbench warning reports relative, absolute, or remote asset references, fix the HTML or document why it is not an `html-artifact` output.
 
 ## Output
 
