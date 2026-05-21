@@ -33,7 +33,8 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
     ├── artifact-workbench/
     ├── repo-design-context/
     ├── publish-artifact/
-    └── task-doc/
+    ├── task-doc/
+    └── task-first-implementation/
 ```
 
 ## Skills
@@ -56,6 +57,7 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 | `roadmap-todo`             | Create and maintain durable roadmap or todo files for feature-grade work across repos                                                                                                                         |
 | `scaffold-repo-skill`      | Write an approved skill, command, or script candidate with correct structure and wiring                                                                                                                       |
 | `task-doc`                 | Create durable task documents for feature-grade work and reject small work that should stay in normal plan mode                                                                                               |
+| `task-first-implementation` | Orchestrate bounded improvements through a task-doc-first review gate before implementation, with optional visual/HTML companions and post-implementation review                                               |
 | `html-artifact`            | Convert any Markdown file into a self-contained, browser-ready HTML companion stored in `~/agent-artifacts/`. Supports task docs, roadmaps, QA handoffs, frontend handoffs, repo docs, and generic files |
 | `markdown-artifact`        | Create polished Markdown artifact workspaces under `~/agent-artifacts/<slug>/` from ideas, notes, UI/backend designs, learning topics, tutorials, task plans, and other early-stage source docs |
 | `image-artifact`           | Create static visual companions from existing Markdown, including summary cards, UI variant boards, comparison boards, decision boards, concept posters, architecture diagrams, and API flow images. Repo Markdown defaults to `~/agent-artifacts/<repo-name>-<source-stem>/images/` |
@@ -142,6 +144,12 @@ The link script is idempotent — it skips symlinks that already point to the co
 
 1. `task-doc` — turn a roadmap item, issue, PRD, or feature brief into a durable execution artifact
 2. Normal agent plan mode — use for small work that does not justify a maintained task doc
+
+### Review-gated implementation
+
+1. `task-first-implementation` — classify bounded improvement work, create or update a task doc, stop for review, then implement only after explicit approval
+2. Optional companions: `image-artifact` for visual/API/architecture summaries, `html-artifact` for browsable or interactive review surfaces
+3. Post-implementation: `review-implementation`, then `address-review-findings` when valid gaps need remediation
 
 ### Publishing code safely
 

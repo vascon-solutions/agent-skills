@@ -1,0 +1,4 @@
+interface:
+  display_name: "Task-First Implementation"
+  short_description: "Review-gated task-doc implementation"
+  default_prompt: "Use $task-first-implementation to turn this bounded improvement into a reviewed task doc before implementation."

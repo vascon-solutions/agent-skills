@@ -35,6 +35,7 @@ repo-skill-scan
 roadmap-todo
 scaffold-repo-skill
 task-doc
+task-first-implementation
 html-artifact
 markdown-artifact
 image-artifact
