@@ -21,6 +21,8 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
     ├── repair-agent-files/
     ├── review-doc-changes/
     ├── review-task-docs/
+    ├── review-implementation/
+    ├── address-review-findings/
     ├── implementation-map/
     ├── repo-skill-scan/
     ├── roadmap-todo/
@@ -47,6 +49,8 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 | `repair-agent-files`       | Create or align `AGENTS.md` and `CLAUDE.md` as a matched pair                                                                                                                                                 |
 | `review-doc-changes`       | Second-pass review of recent doc changes; verify against code                                                                                                                                                 |
 | `review-task-docs`         | Independently review task docs for executability, scope control, and whether they should be split                                                                                                             |
+| `review-implementation`    | Report-only review of finished code against a task doc, plan, spec, roadmap item, PRD, or acceptance criteria                                                                                                 |
+| `address-review-findings`  | Evaluate and remediate code, PR, or spec-compliance review findings; push back on invalid feedback and validate fixes                                                                                          |
 | `implementation-map`       | Produce a code-grounded Markdown map of an existing feature or module — entry points, runtime flow, ownership boundaries, tests, refactoring candidates, and HTML/image artifact decisions. Rejects work too small to justify a map |
 | `repo-skill-scan`          | Scan a repo for repeated patterns; recommend skills, commands, or no action                                                                                                                                   |
 | `roadmap-todo`             | Create and maintain durable roadmap or todo files for feature-grade work across repos                                                                                                                         |
@@ -155,7 +159,11 @@ The link script is idempotent — it skips symlinks that already point to the co
 ### Reviewing and tracking feature work
 
 1. `review-task-docs` — challenge a task doc before implementation starts
-2. `roadmap-todo` — keep feature-grade backlog items concise, durable, and linked to task docs
+2. `review-implementation` — review finished code against the task doc, plan, spec, roadmap item, PRD, or acceptance criteria
+3. `address-review-findings` — evaluate and fix valid review findings; when asked to "review and fix," run the review first, then remediate
+4. `roadmap-todo` — keep feature-grade backlog items concise, durable, and linked to task docs
+
+`address-review-findings` uses `receiving-code-review` for finding evaluation when that skill is installed, and otherwise falls back to its bundled evaluation rules.
 
 ### Generating HTML artifact companions
 

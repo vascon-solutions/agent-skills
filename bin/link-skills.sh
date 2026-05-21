@@ -28,6 +28,8 @@ rewrite-docs-from-code
 repair-agent-files
 review-doc-changes
 review-task-docs
+review-implementation
+address-review-findings
 implementation-map
 repo-skill-scan
 roadmap-todo

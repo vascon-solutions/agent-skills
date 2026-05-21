@@ -105,6 +105,60 @@ Conditional sections (include only when evidence supports them):
 
 Omit conditional sections cleanly rather than padding them with `None found` for every absent topic. Use `None found` only inside a mandatory section when the answer is genuinely empty (e.g., no tests).
 
+## Route Review Dossier Mode
+
+Use this mode by default when all are true:
+
+- stack profile is `frontend` or `full-stack` with meaningful frontend routes
+- the user wants to understand implementation quality, route/component wiring, refactor options, performance, tests, or code discoveries
+- the feature spans routes, components, hooks/state, API helpers, shared packages, jobs, or test coverage
+
+This mode still satisfies the 9 mandatory map sections, but it should be organized for code review scanning rather than generic prose. Default title pattern:
+
+```text
+<Feature Name> Route Review Dossier
+```
+
+Required dossier sections:
+
+1. Mental model and 30-second read
+2. Refactor priority index
+3. Route review map
+4. One section per route, ordered by user workflow
+5. Component trace atlas
+6. Hooks, stores, jobs, cache, and side effects map
+7. API and shared package contracts
+8. Test coverage map
+9. Refactor decision matrix
+10. Artifact decision
+
+Each route section must use the same review shape:
+
+```text
+Route Snapshot
+Code Scan
+Runtime Flow
+Component Wiring
+Hook / Store / API Wiring
+Review Cards
+Tests / Gaps
+```
+
+Code snippets must be compact excerpts from actual files with path and line range. HTML companions must render snippets with syntax coloring or a dark editor treatment when the user asked for a browser artifact, review artifact, or easy scanning. Do not paste full files.
+
+Review cards use this taxonomy:
+
+```text
+Decision
+Boundary
+Refactor
+Performance
+Testing
+Risk
+```
+
+Each card should include a confidence label (`High`, `Medium`, `Low`) and a concrete code signal. Test coverage is not optional in this mode: list existing test files, what behavior they prove, and visible gaps.
+
 ## Discovery Workflow
 
 1. Confirm the target feature. If the rejection gate applies, refuse and recommend the lighter alternative.
@@ -115,7 +169,7 @@ Omit conditional sections cleanly rather than padding them with `None found` for
 6. Group files by workflow, not by folder alone.
 7. Trace primary lifecycle flows: route load, render composition, request handling, service execution, repository/external dependency, user action, mutation, transaction/event/queue/job, cache invalidation or navigation, error handling.
 8. Identify gaps using [references/gap-heuristics.md](references/gap-heuristics.md). Tie every gap to a convention from repo instructions or a concrete code pattern.
-9. Write the Markdown map using [references/map-template.md](references/map-template.md).
+9. Write the Markdown map using [references/map-template.md](references/map-template.md), or Route Review Dossier Mode when its trigger conditions apply.
 10. Validate against the checks below.
 11. Decide companion artifacts using [references/artifact-decision-rules.md](references/artifact-decision-rules.md). Record the decision in the map's `Artifact Decision` section.
 12. Invoke `html-artifact`, `image-artifact`, both, or neither according to the recorded decision. Companion generation happens only after the Markdown map is complete.
@@ -141,6 +195,8 @@ Decision summary:
 - `image-artifact` — low-text architecture diagram, API flow, lifecycle diagram, refactoring hotspot map.
 - `both` — complex or full-stack maps where readers benefit from readable detail *and* a quick visual.
 - `neither` — small features or single-flow maps where Markdown is already sufficient.
+
+For Route Review Dossier Mode, default to `html-artifact` when the user wants easy review, scanning, colored snippets, diagrams, or shareable output. The HTML should be a dossier, not a slide deck: sticky navigation, route sections, syntax-colored snippets, flow diagrams, component trees, review cards, test coverage, and a refactor matrix. If the user explicitly asks for generated imagery, use one generated orientation image only; keep code-grounded SVG/Mermaid/table visuals as the evidence layer.
 
 Companion generation happens only after the Markdown map is complete. HTML companions may include compact illustrative snippets, never full source files. Image companions stay low-text.
 
