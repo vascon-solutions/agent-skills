@@ -34,7 +34,15 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
     ├── repo-design-context/
     ├── publish-artifact/
     ├── task-doc/
-    └── task-first-implementation/
+    ├── task-first-implementation/
+    ├── audit-logging-standard/
+    ├── forms-rhf-zod-standard/
+    ├── migration-discipline/
+    ├── nestjs-api-standard/
+    ├── nx-monorepo-standard/
+    ├── tanstack-fe-standard/
+    ├── tanstack-start-standard/
+    └── ultracite-standard/
 ```
 
 ## Skills
@@ -58,6 +66,14 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 | `scaffold-repo-skill`      | Write an approved skill, command, or script candidate with correct structure and wiring                                                                                                                       |
 | `task-doc`                 | Create durable task documents for feature-grade work and reject small work that should stay in normal plan mode                                                                                               |
 | `task-first-implementation` | Orchestrate bounded improvements through a task-doc-first review gate before implementation, with optional visual/HTML companions and post-implementation review                                               |
+| `audit-logging-standard`   | Review or harden audit logging for APIs, admin workflows, sensitive mutations, compliance trails, and protected audit read surfaces                                                                            |
+| `forms-rhf-zod-standard`   | Build or review React forms that use React Hook Form, Zod, typed payloads, resolver validation, API error mapping, or shared form contracts                                                                   |
+| `migration-discipline`     | Review or harden database migrations, TypeORM/PostgreSQL configuration, seed scripts, e2e database setup, schema changes, or template migration commands                                                       |
+| `nestjs-api-standard`      | Create, review, or harden NestJS REST APIs with PostgreSQL, TypeORM, JWT auth, Swagger, validation, auditability, and production-ready checks                                                                 |
+| `nx-monorepo-standard`     | Create, review, or harden Nx monorepo templates with React/Vite apps, NestJS APIs, shared packages, workspace aliases, module boundaries, CI checks, and Docker-ready layouts                                  |
+| `tanstack-fe-standard`     | Build or review React SPA/admin frontends that use TanStack Router, TanStack Query, Vite, Tailwind, protected routes, route search state, feature folders, or browser smoke tests                              |
+| `tanstack-start-standard`  | Build or review TanStack Start apps with SSR, server functions, server routes, streaming, server/client env boundaries, route loaders, or full-stack React behavior                                            |
+| `ultracite-standard`       | Set up, migrate, or review JavaScript and TypeScript projects that use Ultracite, Biome, check/fix scripts, generated path exclusions, or ESLint/Prettier replacement                                         |
 | `html-artifact`            | Convert any Markdown file into a self-contained, browser-ready HTML companion stored in `~/agent-artifacts/`. Supports task docs, roadmaps, QA handoffs, frontend handoffs, repo docs, and generic files |
 | `markdown-artifact`        | Create polished Markdown artifact workspaces under `~/agent-artifacts/<slug>/` from ideas, notes, UI/backend designs, learning topics, tutorials, task plans, and other early-stage source docs |
 | `image-artifact`           | Create static visual companions from existing Markdown, including summary cards, UI variant boards, comparison boards, decision boards, concept posters, architecture diagrams, and API flow images. Repo Markdown defaults to `~/agent-artifacts/<repo-name>-<source-stem>/images/` |
@@ -150,6 +166,11 @@ The link script is idempotent — it skips symlinks that already point to the co
 1. `task-first-implementation` — classify bounded improvement work, create or update a task doc, stop for review, then implement only after explicit approval
 2. Optional companions: `image-artifact` for visual/API/architecture summaries, `html-artifact` for browsable or interactive review surfaces
 3. Post-implementation: `review-implementation`, then `address-review-findings` when valid gaps need remediation
+
+### Applying stack standards
+
+1. Use the relevant standard skill while creating or reviewing stack-specific work: `tanstack-fe-standard`, `tanstack-start-standard`, `nestjs-api-standard`, `nx-monorepo-standard`, `forms-rhf-zod-standard`, `migration-discipline`, `audit-logging-standard`, or `ultracite-standard`
+2. Pair standards with `review-implementation` or `alphadigital-platform-review` when the work needs an explicit review verdict
 
 ### Publishing code safely
 

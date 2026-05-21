@@ -36,6 +36,14 @@ roadmap-todo
 scaffold-repo-skill
 task-doc
 task-first-implementation
+audit-logging-standard
+forms-rhf-zod-standard
+migration-discipline
+nestjs-api-standard
+nx-monorepo-standard
+tanstack-fe-standard
+tanstack-start-standard
+ultracite-standard
 html-artifact
 markdown-artifact
 image-artifact
