@@ -83,14 +83,15 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 
 ## Link Targets
 
-`bin/link-skills.sh` symlinks each skill directory into four tool-specific locations:
+`bin/link-skills.sh` symlinks each skill directory into five tool-specific locations:
 
-| Target directory          | Tool                           |
-| ------------------------- | ------------------------------ |
-| `~/.claude/skills/<name>` | Claude Code                    |
-| `~/.codex/skills/<name>`  | OpenAI Codex                   |
-| `~/.cursor/skills/<name>` | Cursor (primary)               |
-| `~/.agents/skills/<name>` | agents.sh and compatible tools |
+| Target directory                 | Tool                           |
+| -------------------------------- | ------------------------------ |
+| `~/.claude/skills/<name>`        | Claude Code                    |
+| `~/.codex/skills/<name>`         | OpenAI Codex                   |
+| `~/.cursor/skills/<name>`        | Cursor (primary)               |
+| `~/.agents/skills/<name>`        | agents.sh and compatible tools |
+| `~/.gemini/config/skills/<name>` | Antigravity                    |
 
 Per-skill symlinks are used (not the whole `skills/` directory) so each tool's existing skills are not disturbed.
 

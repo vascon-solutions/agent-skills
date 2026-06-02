@@ -64,6 +64,7 @@ $HOME/.codex/skills
 $HOME/.claude/skills
 $HOME/.cursor/skills
 $HOME/.agents/skills
+$HOME/.gemini/config/skills
 "
 
 echo "Canonical skills root: $ROOT"

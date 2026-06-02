@@ -2,7 +2,7 @@
 set -eu
 
 # Install the agent-skills pack to ~/agent-skills and link skills into
-# ~/.claude/skills, ~/.codex/skills, ~/.cursor/skills, and ~/.agents/skills.
+# ~/.claude/skills, ~/.codex/skills, ~/.cursor/skills, ~/.agents/skills, and ~/.gemini/config/skills.
 #
 # Usage:
 #   # via curl (recommended for first install):
@@ -59,10 +59,11 @@ echo ""
 echo "Done."
 echo ""
 echo "Skills are linked into:"
-echo "  ~/.claude/skills/    (Claude Code)"
-echo "  ~/.codex/skills/     (OpenAI Codex)"
-echo "  ~/.cursor/skills/    (Cursor)"
-echo "  ~/.agents/skills/    (agents.sh and compatible tools)"
+echo "  ~/.claude/skills/          (Claude Code)"
+echo "  ~/.codex/skills/           (OpenAI Codex)"
+echo "  ~/.cursor/skills/          (Cursor)"
+echo "  ~/.agents/skills/          (agents.sh and compatible tools)"
+echo "  ~/.gemini/config/skills/   (Antigravity)"
 echo ""
 echo "To update later:"
 echo "  cd ~/agent-skills && git pull && bin/link-skills.sh"
