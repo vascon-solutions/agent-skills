@@ -1,0 +1,4 @@
+interface:
+  display_name: "Task Doc Delivery Loop"
+  short_description: "Deliver task docs through PR review"
+  default_prompt: "Use $task-doc-delivery-loop to deliver this approved task doc through implementation, review, validation, and PR closeout."
