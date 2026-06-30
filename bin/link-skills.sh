@@ -36,6 +36,7 @@ roadmap-todo
 scaffold-repo-skill
 task-doc
 task-first-implementation
+task-doc-delivery-loop
 audit-logging-standard
 forms-rhf-zod-standard
 migration-discipline

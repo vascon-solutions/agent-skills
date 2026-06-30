@@ -35,6 +35,7 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
     ├── publish-artifact/
     ├── task-doc/
     ├── task-first-implementation/
+    ├── task-doc-delivery-loop/
     ├── audit-logging-standard/
     ├── forms-rhf-zod-standard/
     ├── migration-discipline/
@@ -66,6 +67,7 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 | `scaffold-repo-skill`      | Write an approved skill, command, or script candidate with correct structure and wiring                                                                                                                       |
 | `task-doc`                 | Create durable task documents for feature-grade work and reject small work that should stay in normal plan mode                                                                                               |
 | `task-first-implementation` | Orchestrate bounded improvements through a task-doc-first review gate before implementation, with optional visual/HTML companions and post-implementation review                                               |
+| `task-doc-delivery-loop`   | Run, resume, or make an approved task doc self-implementing through implementation, review, validation, publishing, PR feedback closeout, and final completion                                                |
 | `audit-logging-standard`   | Review or harden audit logging for APIs, admin workflows, sensitive mutations, compliance trails, and protected audit read surfaces                                                                            |
 | `forms-rhf-zod-standard`   | Build or review React forms that use React Hook Form, Zod, typed payloads, resolver validation, API error mapping, or shared form contracts                                                                   |
 | `migration-discipline`     | Review or harden database migrations, TypeORM/PostgreSQL configuration, seed scripts, e2e database setup, schema changes, or template migration commands                                                       |
@@ -167,6 +169,10 @@ The link script is idempotent — it skips symlinks that already point to the co
 1. `task-first-implementation` — classify bounded improvement work, create or update a task doc, stop for review, then implement only after explicit approval
 2. Optional companions: `image-artifact` for visual/API/architecture summaries, `html-artifact` for browsable or interactive review surfaces
 3. Post-implementation: `review-implementation`, then `address-review-findings` when valid gaps need remediation
+
+### Approved task-doc delivery
+
+1. `task-doc-delivery-loop` — run an approved task doc through implementation, review, validation, publishing, PR feedback closeout, and final completion
 
 ### Applying stack standards
 
