@@ -12,6 +12,7 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 │   ├── install.sh        ← first-time install + link
 │   └── link-skills.sh    ← re-link after updates
 └── skills/
+    ├── audit-ui/
     ├── publish-branch/
     ├── prepare-frontend-handoff/
     ├── prepare-qa-handoff/
@@ -50,6 +51,7 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 
 | Skill                       | Purpose                                                                                                                                                                                                                                                                              |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `audit-ui`                  | Audit a focused running UI feature or end-to-end journey with service readiness checks, critical-page screenshots, functional evidence, a calibrated verdict, and prioritized UI/UX improvements                                                                                     |
 | `prepare-frontend-handoff`  | Prepare implementation handoff notes for frontend developers, including API contracts, screen behavior, route state, form mapping, query/cache behavior, UI states, migration steps, and retired dependencies                                                                        |
 | `prepare-qa-handoff`        | Prepare QA sign-off notes for features with lifecycle flows, endpoint touchpoints, expected behavior, negative coverage, and release validation scope                                                                                                                                |
 | `qa-triage-and-fix`         | Triage QA reports issue-by-issue, reproduce or contest findings with evidence, implement focused fixes, update authorized report fields, and record validation                                                                                                                       |
@@ -173,6 +175,11 @@ The link script is idempotent — it skips symlinks that already point to the co
 ### Approved task-doc delivery
 
 1. `task-doc-delivery-loop` — run one approved task doc or a coherent ordered set in the current repository through calibrated implementation, deduplicated validation, one ready PR, feedback closeout, and final completion
+
+### Auditing a running UI feature
+
+1. `audit-ui` — probe required services, start missing local services only when safe commands are provided, execute the smallest complete browser journey, capture critical-page evidence, and report functional plus UI/UX findings
+2. Use `playwright-cli` directly for one-off navigation or screenshots that do not need an audit workspace, verdict, or improvement report
 
 ### Applying stack standards
 

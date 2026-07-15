@@ -1,0 +1,4 @@
+interface:
+  display_name: "Audit UI"
+  short_description: "Audit running UI journeys with evidence"
+  default_prompt: "Use $audit-ui to audit this running web feature and produce an evidence-backed verdict."
