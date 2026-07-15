@@ -4,7 +4,8 @@ Date: 2026-07-15
 Status: Proposed for user review
 Target repository: `~/agent-skills`
 Proposed skill name: `audit-api`
-Source mode: user brief + approved `audit-ui` sibling conventions
+Source mode: user brief + approved `audit-ui` sibling conventions + independent
+spec review
 
 ## Objective
 
@@ -68,19 +69,22 @@ The skill description should make that boundary explicit:
 - Input: natural-language prompt with an optional Markdown audit brief.
 - Contract source order: OpenAPI/Swagger, explicit endpoint brief, repository
   documentation, then bounded source inspection only to resolve ambiguity.
-- Primary executor: Hurl for chained workflows and assertions.
+- Primary executor: Hurl 6.1 or newer for chained workflows, secret-aware
+  captures, and assertions.
 - Fallback executor: curl for probes, simple checks, and environments without
   Hurl.
 - Tool installation: no automatic installation during an audit.
 - Local workstation setup: install Hurl once during implementation because the
   user explicitly approved it.
-- OpenAPI processing: `jq` for JSON and `yq` for YAML when available; do not
-  implement or vendor a YAML/OpenAPI parser.
+- OpenAPI processing: detect Swagger/OpenAPI version, resolve effective operation
+  metadata, use `jq` for JSON, and use only a recognized compatible `yq` for
+  YAML; do not implement or vendor a YAML/OpenAPI parser.
 - Evidence: compact request/result metadata plus bounded redacted excerpts.
 - Output: durable Markdown artifact plus concise chat summary.
 - Artifact root: `~/agent-artifacts/api-audits/<feature>/<timestamp>/`.
 - Verdicts: `PASS`, `PARTIAL`, `BLOCKED`, or `FAIL`.
-- Failure behavior: retry transient failures once, diagnose briefly, and
+- Failure behavior: retry safe reads and explicitly idempotent calls once when
+  transient; reconcile uncertain mutation outcomes before any replay and
   continue independent checks.
 - Generated scenarios: task-scoped audit artifacts, not repository tests.
 - Environment safety: state-changing calls only in local or explicitly approved
@@ -98,7 +102,8 @@ The skill description should make that boundary explicit:
 Hurl owns multi-request HTTP sessions, captures, assertions, variables, secret
 redaction, and test execution. `audit-api` should generate the smallest useful
 task-scoped Hurl scenario and must not duplicate the full Hurl manual in
-`SKILL.md`.
+`SKILL.md`. Secret injection and dynamic-capture redaction require Hurl 6.1 or
+newer.
 
 ### curl
 
@@ -239,6 +244,36 @@ skills/audit-api/
         └── report.md
 ```
 
+Repository-only conformance support should also include:
+
+```text
+tests/
+├── audit-helper-conformance.test.mjs
+├── audit-executors.test.mjs
+└── fixtures/
+    ├── api-audit-fixture.mjs
+    └── contracts/
+        ├── swagger-2.json
+        ├── swagger-2.expected.json
+        ├── openapi-3.json
+        ├── openapi-3.expected.json
+        ├── openapi-3.1.yaml
+        ├── openapi-3.1.expected.json
+        ├── unresolved-external-ref.json
+        └── unresolved-external-ref.expected.json
+```
+
+The helper suite must be parameterized so one implementation can run against the
+shared contract independently. `audit-api` must pass it. When `audit-ui` is also
+present, run the same suite against that implementation and compare shared
+behavior; absence of the sibling must not block `audit-api`. The disposable API
+fixture must use only Node standard-library APIs and bind to a random loopback
+port.
+
+The contract fixtures and paired expected inventories are forward-test inputs
+for agent behavior, not Node unit-test subjects. They make version, inheritance,
+and unresolved-reference reasoning reviewable without adding an OpenAPI parser.
+
 Repository integration also requires:
 
 - add `audit-api` to `SKILL_NAMES` in `bin/link-skills.sh`
@@ -246,10 +281,13 @@ Repository integration also requires:
 - add a concise README usage example for runtime API audits
 - run the link script so all five supported tool locations receive the skill
 - generate and validate `agents/openai.yaml` as optional Codex UI metadata
+- add the repository-only shared helper and executor conformance fixtures
 
 The skill is self-contained and must not require `audit-ui` to be installed.
 Small helper duplication is preferable to a brittle cross-skill runtime
-dependency. Shared conventions should be kept aligned through tests and review.
+dependency. A parameterized repository test may compare both implementations
+when present, but neither skill may depend on its sibling at runtime or for
+standalone completion.
 
 ## Input Contract
 
@@ -353,9 +391,23 @@ traces are not default evidence.
 
 - Prefer a machine-readable OpenAPI document or endpoint.
 - Record its source and a content hash or stable version identifier.
-- For JSON, use `jq` to extract only method, path, operation ID, tag, summary,
-  security, request schema reference, and response codes needed for scope.
-- For YAML, use an already-installed `yq` when available.
+- Detect and record whether the document is Swagger 2.0, OpenAPI 3.0, or OpenAPI
+  3.1 before deriving requests.
+- For Swagger 2.0, resolve effective `schemes`, `host`, `basePath`, path and
+  operation parameters, `consumes`, `produces`, security, body/form inputs, and
+  responses relevant to scope.
+- For OpenAPI 3.x, resolve effective root/path/operation servers, inherited and
+  overridden parameters and security, request-body content/schema, response
+  content/schema, and relevant local references.
+- Treat operation-level security and servers as overrides where the contract
+  version defines them; do not flatten only operation-local fields.
+- Record unresolved external, recursive, or multi-document references as
+  unverified instead of inferring them.
+- For JSON, use `jq` only after this version and inheritance model is understood,
+  and filter the resolved inventory to the requested scope.
+- For YAML, first identify the installed `yq` implementation and version, use
+  only a verified command that converts the full document to valid JSON, then
+  process that JSON. Do not assume all executables named `yq` share syntax.
 - If YAML tooling is unavailable, perform a bounded manual inspection for named
   operations. For broad rollout inventory, ask for JSON or return `BLOCKED`
   rather than implementing a partial YAML parser.
@@ -366,7 +418,9 @@ traces are not default evidence.
 
 ### 5. Executor selection
 
-- Check for Hurl and record its version.
+- Check for Hurl and record its version. Hurl is eligible for authenticated or
+  secret-bearing scenarios only when it is version 6.1 or newer or passes a
+  local secret-redaction capability probe.
 - Prefer Hurl for dependent requests, captures, assertions, and role journeys.
 - Use curl for readiness probes, small independent checks, or fallback when Hurl
   is unavailable.
@@ -379,6 +433,8 @@ traces are not default evidence.
 - Generate the smallest scenario set that covers the resolved contract.
 - Keep dependent steps in one Hurl file and independent scenarios separate.
 - Use stable synthetic values and capture server-generated identifiers.
+- Mark every captured access token, refresh token, cookie, CSRF value, signed
+  URL, or reusable authentication value with Hurl's `redact` capture modifier.
 - Assert business-significant results, not every incidental response field.
 - Keep all scenarios in the artifact workspace.
 
@@ -393,7 +449,16 @@ traces are not default evidence.
 
 ### 8. Failure handling
 
-- Retry a potentially transient failure once.
+- Retry a potentially transient safe read or explicitly idempotent operation at
+  most once.
+- Never automatically replay a non-idempotent mutation after a timeout,
+  connection loss, assertion failure, or ambiguous response.
+- First reconcile an uncertain mutation through a safe read using its
+  idempotency key, synthetic uniqueness key, correlation identifier, or returned
+  relationship. Replay only when the operation has a verified idempotency key or
+  the brief explicitly authorizes that exact retry.
+- If mutation outcome cannot be reconciled safely, record it as unverified and
+  apply the verdict model instead of guessing or replaying.
 - Do not retry deterministic validation, authorization, conflict, or contract
   failures without changing an explicitly invalid input.
 - For a uniqueness collision, generate one new synthetic value and retry once.
@@ -414,7 +479,11 @@ traces are not default evidence.
 
 - Run Hurl from the audit workspace and reference scenario files by absolute or
   workspace-relative path.
-- Use test mode for assertions.
+- Require Hurl 6.1 or newer, or a successful local capability probe, before using
+  injected secrets or redacted captures. Otherwise choose a safe curl fallback
+  or return non-pass when required coverage cannot be protected.
+- Use test mode for assertions; do not use ordinary response-output mode for an
+  audit because response stdout is not a durable redaction boundary.
 - Use `--jobs 1` for dependent or stateful scenarios. Parallelize only files
   proven independent.
 - Apply bounded connect and total timeouts from the brief, with conservative
@@ -424,9 +493,19 @@ traces are not default evidence.
   permission-restricted temporary secrets file outside durable evidence.
 - Do not place secrets in `--secret` command arguments, scenario files, URLs,
   reports, or preserved logs.
+- Append `redact` to every capture of a dynamic token, cookie, CSRF value,
+  signed URL, or reusable authentication value. Do not assert, print, interpolate
+  into evidence, or otherwise expose the captured value except where needed in a
+  subsequent request.
 - Do not use verbose or very-verbose output by default.
+- Do not use long error output when a response may contain credentials or other
+  sensitive values.
 - Do not generate Hurl JSON or HTML reports by default because they may persist
   complete responses.
+- Do not use global Hurl retry in a journey containing mutations. Use per-entry
+  bounded retry only for safe reads, explicitly idempotent calls, or polling.
+- Permit mutation retry only under the reconciliation and idempotency rules in
+  the runtime failure contract.
 - Do not disable TLS verification except for an explicitly approved local/test
   certificate constraint; never do so for production.
 - Treat Hurl output as sensitive until it has been reviewed and sanitized.
@@ -439,8 +518,19 @@ not an automatic runtime behavior or repository dependency.
 
 ## Curl Fallback Contract
 
-- Use curl with silent-but-error-visible output, ordinary redirects, explicit
-  connect and total timeouts, and structured write-out metadata.
+- Put `--disable` first so user curl configuration cannot silently change audit
+  behavior.
+- Restrict initial and redirected protocols to HTTP and HTTPS and reject URL
+  userinfo.
+- Use silent-but-error-visible output, explicit connect and total timeouts, and
+  structured write-out metadata.
+- Do not follow redirects for endpoint assertions by default. Assert the 3xx and
+  `Location` value as the contract result.
+- When redirect traversal is required, issue each hop explicitly after validating
+  its scheme, origin, `Location`, and expected method behavior. Do not use curl's
+  automatic redirect traversal for audited endpoint behavior; it cannot enforce
+  a general same-origin allowlist before each hop and may silently change POST to
+  GET for 301, 302, or 303.
 - Do not use a failure mode that treats expected 4xx negative cases as transport
   failures before their bodies and statuses can be evaluated.
 - Put sensitive headers or URLs in a permission-restricted temporary curl config
@@ -449,6 +539,8 @@ not an automatic runtime behavior or repository dependency.
 - Capture response headers and bodies to temporary files, inspect only what is
   needed, then retain bounded redacted evidence.
 - Never print a command containing credentials into chat or logs.
+- Do not use global curl retry for a sequence containing mutations. Apply the
+  same safe-read, idempotency, reconciliation, and polling rules as Hurl.
 - Do not use insecure TLS mode except under the same explicit local/test rule as
   Hurl.
 - Curl fallback must not reduce required assertions merely to obtain a pass.
@@ -462,6 +554,8 @@ not an automatic runtime behavior or repository dependency.
 - Preserve only response fields material to the assertion or finding.
 - Avoid full headers; redact authorization, cookies, set-cookie, API keys,
   signed URLs, and correlation data that exposes internal systems.
+- Treat dynamic captures as secret at capture time; later report sanitization is
+  not a substitute for preventing them from entering logs or tool output.
 - Treat contracts, raw bodies, tool reports, and trace output as sensitive local
   material.
 - Do not retain refresh tokens, access tokens, passwords, cookies, secret-file
@@ -580,13 +674,25 @@ Contract:
 - Require at least one `--service` or `--optional-service` in `name=url` form.
 - Treat `--service` as required and `--optional-service` as informational.
 - Require unique nonblank names and absolute `http:` or `https:` URLs.
+- Accept repeatable `--allow-nonsecret-query <name>` only for a defined service
+  name. Reject duplicates and unknown names.
+- Reject URL username/password components. Reject query-bearing URLs by default;
+  accept one only when its service name is explicitly listed by
+  `--allow-nonsecret-query`, which asserts that every query value is safe to
+  expose through process arguments. Use authenticated Hurl/curl readiness checks
+  through their secret channels when authentication is required.
 - Default `--timeout-ms` to 5000; accept 250-30000 milliseconds.
-- Probe concurrently with `GET`, follow ordinary redirects, and consume no more
-  response data than needed to establish reachability.
-- Treat HTTP 200-399 as reachable and HTTP 400-599 as `error: "http"`.
-- Emit exactly one compact JSON object to stdout on valid invocation.
-- Send usage and input diagnostics to stderr only.
-- Redact URL credentials and every query value in `displayUrl`.
+- Probe all services concurrently with `GET`, follow at most three same-origin
+  HTTP/HTTPS redirects, and consume no more response data than needed to
+  establish reachability. Treat unsafe, cross-origin, or excessive redirects as
+  `error: "http"`.
+- After the redirect policy succeeds, treat the final HTTP 200-399 response as
+  reachable and HTTP 400-599 as `error: "http"`. A redirect-policy violation is
+  unavailable regardless of the received 3xx status.
+- Emit exactly one compact JSON object to stdout on a valid invocation. Send
+  usage and input diagnostics to stderr only.
+- Replace every query parameter value with `[REDACTED]` in `displayUrl`; the
+  original URL must never be echoed to stdout or stderr.
 - Never start, restart, or kill a process.
 
 Output shape:
@@ -608,6 +714,8 @@ Output shape:
 }
 ```
 
+`ok` is `true` exactly when every required service is reachable; optional
+service failures do not change it.
 `error` is one of `timeout`, `dns`, `connection`, `tls`, `http`, or `unknown`,
 and is `null` when reachable.
 
@@ -641,15 +749,21 @@ Contract:
   repository so path safety and final baseline checks can be enforced.
 - Accept optional `--timestamp` only in UTC `YYYYMMDDTHHMMSSZ` form; otherwise
   generate the current UTC timestamp.
-- Normalize feature text to lowercase hyphen-case and fall back to `api-audit`.
-- Create a collision-safe directory with numeric suffixes and never overwrite.
-- Resolve canonical paths through symlinks and reject any final workspace equal
-  to, inside, or containing the tested repository.
+- Normalize the feature to lowercase hyphen-case, collapse separators, trim
+  punctuation, and fall back to `api-audit` when no useful characters remain.
+- Create a collision-safe directory by appending `-2`, `-3`, and so on; never
+  overwrite an existing file.
+- Before writing, resolve the canonical tested-repo path and the canonical
+  nearest existing ancestor of the proposed workspace, then reconstruct the
+  proposed canonical workspace path. Refuse any case where the final workspace
+  and tested repo are equal or either is a descendant of the other. Apply this
+  check through symlinked artifact roots and tested-repo paths; checking only the
+  parent artifact root is insufficient.
 - Create `contracts`, `scenarios`, `evidence`, and `logs`.
 - Copy the brief and report templates to the workspace root.
 - Resolve templates relative to the installed skill directory.
-- Emit exactly one compact JSON object to stdout on success and diagnostics to
-  stderr only.
+- Emit exactly one compact JSON object to stdout on success. Send input or
+  filesystem diagnostics to stderr only.
 
 Output shape:
 
@@ -727,26 +841,66 @@ The skill does not:
 
 - Run Node tests for healthy, unhealthy, redirect, timeout, malformed, required,
   and optional service probes.
-- Verify JSON output, exit codes, URL credential removal, and query redaction.
+- Verify JSON output, the exact `ok` invariant, exit codes, URL-userinfo
+  rejection, default query rejection, explicit nonsecret-query opt-in, query
+  redaction, original-URL no-echo behavior, redirect-policy precedence, and
+  bounded same-origin redirects.
 - Run workspace tests for slug normalization, timestamps, collisions, template
   copying, mode validation, unsafe overlaps, ancestor-root collisions, symlinks,
   traversal refusal, JSON output, and temporary-HOME isolation.
 - Smoke-test helpers against a temporary HTTP server and artifact root.
+- Run the parameterized repository-level helper conformance suite against
+  `audit-api`. When `audit-ui` is present, run the same named cases against it;
+  do not make sibling presence an API-skill completion prerequisite.
+
+### Deterministic API fixture
+
+- Build a disposable Node-standard-library server that binds to a random
+  loopback port and is started and stopped by tests in a temporary directory.
+- Provide controlled endpoints for dynamic login tokens, create and retrieve,
+  expected validation failure, bounded asynchronous polling, redirects, and one
+  transient read failure.
+- Give mutations an observable uniqueness or idempotency key so tests can prove
+  that an ambiguous response is reconciled before replay.
+- Never use an arbitrary existing application or externally hosted API as the
+  executor validation gate.
+
+### Contract discovery forward tests
+
+- Give fresh agents Swagger 2.0, OpenAPI 3.0, and OpenAPI 3.1 fixtures with
+  root/path/operation inheritance and compare their bounded inventories with the
+  paired expected JSON artifacts.
+- Verify each result identifies effective server/base path, parameters,
+  security, request media/schema, and expected response metadata for the
+  selected operations.
+- Verify an operation override replaces the applicable root or path value only
+  where the contract version permits it.
+- Verify external or multi-document references become explicitly unverified
+  rather than silently omitted or guessed.
+- Test the detected `yq` implementation and conversion command before YAML use;
+  unsupported or invalid conversion must not fall through to partial parsing.
+- Treat these as skill forward tests, not Node unit tests; the design deliberately
+  adds no custom OpenAPI extractor.
 
 ### Hurl and curl execution
 
 - Install Hurl with the official macOS/Homebrew instruction and verify its
-  version.
-- Run a Hurl focused read-only check.
-- Run a Hurl stateful create-to-retrieve journey with a negative case.
+  version is 6.1 or newer and run a dynamic-capture redaction capability probe.
+- Run a Hurl focused read-only check against the disposable fixture.
+- Run a Hurl stateful create-to-retrieve journey with a negative case against
+  the fixture.
 - Run the same bounded surface with Hurl deliberately unavailable to verify curl
   fallback.
-- Verify secrets never appear in argv captures, scenarios, reports, or durable
-  logs.
+- Verify static and dynamically captured secrets never appear in stdout, stderr,
+  constructed argv, scenarios, reports, or durable files.
 - Verify expected 4xx responses can be asserted without being misclassified as
   transport failures.
 - Verify dependent scenarios run sequentially and independent scenarios may run
   concurrently.
+- Verify curl starts with `--disable`, rejects URL userinfo, restricts protocols,
+  and does not follow redirects unless the scenario explicitly validates them.
+- Verify global retry is absent from mutation journeys and per-entry polling
+  retry cannot replay the mutation.
 
 ### Safety and verdict smoke tests
 
@@ -754,7 +908,8 @@ The skill does not:
 - Verify a local/test mutation is followed by an independent persistence check.
 - Verify `FAIL`, `PASS`, `BLOCKED`, and `PARTIAL` precedence with controlled
   scenarios.
-- Verify transient failures retry once and deterministic failures do not loop.
+- Verify a transient safe read retries once, deterministic failures do not loop,
+  and an ambiguous mutation is reconciled instead of automatically replayed.
 - Verify cleanup deletes ephemeral credential files and stops only audit-started
   services.
 - Verify the tested repository matches its baseline after every smoke audit.
@@ -776,6 +931,7 @@ The first implementation is complete when:
 - curl fallback remains functional and documented
 - `agents/openai.yaml` is valid optional metadata
 - helper scripts and tests pass
+- repository-level helper and executor conformance fixtures pass for `audit-api`
 - templates contain no unresolved placeholders beyond intentional tokens
 - README and link-script wiring are complete
 - all five global skill links are present
