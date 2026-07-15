@@ -105,6 +105,22 @@ test("follows an ordinary redirect", async () => {
   });
 });
 
+test("does not follow a cross-origin redirect", async () => {
+  await withServer((request, response) => {
+    response.writeHead(200).end("elsewhere");
+  }, async (otherUrl) => {
+    await withServer((request, response) => {
+      response.writeHead(302, { location: `${otherUrl}/ok` }).end();
+    }, async (baseUrl) => {
+      const result = await run(["--service", `app=${baseUrl}/redirect`]);
+      assert.equal(result.status, 1);
+      const service = JSON.parse(result.stdout).services[0];
+      assert.equal(service.reachable, false);
+      assert.equal(service.error, "http");
+    });
+  });
+});
+
 test("redacts URL credentials and query values while authenticating", async () => {
   await withServer((request, response) => {
     const expected = `Basic ${Buffer.from("user:secret").toString("base64")}`;

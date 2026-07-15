@@ -94,39 +94,56 @@ function classifyError(error) {
   return "unknown";
 }
 
+function result(service, startedAt, now, reachable, status, error) {
+  return {
+    name: service.name,
+    displayUrl: toDisplayUrl(service.rawUrl),
+    required: service.required,
+    reachable,
+    status,
+    durationMs: Math.max(0, now() - startedAt),
+    error,
+  };
+}
+
 export async function probeOne(service, timeoutMs, dependencies = {}) {
   const fetchImpl = dependencies.fetchImpl ?? fetch;
   const now = dependencies.now ?? Date.now;
   const startedAt = now();
   const { url, headers } = requestDetails(service.rawUrl);
+  let current = url;
+  let redirects = 0;
   try {
-    const response = await fetchImpl(url, {
-      method: "GET",
-      headers,
-      redirect: "follow",
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-    await response.body?.cancel();
-    const reachable = response.status >= 200 && response.status <= 399;
-    return {
-      name: service.name,
-      displayUrl: toDisplayUrl(service.rawUrl),
-      required: service.required,
-      reachable,
-      status: response.status,
-      durationMs: Math.max(0, now() - startedAt),
-      error: reachable ? null : "http",
-    };
+    while (true) {
+      const response = await fetchImpl(current, {
+        method: "GET",
+        headers,
+        redirect: "manual",
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      const location = response.headers.get("location");
+      if (response.status >= 300 && response.status <= 399 && location) {
+        const next = new URL(location, current);
+        await response.body?.cancel();
+        // A readiness probe follows same-origin redirects only. A cross-origin
+        // hop would report an unrelated origin as reachable and would carry
+        // probe auth off the configured host, so treat it as unreachable.
+        if (next.origin !== current.origin) {
+          return result(service, startedAt, now, false, response.status, "http");
+        }
+        redirects += 1;
+        if (redirects > 3) {
+          return result(service, startedAt, now, false, response.status, "http");
+        }
+        current = next;
+        continue;
+      }
+      await response.body?.cancel();
+      const reachable = response.status >= 200 && response.status <= 399;
+      return result(service, startedAt, now, reachable, response.status, reachable ? null : "http");
+    }
   } catch (error) {
-    return {
-      name: service.name,
-      displayUrl: toDisplayUrl(service.rawUrl),
-      required: service.required,
-      reachable: false,
-      status: null,
-      durationMs: Math.max(0, now() - startedAt),
-      error: classifyError(error),
-    };
+    return result(service, startedAt, now, false, null, classifyError(error));
   }
 }
 

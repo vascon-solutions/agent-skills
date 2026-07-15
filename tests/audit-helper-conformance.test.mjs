@@ -34,6 +34,24 @@ for (const skill of skills) {
       assert.deepEqual(services.map(({ required, reachable }) => ({ required, reachable })), [{ required: true, reachable: true }, { required: false, reachable: false }]);
     } finally { await new Promise((resolve) => server.close(resolve)); }
 
+    // Shared safety invariant: neither probe may follow a cross-origin redirect
+    // into a "reachable" verdict. Each helper enforces this independently, so
+    // assert it here to catch drift between the duplicated implementations.
+    const other = http.createServer((request, response) => response.writeHead(200).end());
+    await new Promise((resolve) => other.listen(0, "127.0.0.1", resolve));
+    const otherBase = `http://127.0.0.1:${other.address().port}`;
+    const redirector = http.createServer((request, response) => response.writeHead(302, { location: `${otherBase}/ok` }).end());
+    await new Promise((resolve) => redirector.listen(0, "127.0.0.1", resolve));
+    const redirectBase = `http://127.0.0.1:${redirector.address().port}`;
+    try {
+      const crossOrigin = await run(path.join(root, "skills", skill.name, "scripts", skill.probe), ["--service", `app=${redirectBase}/redirect`]);
+      assert.equal(crossOrigin.status, 1, crossOrigin.stderr);
+      assert.equal(JSON.parse(crossOrigin.stdout).services[0].reachable, false);
+    } finally {
+      await new Promise((resolve) => redirector.close(resolve));
+      await new Promise((resolve) => other.close(resolve));
+    }
+
     const artifacts = fs.mkdtempSync(path.join(os.tmpdir(), `${skill.name}-conformance-`));
     const initArgs = ["--feature", "Shared Feature", "--mode", "focused", "--artifact-root", artifacts, "--timestamp", "20260715T140000Z"];
     const first = await run(path.join(root, "skills", skill.name, "scripts", skill.init), initArgs);
