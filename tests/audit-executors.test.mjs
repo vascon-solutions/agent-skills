@@ -6,7 +6,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { startApiAuditFixture } from "./fixtures/api-audit-fixture.mjs";
-import { executableAvailable } from "./helpers/executable-available.mjs";
+import { executableVersionAtLeast } from "./helpers/executable-available.mjs";
 
 const contracts = path.resolve(new URL("./fixtures/contracts", import.meta.url).pathname);
 
@@ -41,7 +41,9 @@ test("contract forward-test fixtures have paired bounded inventories", () => {
 });
 
 test("Hurl runs a sequential redacted create-to-retrieve journey", {
-  skip: executableAvailable("hurl") ? false : "Hurl is unavailable; curl fallback coverage remains active.",
+  skip: executableVersionAtLeast("hurl", "6.1.0")
+    ? false
+    : "Hurl 6.1 or newer is unavailable; curl fallback coverage remains active.",
 }, async () => {
   const fixture = await startApiAuditFixture();
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "audit-hurl-"));

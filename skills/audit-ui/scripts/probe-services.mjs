@@ -24,6 +24,9 @@ function parseDefinition(value, required) {
   if (url.username || url.password) {
     throw new UsageError("Embedded URL credentials are not accepted.");
   }
+  if (url.hash) {
+    throw new UsageError("URL fragments are not accepted.");
+  }
   return { name, rawUrl: url.href, required };
 }
 

@@ -523,7 +523,7 @@ Contract:
 - Require unique nonblank names and absolute `http:` or `https:` URLs.
 - Accept repeatable `--allow-nonsecret-query <name>` only for a defined service
   name. Reject duplicates and unknown names.
-- Reject URL username/password components. Reject query-bearing URLs by default;
+- Reject URL username/password components and URL fragments. Reject query-bearing URLs by default;
   accept one only when its service name is explicitly listed by
   `--allow-nonsecret-query`, which asserts that every query value is safe to
   expose through process arguments. Authenticated readiness belongs in the
@@ -685,9 +685,9 @@ first `audit-ui` task.
 
 - Run Node tests for healthy, unhealthy, redirect, timeout, and malformed service
   definitions.
-- Verify required/optional behavior, JSON output, exit codes, URL-userinfo
-  rejection, default query rejection, service-scoped nonsecret-query opt-in, and
-  query-value redaction.
+- Verify required/optional behavior, JSON output, exit codes, URL-userinfo and
+  fragment rejection without URL-value echo, default query rejection,
+  service-scoped nonsecret-query opt-in, and query-value redaction.
 - Run Node tests for slug normalization, timestamps, collision handling, template
   copying, mode validation, unsafe tested-repo roots, ancestor-root/slug
   collisions, symlinked overlap, traversal refusal, JSON output, exit codes, and

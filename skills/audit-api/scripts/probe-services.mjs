@@ -14,6 +14,7 @@ function parseDefinition(value, required) {
   catch { throw new UsageError("Service definitions require absolute HTTP(S) URLs."); }
   if (!name || !["http:", "https:"].includes(url.protocol)) throw new UsageError("Service definitions require unique names and absolute HTTP(S) URLs.");
   if (url.username || url.password) throw new UsageError("Embedded URL credentials are not accepted.");
+  if (url.hash) throw new UsageError("URL fragments are not accepted.");
   return { name, rawUrl: url.href, required };
 }
 

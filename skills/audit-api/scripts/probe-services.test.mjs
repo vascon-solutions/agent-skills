@@ -60,6 +60,19 @@ test("rejects userinfo and query parameters unless names are explicitly allowed"
   });
 });
 
+test("rejects URL fragments without echoing their values", async () => {
+  await withServer((_request, response) => response.writeHead(200).end(), async (base) => {
+    const result = await run([
+      "--service",
+      `api=${base}/health#access_token=secret-fragment`,
+    ]);
+
+    assert.equal(result.status, 2);
+    assert.equal(result.stdout, "");
+    assert.doesNotMatch(result.stderr, /secret-fragment|127\.0\.0\.1/);
+  });
+});
+
 test("rejects unknown, duplicate, or insufficient query opt-ins", async () => {
   for (const args of [
     ["--allow-nonsecret-query", "missing", "--service", "api=http://example.test/health"],

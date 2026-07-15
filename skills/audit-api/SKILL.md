@@ -66,7 +66,7 @@ node scripts/init-api-audit-workspace.mjs --feature "<feature>" \
 node scripts/probe-services.mjs --service "api=<readiness-url>"
 ```
 
-Probe URLs reject embedded credentials and query parameters by default. Opt in
+Probe URLs reject embedded credentials, fragments, and query parameters by default. Opt in
 only a known query-bearing service with repeatable
 `--allow-nonsecret-query <service-name>`.
 Complete `audit-brief.md` once and keep every generated file in the workspace.

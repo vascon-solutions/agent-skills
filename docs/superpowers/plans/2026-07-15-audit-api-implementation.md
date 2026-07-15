@@ -47,7 +47,7 @@ Expected: generated skill skeleton exists without modifying `audit-ui`.
 
 - [ ] **Step 1: Write probe tests and verify RED**
 
-Cover UI-common probe behavior plus URL-userinfo rejection, default query rejection, repeatable `--allow-nonsecret-query`, unknown/duplicate opt-in rejection, redacted allowed queries, no original-URL echo, at most three same-origin redirects, and redirect-policy precedence.
+Cover UI-common probe behavior plus URL-userinfo and fragment rejection, default query rejection, repeatable `--allow-nonsecret-query`, unknown/duplicate opt-in rejection, redacted allowed queries, no original-URL echo, at most three same-origin redirects, and redirect-policy precedence.
 
 ```bash
 node --test skills/audit-api/scripts/probe-services.test.mjs

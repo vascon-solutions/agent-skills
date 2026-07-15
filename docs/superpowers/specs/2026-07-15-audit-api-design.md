@@ -676,7 +676,7 @@ Contract:
 - Require unique nonblank names and absolute `http:` or `https:` URLs.
 - Accept repeatable `--allow-nonsecret-query <name>` only for a defined service
   name. Reject duplicates and unknown names.
-- Reject URL username/password components. Reject query-bearing URLs by default;
+- Reject URL username/password components and URL fragments. Reject query-bearing URLs by default;
   accept one only when its service name is explicitly listed by
   `--allow-nonsecret-query`, which asserts that every query value is safe to
   expose through process arguments. Use authenticated Hurl/curl readiness checks
@@ -841,8 +841,9 @@ The skill does not:
 
 - Run Node tests for healthy, unhealthy, redirect, timeout, malformed, required,
   and optional service probes.
-- Verify JSON output, the exact `ok` invariant, exit codes, URL-userinfo
-  rejection, default query rejection, explicit nonsecret-query opt-in, query
+- Verify JSON output, the exact `ok` invariant, exit codes, URL-userinfo and
+  fragment rejection without URL-value echo, default query rejection,
+  explicit nonsecret-query opt-in, query
   redaction, original-URL no-echo behavior, redirect-policy precedence, and
   bounded same-origin redirects.
 - Run workspace tests for slug normalization, timestamps, collisions, template
@@ -891,8 +892,8 @@ The skill does not:
 - Run a Hurl focused read-only check against the disposable fixture.
 - Run a Hurl stateful create-to-retrieve journey with a negative case against
   the fixture.
-- Run the same bounded surface with Hurl deliberately unavailable to verify curl
-  fallback.
+- Run the same bounded surface with Hurl deliberately unavailable or older than
+  6.1 to verify curl fallback.
 - Verify static and dynamically captured secrets never appear in stdout, stderr,
   constructed argv, scenarios, reports, or durable files.
 - Verify expected 4xx responses can be asserted without being misclassified as

@@ -156,6 +156,21 @@ test("rejects URL credentials and query values unless the service is explicitly 
   });
 });
 
+test("rejects URL fragments without echoing their values", async () => {
+  await withServer((_request, response) => {
+    response.writeHead(200).end();
+  }, async (baseUrl) => {
+    const result = await run([
+      "--service",
+      `app=${baseUrl}/health#access_token=secret-fragment`,
+    ]);
+
+    assert.equal(result.status, 2);
+    assert.equal(result.stdout, "");
+    assert.doesNotMatch(result.stderr, /secret-fragment|127\.0\.0\.1/);
+  });
+});
+
 test("rejects duplicate and unknown query opt-ins", async () => {
   const duplicate = await run([
     "--allow-nonsecret-query",
