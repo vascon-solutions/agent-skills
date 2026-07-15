@@ -1,0 +1,21 @@
+{
+  "swagger": "2.0",
+  "schemes": ["https"],
+  "host": "api.example.test",
+  "basePath": "/v1",
+  "consumes": ["application/json"],
+  "produces": ["application/json"],
+  "security": [{ "bearer": [] }],
+  "paths": {
+    "/orders": {
+      "parameters": [{ "name": "tenant", "in": "header", "required": true, "type": "string" }],
+      "get": { "operationId": "listOrders", "responses": { "200": { "description": "ok", "schema": { "type": "array", "items": { "$ref": "#/definitions/Order" } } } } },
+      "post": { "operationId": "createOrder", "security": [], "parameters": [{ "name": "body", "in": "body", "required": true, "schema": { "$ref": "#/definitions/OrderInput" } }], "responses": { "201": { "description": "created", "schema": { "$ref": "#/definitions/Order" } }, "422": { "description": "invalid" } } }
+    }
+  },
+  "securityDefinitions": { "bearer": { "type": "apiKey", "name": "Authorization", "in": "header" } },
+  "definitions": {
+    "OrderInput": { "type": "object", "required": ["name"], "properties": { "name": { "type": "string" } } },
+    "Order": { "allOf": [{ "$ref": "#/definitions/OrderInput" }, { "type": "object", "properties": { "id": { "type": "string" } } }] }
+  }
+}

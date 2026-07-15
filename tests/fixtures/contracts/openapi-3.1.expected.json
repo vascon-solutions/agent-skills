@@ -1,0 +1,19 @@
+{
+  "version": "3.1.0",
+  "operations": [
+    {
+      "method": "POST", "path": "/jobs", "operationId": "startJob", "effectiveServer": "https://api.example.test/v3", "security": "bearerAuth",
+      "parameters": ["header:x-tenant"], "request": { "contentTypes": ["application/json"], "schema": "inline:object" },
+      "responses": [{ "status": "202", "contentTypes": ["application/json"], "schema": "#/components/schemas/Job" }]
+    },
+    {
+      "method": "GET", "path": "/jobs/{id}", "operationId": "getJob", "effectiveServer": "https://api.example.test/v3", "security": "none",
+      "parameters": ["path:id"], "request": { "contentTypes": [], "schema": null },
+      "responses": [
+        { "status": "200", "contentTypes": ["application/json"], "schema": "#/components/schemas/Job" },
+        { "status": "404", "contentTypes": [], "schema": null }
+      ]
+    }
+  ],
+  "unresolvedReferences": []
+}

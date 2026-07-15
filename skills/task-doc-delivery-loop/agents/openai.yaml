@@ -1,4 +1,4 @@
 interface:
   display_name: "Task Doc Delivery Loop"
-  short_description: "Deliver approved task docs to PR closeout"
-  default_prompt: "Use $task-doc-delivery-loop to deliver this approved task doc through implementation, review, validation, and PR closeout."
+  short_description: "Deliver an approved task-doc set to a ready PR"
+  default_prompt: "Use $task-doc-delivery-loop to deliver the selected approved task doc or ordered task-doc set through one ready PR and feedback closeout."

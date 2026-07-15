@@ -1,0 +1,19 @@
+{
+  "version": "2.0",
+  "operations": [
+    {
+      "method": "GET", "path": "/v1/orders", "operationId": "listOrders", "effectiveServer": "https://api.example.test/v1", "security": "bearer",
+      "parameters": ["header:tenant"], "request": { "contentTypes": [], "schema": null },
+      "responses": [{ "status": "200", "contentTypes": ["application/json"], "schema": "array<#/definitions/Order>" }]
+    },
+    {
+      "method": "POST", "path": "/v1/orders", "operationId": "createOrder", "effectiveServer": "https://api.example.test/v1", "security": "none",
+      "parameters": ["header:tenant", "body:body"], "request": { "contentTypes": ["application/json"], "schema": "#/definitions/OrderInput" },
+      "responses": [
+        { "status": "201", "contentTypes": ["application/json"], "schema": "#/definitions/Order" },
+        { "status": "422", "contentTypes": [], "schema": null }
+      ]
+    }
+  ],
+  "unresolvedReferences": []
+}

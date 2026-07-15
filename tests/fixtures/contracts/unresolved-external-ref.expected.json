@@ -1,0 +1,11 @@
+{
+  "version": "3.1.0",
+  "operations": [
+    {
+      "method": "POST", "path": "/external", "operationId": "createExternal", "effectiveServer": null, "security": "none", "parameters": [],
+      "request": { "contentTypes": [], "schema": "unresolved:./missing-components.yaml#/CreateExternal" },
+      "responses": [{ "status": "201", "contentTypes": [], "schema": "unresolved:https://contracts.example.test/responses.yaml#/Created" }]
+    }
+  ],
+  "unresolvedReferences": ["./missing-components.yaml#/CreateExternal", "https://contracts.example.test/responses.yaml#/Created"]
+}

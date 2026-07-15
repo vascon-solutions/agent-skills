@@ -1,0 +1,51 @@
+openapi: 3.1.0
+servers:
+  - url: https://api.example.test/v3
+security:
+  - bearerAuth: []
+paths:
+  /jobs:
+    parameters:
+      - name: x-tenant
+        in: header
+        required: true
+        schema: { type: string }
+    post:
+      operationId: startJob
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "202":
+          description: accepted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Job" }
+  /jobs/{id}:
+    get:
+      operationId: getJob
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: complete
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Job" }
+        "404": { description: missing }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer }
+  schemas:
+    Job:
+      type: object
+      required: [id, status]
+      properties:
+        id: { type: string }
+        status: { type: string }

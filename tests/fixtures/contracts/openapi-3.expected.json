@@ -1,0 +1,19 @@
+{
+  "version": "3.0.3",
+  "operations": [
+    {
+      "method": "GET", "path": "/orders/{id}", "operationId": "getOrder", "effectiveServer": "https://regional.example.test/v2", "security": "oauth:orders:read",
+      "parameters": ["path:id"], "request": { "contentTypes": [], "schema": null },
+      "responses": [
+        { "status": "200", "contentTypes": ["application/json"], "schema": "#/components/schemas/Order" },
+        { "status": "404", "contentTypes": [], "schema": null }
+      ]
+    },
+    {
+      "method": "DELETE", "path": "/orders/{id}", "operationId": "deleteOrder", "effectiveServer": "https://admin.example.test/v2", "security": "none",
+      "parameters": ["path:id"], "request": { "contentTypes": [], "schema": null },
+      "responses": [{ "status": "204", "contentTypes": [], "schema": null }]
+    }
+  ],
+  "unresolvedReferences": []
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Audit API"
+  short_description: "Audit running APIs with direct evidence"
+  default_prompt: "Use $audit-api to audit this running API surface and produce an evidence-backed verdict."
