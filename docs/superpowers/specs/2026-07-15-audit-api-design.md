@@ -848,6 +848,8 @@ The skill does not:
 - Run workspace tests for slug normalization, timestamps, collisions, template
   copying, mode validation, unsafe overlaps, ancestor-root collisions, symlinks,
   traversal refusal, JSON output, and temporary-HOME isolation.
+- Execute both helpers through an installed-style symlink and verify the CLI
+  entrypoint still emits its normal JSON result.
 - Smoke-test helpers against a temporary HTTP server and artifact root.
 - Run the parameterized repository-level helper conformance suite against
   `audit-api`. When `audit-ui` is present, run the same named cases against it;

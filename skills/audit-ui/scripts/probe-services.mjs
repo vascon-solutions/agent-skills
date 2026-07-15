@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 
 class UsageError extends Error {}
@@ -20,11 +21,15 @@ function parseDefinition(value, required) {
   if (!name || !["http:", "https:"].includes(url.protocol)) {
     throw new UsageError("Service definitions require unique names and absolute HTTP(S) URLs.");
   }
-  return { name, rawUrl, required };
+  if (url.username || url.password) {
+    throw new UsageError("Embedded URL credentials are not accepted.");
+  }
+  return { name, rawUrl: url.href, required };
 }
 
 export function parseArgs(argv) {
   const services = [];
+  const allowedQueryServices = [];
   let timeoutMs = 5000;
   for (let index = 0; index < argv.length; index += 1) {
     const flag = argv[index];
@@ -32,6 +37,15 @@ export function parseArgs(argv) {
       const value = argv[index + 1];
       if (!value) throw new UsageError(`${flag} requires name=url.`);
       services.push(parseDefinition(value, flag === "--service"));
+      index += 1;
+      continue;
+    }
+    if (flag === "--allow-nonsecret-query") {
+      const value = argv[index + 1];
+      if (!value || !/^[A-Za-z0-9_.~-]+$/.test(value)) {
+        throw new UsageError("--allow-nonsecret-query requires a service name.");
+      }
+      allowedQueryServices.push(value);
       index += 1;
       continue;
     }
@@ -47,7 +61,7 @@ export function parseArgs(argv) {
       index += 1;
       continue;
     }
-    throw new UsageError("Unknown argument. Use --service, --optional-service, or --timeout-ms.");
+    throw new UsageError("Unknown service probe argument.");
   }
   if (services.length === 0) {
     throw new UsageError("At least one service definition is required.");
@@ -56,6 +70,18 @@ export function parseArgs(argv) {
   for (const service of services) {
     if (names.has(service.name)) throw new UsageError("Service names must be unique.");
     names.add(service.name);
+  }
+  const allowedSet = new Set(allowedQueryServices);
+  if (allowedSet.size !== allowedQueryServices.length) {
+    throw new UsageError("Query-bearing service opt-ins must be unique.");
+  }
+  if ([...allowedSet].some((name) => !names.has(name))) {
+    throw new UsageError("Every query opt-in must name a supplied service.");
+  }
+  for (const { name, rawUrl } of services) {
+    if (new URL(rawUrl).search && !allowedSet.has(name)) {
+      throw new UsageError("Every query-bearing service requires explicit nonsecret opt-in.");
+    }
   }
   return { services, timeoutMs };
 }
@@ -68,19 +94,6 @@ export function toDisplayUrl(rawUrl) {
     url.searchParams.set(key, "[REDACTED]");
   }
   return url.href;
-}
-
-function requestDetails(rawUrl) {
-  const url = new URL(rawUrl);
-  const headers = {};
-  if (url.username || url.password) {
-    const username = decodeURIComponent(url.username);
-    const password = decodeURIComponent(url.password);
-    headers.authorization = `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`;
-    url.username = "";
-    url.password = "";
-  }
-  return { url, headers };
 }
 
 function classifyError(error) {
@@ -110,14 +123,12 @@ export async function probeOne(service, timeoutMs, dependencies = {}) {
   const fetchImpl = dependencies.fetchImpl ?? fetch;
   const now = dependencies.now ?? Date.now;
   const startedAt = now();
-  const { url, headers } = requestDetails(service.rawUrl);
-  let current = url;
+  let current = new URL(service.rawUrl);
   let redirects = 0;
   try {
     while (true) {
       const response = await fetchImpl(current, {
         method: "GET",
-        headers,
         redirect: "manual",
         signal: AbortSignal.timeout(timeoutMs),
       });
@@ -125,11 +136,10 @@ export async function probeOne(service, timeoutMs, dependencies = {}) {
       if (response.status >= 300 && response.status <= 399 && location) {
         const next = new URL(location, current);
         await response.body?.cancel();
-        // A readiness probe follows same-origin redirects only. A cross-origin
-        // hop would report an unrelated origin as reachable and would carry
-        // probe auth off the configured host, so treat it as unreachable.
+        // The configured UI origin answered with a valid 3xx, so it is
+        // reachable. Do not contact a different origin from a readiness probe.
         if (next.origin !== current.origin) {
-          return result(service, startedAt, now, false, response.status, "http");
+          return result(service, startedAt, now, true, response.status, null);
         }
         redirects += 1;
         if (redirects > 3) {
@@ -176,7 +186,15 @@ export async function runCli(argv, dependencies = {}) {
   }
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  process.exitCode = await runCli(process.argv.slice(2));
+function isMainModule(argvPath = process.argv[1]) {
+  if (!argvPath) return false;
+  try {
+    return fs.realpathSync(fileURLToPath(import.meta.url)) === fs.realpathSync(argvPath);
+  } catch {
+    return false;
+  }
 }
 
+if (isMainModule()) {
+  process.exitCode = await runCli(process.argv.slice(2));
+}

@@ -64,6 +64,9 @@ node scripts/init-audit-workspace.mjs --feature "<feature>" --mode <mode> \
 node scripts/probe-services.mjs --service "app=<readiness-url>"
 ```
 
+Probe URLs reject embedded credentials and query parameters by default. Opt in
+only a known query-bearing service with repeatable
+`--allow-nonsecret-query <service-name>`; authenticate through the browser flow.
 Complete `audit-brief.md` once. Use the returned external workspace for every
 browser command, screenshot, trace, download, and log.
 

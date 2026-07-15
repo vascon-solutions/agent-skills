@@ -159,6 +159,15 @@ export async function runCli(argv, dependencies = {}) {
   }
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+function isMainModule(argvPath = process.argv[1]) {
+  if (!argvPath) return false;
+  try {
+    return fs.realpathSync(fileURLToPath(import.meta.url)) === fs.realpathSync(argvPath);
+  } catch {
+    return false;
+  }
+}
+
+if (isMainModule()) {
   process.exitCode = await runCli(process.argv.slice(2));
 }

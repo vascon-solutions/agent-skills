@@ -8,8 +8,8 @@ import test from "node:test";
 
 const root = path.resolve(new URL("..", import.meta.url).pathname);
 const skills = [
-  { name: "audit-ui", probe: "probe-services.mjs", init: "init-audit-workspace.mjs", dirs: ["screenshots", "logs"] },
-  { name: "audit-api", probe: "probe-services.mjs", init: "init-api-audit-workspace.mjs", dirs: ["contracts", "evidence"] },
+  { name: "audit-ui", probe: "probe-services.mjs", init: "init-audit-workspace.mjs", dirs: ["screenshots", "logs"], crossOriginReachable: true },
+  { name: "audit-api", probe: "probe-services.mjs", init: "init-api-audit-workspace.mjs", dirs: ["contracts", "evidence"], crossOriginReachable: false },
 ];
 
 function run(script, args) {
@@ -34,10 +34,13 @@ for (const skill of skills) {
       assert.deepEqual(services.map(({ required, reachable }) => ({ required, reachable })), [{ required: true, reachable: true }, { required: false, reachable: false }]);
     } finally { await new Promise((resolve) => server.close(resolve)); }
 
-    // Shared safety invariant: neither probe may follow a cross-origin redirect
-    // into a "reachable" verdict. Each helper enforces this independently, so
-    // assert it here to catch drift between the duplicated implementations.
-    const other = http.createServer((request, response) => response.writeHead(200).end());
+    // Neither probe may contact a cross-origin redirect target. The UI probe
+    // counts the originating 3xx as reachable; the API probe rejects the hop.
+    let redirectedRequests = 0;
+    const other = http.createServer((_request, response) => {
+      redirectedRequests += 1;
+      response.writeHead(200).end();
+    });
     await new Promise((resolve) => other.listen(0, "127.0.0.1", resolve));
     const otherBase = `http://127.0.0.1:${other.address().port}`;
     const redirector = http.createServer((request, response) => response.writeHead(302, { location: `${otherBase}/ok` }).end());
@@ -45,8 +48,9 @@ for (const skill of skills) {
     const redirectBase = `http://127.0.0.1:${redirector.address().port}`;
     try {
       const crossOrigin = await run(path.join(root, "skills", skill.name, "scripts", skill.probe), ["--service", `app=${redirectBase}/redirect`]);
-      assert.equal(crossOrigin.status, 1, crossOrigin.stderr);
-      assert.equal(JSON.parse(crossOrigin.stdout).services[0].reachable, false);
+      assert.equal(crossOrigin.status, skill.crossOriginReachable ? 0 : 1, crossOrigin.stderr);
+      assert.equal(JSON.parse(crossOrigin.stdout).services[0].reachable, skill.crossOriginReachable);
+      assert.equal(redirectedRequests, 0);
     } finally {
       await new Promise((resolve) => redirector.close(resolve));
       await new Promise((resolve) => other.close(resolve));
@@ -70,5 +74,22 @@ for (const skill of skills) {
       assert.equal(fs.existsSync(path.join(workspace, "audit-brief.md")), true);
       assert.equal(fs.existsSync(path.join(workspace, "report.md")), true);
     }
+
+    const symlinkParent = fs.mkdtempSync(path.join(os.tmpdir(), `${skill.name}-symlink-`));
+    const linkedSkill = path.join(symlinkParent, skill.name);
+    fs.symlinkSync(path.join(root, "skills", skill.name), linkedSkill);
+    const linkedServer = http.createServer((_request, response) => response.writeHead(200).end());
+    await new Promise((resolve) => linkedServer.listen(0, "127.0.0.1", resolve));
+    try {
+      const linkedBase = `http://127.0.0.1:${linkedServer.address().port}`;
+      const linkedProbe = await run(path.join(linkedSkill, "scripts", skill.probe), ["--service", `app=${linkedBase}/ok`]);
+      assert.equal(linkedProbe.status, 0, linkedProbe.stderr);
+      assert.equal(JSON.parse(linkedProbe.stdout).ok, true);
+    } finally {
+      await new Promise((resolve) => linkedServer.close(resolve));
+    }
+    const linkedInit = await run(path.join(linkedSkill, "scripts", skill.init), ["--feature", "Linked Feature", "--mode", "focused", "--artifact-root", artifacts, "--timestamp", "20260715T160000Z"]);
+    assert.equal(linkedInit.status, 0, linkedInit.stderr);
+    assert.equal(JSON.parse(linkedInit.stdout).featureSlug, "linked-feature");
   });
 }

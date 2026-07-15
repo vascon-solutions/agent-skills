@@ -82,4 +82,10 @@ export async function runCli(argv, dependencies = {}) {
   catch (error) { if (error instanceof UsageError) { stderr.write(`Invalid API audit workspace input: ${error.message}\n`); return 2; } stderr.write("API audit workspace initialization failure prevented a valid result.\n"); return 3; }
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) process.exitCode = await runCli(process.argv.slice(2));
+function isMainModule(argvPath = process.argv[1]) {
+  if (!argvPath) return false;
+  try { return fs.realpathSync(fileURLToPath(import.meta.url)) === fs.realpathSync(argvPath); }
+  catch { return false; }
+}
+
+if (isMainModule()) process.exitCode = await runCli(process.argv.slice(2));

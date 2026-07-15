@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 
 class UsageError extends Error {}
@@ -28,7 +29,7 @@ export function parseArgs(argv) {
       services.push(parseDefinition(value, flag === "--service")); index += 1; continue;
     }
     if (flag === "--allow-nonsecret-query") {
-      if (!value || !/^[A-Za-z0-9_.~-]+$/.test(value)) throw new UsageError("--allow-nonsecret-query requires a query parameter name.");
+      if (!value || !/^[A-Za-z0-9_.~-]+$/.test(value)) throw new UsageError("--allow-nonsecret-query requires a service name.");
       allowedQueryServices.push(value); index += 1; continue;
     }
     if (flag === "--timeout-ms") {
@@ -112,4 +113,10 @@ export async function runCli(argv, dependencies = {}) {
   }
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) process.exitCode = await runCli(process.argv.slice(2));
+function isMainModule(argvPath = process.argv[1]) {
+  if (!argvPath) return false;
+  try { return fs.realpathSync(fileURLToPath(import.meta.url)) === fs.realpathSync(argvPath); }
+  catch { return false; }
+}
+
+if (isMainModule()) process.exitCode = await runCli(process.argv.slice(2));

@@ -106,37 +106,76 @@ test("follows an ordinary redirect", async () => {
 });
 
 test("does not follow a cross-origin redirect", async () => {
-  await withServer((request, response) => {
+  let redirectedRequests = 0;
+  await withServer((_request, response) => {
+    redirectedRequests += 1;
     response.writeHead(200).end("elsewhere");
   }, async (otherUrl) => {
-    await withServer((request, response) => {
+    await withServer((_request, response) => {
       response.writeHead(302, { location: `${otherUrl}/ok` }).end();
     }, async (baseUrl) => {
       const result = await run(["--service", `app=${baseUrl}/redirect`]);
-      assert.equal(result.status, 1);
+      assert.equal(result.status, 0);
       const service = JSON.parse(result.stdout).services[0];
-      assert.equal(service.reachable, false);
-      assert.equal(service.error, "http");
+      assert.equal(service.reachable, true);
+      assert.equal(service.status, 302);
+      assert.equal(service.error, null);
+      assert.equal(redirectedRequests, 0);
     });
   });
 });
 
-test("redacts URL credentials and query values while authenticating", async () => {
-  await withServer((request, response) => {
-    const expected = `Basic ${Buffer.from("user:secret").toString("base64")}`;
-    response.writeHead(request.headers.authorization === expected ? 200 : 401).end();
+test("rejects URL credentials and query values unless the service is explicitly opted in", async () => {
+  await withServer((_request, response) => {
+    response.writeHead(200).end();
   }, async (baseUrl) => {
-    const url = new URL(`${baseUrl}/health?token=top-secret&plain=value`);
+    const url = new URL(`${baseUrl}/health`);
     url.username = "user";
     url.password = "secret";
-    const result = await run(["--service", `secure=${url.href}`]);
+    const credentials = await run(["--service", `secure=${url.href}`]);
+    assert.equal(credentials.status, 2);
+    assert.equal(credentials.stdout, "");
+    assert.doesNotMatch(credentials.stderr, /user|secret|127\.0\.0\.1/);
 
-    assert.equal(result.status, 0);
-    assert.doesNotMatch(result.stdout, /top-secret|user|secret|plain=value/);
-    const displayUrl = JSON.parse(result.stdout).services[0].displayUrl;
-    assert.match(displayUrl, /token=%5BREDACTED%5D/);
-    assert.match(displayUrl, /plain=%5BREDACTED%5D/);
+    const query = await run(["--service", `secure=${baseUrl}/health?token=top-secret`]);
+    assert.equal(query.status, 2);
+    assert.equal(query.stdout, "");
+    assert.doesNotMatch(query.stderr, /top-secret|127\.0\.0\.1/);
+
+    const allowed = await run([
+      "--allow-nonsecret-query",
+      "secure",
+      "--service",
+      `secure=${baseUrl}/health?tenant=public&locale=en`,
+    ]);
+    assert.equal(allowed.status, 0, allowed.stderr);
+    const displayUrl = JSON.parse(allowed.stdout).services[0].displayUrl;
+    assert.match(displayUrl, /tenant=%5BREDACTED%5D/);
+    assert.match(displayUrl, /locale=%5BREDACTED%5D/);
+    assert.doesNotMatch(displayUrl, /public|locale=en/);
   });
+});
+
+test("rejects duplicate and unknown query opt-ins", async () => {
+  const duplicate = await run([
+    "--allow-nonsecret-query",
+    "app",
+    "--allow-nonsecret-query",
+    "app",
+    "--service",
+    "app=http://example.test/health?tenant=public",
+  ]);
+  assert.equal(duplicate.status, 2);
+  assert.match(duplicate.stderr, /unique/i);
+
+  const unknown = await run([
+    "--allow-nonsecret-query",
+    "missing",
+    "--service",
+    "app=http://example.test/health",
+  ]);
+  assert.equal(unknown.status, 2);
+  assert.match(unknown.stderr, /supplied service/i);
 });
 
 test("classifies timeouts", async () => {

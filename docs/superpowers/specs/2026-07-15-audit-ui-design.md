@@ -511,7 +511,8 @@ Invocation:
 ```bash
 node scripts/probe-services.mjs \
   --service "app=http://127.0.0.1:3000/login" \
-  --optional-service "docs=http://127.0.0.1:3040/api-docs" \
+  --optional-service "docs=http://127.0.0.1:3040/api-docs?view=compact" \
+  --allow-nonsecret-query "docs" \
   --timeout-ms 5000
 ```
 
@@ -520,10 +521,21 @@ Contract:
 - Require at least one `--service` or `--optional-service` in `name=url` form.
 - Treat `--service` as required and `--optional-service` as informational.
 - Require unique nonblank names and absolute `http:` or `https:` URLs.
+- Accept repeatable `--allow-nonsecret-query <name>` only for a defined service
+  name. Reject duplicates and unknown names.
+- Reject URL username/password components. Reject query-bearing URLs by default;
+  accept one only when its service name is explicitly listed by
+  `--allow-nonsecret-query`, which asserts that every query value is safe to
+  expose through process arguments. Authenticated readiness belongs in the
+  browser flow rather than probe argv.
 - Default `--timeout-ms` to 5000; accept 250-30000 milliseconds.
-- Probe all services concurrently with `GET`, follow ordinary redirects, and
-  consume no more response data than needed to establish reachability.
-- Treat HTTP 200-399 as reachable and HTTP 400-599 as `error: "http"`.
+- Probe all services concurrently with `GET`, follow at most three same-origin
+  HTTP/HTTPS redirects, and consume no more response data than needed to
+  establish reachability. Do not contact a cross-origin redirect target; the
+  originating 3xx still proves the configured UI origin is reachable. Treat an
+  excessive same-origin redirect chain as `error: "http"`.
+- After same-origin traversal, treat final HTTP 200-399 as reachable and HTTP
+  400-599 as `error: "http"`.
 - Emit exactly one compact JSON object to stdout on a valid invocation. Send
   usage/input diagnostics to stderr only.
 - Never start, restart, or kill a process.
@@ -549,8 +561,8 @@ Output shape:
 
 `ok` is `true` exactly when every required service is reachable; optional
 service failures do not change it.
-`displayUrl` must remove URL username/password components and replace every query
-parameter value with `[REDACTED]`; the original URL must never be echoed.
+`displayUrl` must replace every allowed query parameter value with `[REDACTED]`;
+the original URL must never be echoed.
 `error` is one of `timeout`, `dns`, `connection`, `tls`, `http`, or `unknown`,
 and is `null` when reachable.
 
@@ -673,12 +685,15 @@ first `audit-ui` task.
 
 - Run Node tests for healthy, unhealthy, redirect, timeout, and malformed service
   definitions.
-- Verify required/optional behavior, JSON output, exit codes, and URL credential
-  and query-value redaction.
+- Verify required/optional behavior, JSON output, exit codes, URL-userinfo
+  rejection, default query rejection, service-scoped nonsecret-query opt-in, and
+  query-value redaction.
 - Run Node tests for slug normalization, timestamps, collision handling, template
   copying, mode validation, unsafe tested-repo roots, ancestor-root/slug
   collisions, symlinked overlap, traversal refusal, JSON output, exit codes, and
   temporary-HOME/artifact-root isolation.
+- Execute both helpers through an installed-style symlink and verify the CLI
+  entrypoint still emits its normal JSON result.
 - Smoke-test both helpers against a temporary local HTTP server and temporary
   artifact root.
 
