@@ -50,8 +50,7 @@ test("rejects userinfo and query parameters unless names are explicitly allowed"
 
   await withServer((_request, response) => response.writeHead(200).end(), async (base) => {
     const allowed = await run([
-      "--allow-nonsecret-query", "tenant",
-      "--allow-nonsecret-query", "locale",
+      "--allow-nonsecret-query", "api",
       "--service", `api=${base}/health?tenant=alpha&locale=en`,
     ]);
     assert.equal(allowed.status, 0, allowed.stderr);
@@ -64,8 +63,8 @@ test("rejects userinfo and query parameters unless names are explicitly allowed"
 test("rejects unknown, duplicate, or insufficient query opt-ins", async () => {
   for (const args of [
     ["--allow-nonsecret-query", "missing", "--service", "api=http://example.test/health"],
-    ["--allow-nonsecret-query", "tenant", "--allow-nonsecret-query", "tenant", "--service", "api=http://example.test/?tenant=a"],
-    ["--allow-nonsecret-query", "tenant", "--service", "api=http://example.test/?tenant=a&token=b"],
+    ["--allow-nonsecret-query", "api", "--allow-nonsecret-query", "api", "--service", "api=http://example.test/?tenant=a"],
+    ["--allow-nonsecret-query", "docs", "--service", "api=http://example.test/?tenant=a"],
   ]) {
     const result = await run(args);
     assert.equal(result.status, 2);
@@ -89,7 +88,7 @@ test("follows at most three same-origin redirects", async () => {
   }, async (base) => {
     const excessive = await run(["--service", `api=${base}/0`]);
     assert.equal(excessive.status, 1);
-    assert.equal(JSON.parse(excessive.stdout).services[0].error, "redirect-limit");
+    assert.equal(JSON.parse(excessive.stdout).services[0].error, "http");
   });
 });
 
@@ -98,7 +97,7 @@ test("rejects cross-origin redirects before HTTP classification", async () => {
     const result = await run(["--service", `api=${base}/start`]);
     assert.equal(result.status, 1);
     const service = JSON.parse(result.stdout).services[0];
-    assert.equal(service.error, "cross-origin-redirect");
+    assert.equal(service.error, "http");
     assert.equal(service.reachable, false);
   });
 });

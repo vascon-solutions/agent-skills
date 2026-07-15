@@ -16,21 +16,26 @@ work.
 
 ## Failure Classes
 
-- `product`: runtime behavior violates the accepted workflow.
-- `contract`: implementation and authoritative API contract disagree.
-- `environment`: required service, seed data, or test dependency is unavailable.
-- `access`: credentials or permissions prevent required coverage.
-- `automation`: the available HTTP/parser tooling cannot express the check.
-- `scope`: the brief omits authority or an expected outcome needed to proceed.
+- `environment`: service, dependency, database, configuration, or DNS unavailable.
+- `authentication`: credentials are missing, expired, rejected, or unusable.
+- `authorization`: expected access is denied or forbidden access succeeds.
+- `test-data`: a prerequisite is missing, conflicting, or already consumed.
+- `contract`: status, content type, shape, or documented behavior differs.
+- `validation`: invalid input is accepted or error behavior is wrong.
+- `functional`: required business behavior or transition is incorrect.
+- `data-integrity`: persisted, related, or returned data is inconsistent.
+- `automation`: available tooling cannot safely express the check.
+- `external`: a third-party or asynchronous dependency prevents progression.
 
-Do not hide product or contract failures behind environment or automation labels.
+Do not hide runtime defects behind contract, environment, or automation labels.
 
 ## Severity
 
-- `critical`: broad security exposure, destructive integrity risk, or unusable core API.
-- `high`: required journey cannot complete, authorization boundary fails, or state is corrupted.
-- `medium`: important contract, validation, reliability, or recovery defect with a workaround.
-- `low`: localized consistency, diagnostics, or developer-experience weakness.
+- `blocker`: required journey cannot complete, critical authorization/data
+  integrity or safety fails, or audit evidence is invalid.
+- `major`: required endpoint behavior is wrong or a high-impact role boundary fails.
+- `moderate`: recoverable contract, validation, consistency, or workflow defect.
+- `minor`: low-impact documentation inconsistency or bounded API ergonomics issue.
 
 Severity describes impact; confidence describes evidence strength. Report both
 when evidence is indirect.
@@ -39,17 +44,15 @@ when evidence is indirect.
 
 Apply the first matching rule:
 
-1. `BLOCKED` — required coverage could not execute for access, environment,
-   automation, or unresolved-scope reasons and no required behavior is disproved.
-2. `FAIL` — any required checkpoint failed or a critical/high defect disproves
-   readiness. Partial success cannot override it.
-3. `PASS WITH CONCERNS` — every required checkpoint passed, but bounded medium or
-   low risks, contract ambiguity, or explicitly optional coverage remains.
-4. `PASS` — every required checkpoint passed with meaningful direct evidence,
-   cleanup succeeded, and no material concern remains.
+1. `FAIL` — any exercised required behavior is proven incorrect.
+2. `PASS` — all required checks are proven and none failed.
+3. `BLOCKED` — no meaningful required coverage completed because access,
+   environment, tooling, contract, or prerequisites prevented execution.
+4. `PARTIAL` — meaningful required coverage completed, but one or more remaining
+   required checks are unverified or blocked and no exercised requirement failed.
 
-If a required checkpoint both fails and another is blocked, use `FAIL` and list
-the blocked residual scope. Never average checkpoint outcomes into a verdict.
+Focused verdicts apply only to named checks. Rollout mode cannot pass with an
+unverified required scenario. Never average checkpoint outcomes into a verdict.
 
 ## Finding Shape
 

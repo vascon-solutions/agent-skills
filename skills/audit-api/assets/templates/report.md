@@ -2,7 +2,7 @@
 
 ## Verdict
 
-PASS | PASS WITH CONCERNS | FAIL | BLOCKED
+PASS | PARTIAL | BLOCKED | FAIL
 
 ## Scope And Environment
 

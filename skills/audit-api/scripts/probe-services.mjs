@@ -18,7 +18,7 @@ function parseDefinition(value, required) {
 
 export function parseArgs(argv) {
   const services = [];
-  const allowedQueries = [];
+  const allowedQueryServices = [];
   let timeoutMs = 5000;
   for (let index = 0; index < argv.length; index += 1) {
     const flag = argv[index];
@@ -29,7 +29,7 @@ export function parseArgs(argv) {
     }
     if (flag === "--allow-nonsecret-query") {
       if (!value || !/^[A-Za-z0-9_.~-]+$/.test(value)) throw new UsageError("--allow-nonsecret-query requires a query parameter name.");
-      allowedQueries.push(value); index += 1; continue;
+      allowedQueryServices.push(value); index += 1; continue;
     }
     if (flag === "--timeout-ms") {
       if (!value || !/^\d+$/.test(value) || Number(value) < 250 || Number(value) > 30000) throw new UsageError("--timeout-ms requires an integer from 250 to 30000.");
@@ -39,16 +39,13 @@ export function parseArgs(argv) {
   }
   if (services.length === 0) throw new UsageError("At least one service definition is required.");
   if (new Set(services.map(({ name }) => name)).size !== services.length) throw new UsageError("Service names must be unique.");
-  const allowedSet = new Set(allowedQueries);
-  if (allowedSet.size !== allowedQueries.length) throw new UsageError("Allowed query names must be unique.");
-  const usedQueries = new Set();
-  for (const { rawUrl } of services) {
-    for (const key of new URL(rawUrl).searchParams.keys()) {
-      usedQueries.add(key);
-      if (!allowedSet.has(key)) throw new UsageError("Every query parameter requires explicit nonsecret opt-in.");
-    }
+  const allowedSet = new Set(allowedQueryServices);
+  if (allowedSet.size !== allowedQueryServices.length) throw new UsageError("Query-bearing service opt-ins must be unique.");
+  const serviceNames = new Set(services.map(({ name }) => name));
+  if ([...allowedSet].some((name) => !serviceNames.has(name))) throw new UsageError("Every query opt-in must name a supplied service.");
+  for (const { name, rawUrl } of services) {
+    if (new URL(rawUrl).search && !allowedSet.has(name)) throw new UsageError("Every query-bearing service requires explicit nonsecret opt-in.");
   }
-  if ([...allowedSet].some((key) => !usedQueries.has(key))) throw new UsageError("Every query opt-in must match a supplied service URL.");
   return { services, timeoutMs };
 }
 
@@ -79,9 +76,9 @@ export async function probeOne(service, timeoutMs, dependencies = {}) {
       if (response.status >= 300 && response.status <= 399 && response.headers.get("location")) {
         const next = new URL(response.headers.get("location"), current);
         await response.body?.cancel();
-        if (next.origin !== current.origin) return result(service, startedAt, now, false, response.status, "cross-origin-redirect");
+        if (next.origin !== current.origin) return result(service, startedAt, now, false, response.status, "http");
         redirects += 1;
-        if (redirects > 3) return result(service, startedAt, now, false, response.status, "redirect-limit");
+        if (redirects > 3) return result(service, startedAt, now, false, response.status, "http");
         current = next; continue;
       }
       await response.body?.cancel();

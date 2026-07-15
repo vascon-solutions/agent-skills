@@ -38,7 +38,8 @@ Record feature, mode, environment, base URLs, startup commands and working
 directories, contract source/hash/version, selected operations, actors and
 secure credential source, allowed mutations, idempotency, polling, terminal
 outcomes, evidence budget, cleanup, and assumptions. Ask one question only when
-safety, mutation authority, authentication, or the required outcome is unclear.
+safety, mutation authority, authentication, the selected endpoint surface, or
+the required outcome is materially unclear.
 
 ## Enforce Safety
 
@@ -48,7 +49,12 @@ safety, mutation authority, authentication, or the required outcome is unclear.
 - Never reset databases, bulk-delete, weaken auth, or manufacture state directly.
 - Record the tested repository baseline and keep all artifacts outside it.
 - Start only missing services whose exact commands come from the user, brief, or
-  authoritative repo docs. Track and stop only audit-started processes.
+  authoritative repo docs. Record readiness, working directory, pre-existing
+  state, and the controllable foreground process handle.
+- Never daemonize, use generic `pkill`, or kill a port owner. Wait and re-probe;
+  ask the user or return `BLOCKED` when no controllable handle exists.
+- Stop only audit-started processes, attempt interruption cleanup, and record
+  cleanup failure without deleting evidence.
 
 ## Initialize And Probe
 
@@ -61,7 +67,8 @@ node scripts/probe-services.mjs --service "api=<readiness-url>"
 ```
 
 Probe URLs reject embedded credentials and query parameters by default. Opt in
-only known nonsecret names with repeatable `--allow-nonsecret-query <name>`.
+only a known query-bearing service with repeatable
+`--allow-nonsecret-query <service-name>`.
 Complete `audit-brief.md` once and keep every generated file in the workspace.
 
 ## Discover The Effective Contract
@@ -88,7 +95,9 @@ or executing scenarios.
 ## Execute Coverage
 
 - Start with readiness/authentication, then the primary success path.
-- In journey mode add one representative validation or authorization failure.
+- In focused and journey modes add one safe, useful risk-based negative case
+  (validation, authorization, not-found, conflict, or transition); record why it
+  is excluded when none is safe or relevant.
 - In rollout mode cover only the brief's required operation and role matrix.
 - Assert status plus the smallest meaningful body/header fields.
 - Capture identifiers and verify created state with a separate read or related

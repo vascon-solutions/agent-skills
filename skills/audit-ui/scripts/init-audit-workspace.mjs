@@ -101,11 +101,18 @@ export function assertWorkspaceSafe(workspace, testedRepo) {
   }
 }
 
-function collisionSafePath(basePath) {
-  if (!fs.existsSync(basePath)) return basePath;
-  for (let suffix = 2; ; suffix += 1) {
-    const candidate = `${basePath}-${suffix}`;
-    if (!fs.existsSync(candidate)) return candidate;
+function claimWorkspace(basePath, testedRepo) {
+  assertWorkspaceSafe(basePath, testedRepo);
+  fs.mkdirSync(path.dirname(basePath), { recursive: true });
+  for (let suffix = 1; ; suffix += 1) {
+    const candidate = suffix === 1 ? basePath : `${basePath}-${suffix}`;
+    assertWorkspaceSafe(candidate, testedRepo);
+    try {
+      fs.mkdirSync(candidate);
+      return candidate;
+    } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+    }
   }
 }
 
@@ -117,12 +124,9 @@ export function initializeWorkspace(config) {
   const featureSlug = slugify(config.feature);
   const timestamp = config.timestamp ?? utcTimestamp();
   const planned = path.resolve(config.artifactRoot, featureSlug, timestamp);
-  const workspace = collisionSafePath(planned);
-  assertWorkspaceSafe(workspace, config.testedRepo);
+  const workspace = claimWorkspace(planned, config.testedRepo);
 
   try {
-    fs.mkdirSync(path.dirname(workspace), { recursive: true });
-    fs.mkdirSync(workspace, { recursive: false });
     for (const directory of ["screenshots", "traces", "downloads", "logs"]) {
       fs.mkdirSync(path.join(workspace, directory));
     }

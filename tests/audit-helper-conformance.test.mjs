@@ -42,5 +42,15 @@ for (const skill of skills) {
     const one = JSON.parse(first.stdout); const two = JSON.parse(second.stdout);
     assert.equal(one.featureSlug, "shared-feature"); assert.equal(two.workspace, `${one.workspace}-2`);
     for (const dir of skill.dirs) assert.equal(fs.existsSync(path.join(one.workspace, dir)), true, dir);
+
+    const concurrentArgs = ["--feature", "Concurrent Feature", "--mode", "focused", "--artifact-root", artifacts, "--timestamp", "20260715T150000Z"];
+    const concurrent = await Promise.all(Array.from({ length: 8 }, () => run(path.join(root, "skills", skill.name, "scripts", skill.init), concurrentArgs)));
+    assert.equal(concurrent.every(({ status }) => status === 0), true, concurrent.map(({ stderr }) => stderr).join("\n"));
+    const workspaces = concurrent.map(({ stdout }) => JSON.parse(stdout).workspace);
+    assert.equal(new Set(workspaces).size, concurrent.length);
+    for (const workspace of workspaces) {
+      assert.equal(fs.existsSync(path.join(workspace, "audit-brief.md")), true);
+      assert.equal(fs.existsSync(path.join(workspace, "report.md")), true);
+    }
   });
 }

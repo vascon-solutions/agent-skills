@@ -4,10 +4,14 @@
   "security": [{ "oauth": ["orders:read"] }],
   "paths": {
     "/orders/{id}": {
+      "servers": [{ "url": "https://regional.example.test/v2" }],
       "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
-      "get": { "operationId": "getOrder", "responses": { "200": { "description": "ok", "content": { "application/json": {} } } } },
-      "delete": { "operationId": "deleteOrder", "security": [], "responses": { "204": { "description": "deleted" } } }
+      "get": { "operationId": "getOrder", "responses": { "200": { "description": "ok", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Order" } } } }, "404": { "description": "missing" } } },
+      "delete": { "operationId": "deleteOrder", "servers": [{ "url": "https://admin.example.test/v2" }], "security": [], "responses": { "204": { "description": "deleted" } } }
     }
   },
-  "components": { "securitySchemes": { "oauth": { "type": "oauth2", "flows": { "clientCredentials": { "tokenUrl": "/token", "scopes": { "orders:read": "read" } } } } } }
+  "components": {
+    "securitySchemes": { "oauth": { "type": "oauth2", "flows": { "clientCredentials": { "tokenUrl": "/token", "scopes": { "orders:read": "read" } } } } },
+    "schemas": { "Order": { "type": "object", "required": ["id"], "properties": { "id": { "type": "string" } } } }
+  }
 }

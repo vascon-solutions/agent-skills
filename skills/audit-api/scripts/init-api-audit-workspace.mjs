@@ -53,15 +53,22 @@ export function assertWorkspaceSafe(workspace, testedRepo) {
   const repo = fs.realpathSync(testedRepo); const future = canonicalFuturePath(workspace);
   if (containsPath(repo, future) || containsPath(future, repo)) throw new UsageError("Unsafe artifact workspace overlaps the tested repository.");
 }
-function collisionSafePath(base) { if (!fs.existsSync(base)) return base; for (let suffix = 2; ; suffix += 1) if (!fs.existsSync(`${base}-${suffix}`)) return `${base}-${suffix}`; }
+function claimWorkspace(base, testedRepo) {
+  assertWorkspaceSafe(base, testedRepo);
+  fs.mkdirSync(path.dirname(base), { recursive: true });
+  for (let suffix = 1; ; suffix += 1) {
+    const candidate = suffix === 1 ? base : `${base}-${suffix}`;
+    assertWorkspaceSafe(candidate, testedRepo);
+    try { fs.mkdirSync(candidate); return candidate; }
+    catch (error) { if (error?.code !== "EEXIST") throw error; }
+  }
+}
 const templatePath = (name) => fileURLToPath(new URL(`../assets/templates/${name}`, import.meta.url));
 
 export function initializeWorkspace(config) {
   const featureSlug = slugify(config.feature); const timestamp = config.timestamp ?? utcTimestamp();
-  const workspace = collisionSafePath(path.resolve(config.artifactRoot, featureSlug, timestamp));
-  assertWorkspaceSafe(workspace, config.testedRepo);
+  const workspace = claimWorkspace(path.resolve(config.artifactRoot, featureSlug, timestamp), config.testedRepo);
   try {
-    fs.mkdirSync(path.dirname(workspace), { recursive: true }); fs.mkdirSync(workspace);
     for (const directory of ["contracts", "scenarios", "evidence", "logs"]) fs.mkdirSync(path.join(workspace, directory));
     fs.copyFileSync(templatePath("audit-brief.md"), path.join(workspace, "audit-brief.md"));
     fs.copyFileSync(templatePath("report.md"), path.join(workspace, "report.md"));

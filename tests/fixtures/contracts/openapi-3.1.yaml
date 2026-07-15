@@ -18,7 +18,11 @@ paths:
           application/json:
             schema: { type: object }
       responses:
-        "202": { description: accepted }
+        "202":
+          description: accepted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Job" }
   /jobs/{id}:
     get:
       operationId: getJob
@@ -29,7 +33,19 @@ paths:
           required: true
           schema: { type: string }
       responses:
-        "200": { description: complete }
+        "200":
+          description: complete
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Job" }
+        "404": { description: missing }
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer }
+  schemas:
+    Job:
+      type: object
+      required: [id, status]
+      properties:
+        id: { type: string }
+        status: { type: string }

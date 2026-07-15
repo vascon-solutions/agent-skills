@@ -47,8 +47,12 @@ mutation authority, authentication, or the required outcome remains ambiguous.
 - Record the tested repository's baseline status and keep artifacts outside it.
 - Start only missing services whose commands come from the user, brief, or
   authoritative repo docs. Never guess a command.
-- Start services in controllable foreground sessions; stop only what this audit
-  started. Never use `nohup`, generic `pkill`, or kill a port owner.
+- Record readiness URL, command, working directory, pre-existing state, and any
+  audit-started process handle. Use controllable foreground sessions only.
+- Never use `nohup`, generic `pkill`, or kill a port owner. Wait and re-probe
+  after startup; ask the user or return `BLOCKED` if no controllable handle exists.
+- Stop only audit-started processes, including interruption cleanup when the
+  runtime permits it, and record cleanup failure without deleting evidence.
 
 ## Initialize Evidence
 
@@ -126,4 +130,3 @@ Create mockups or annotated screenshots only when separately requested.
 - Do not switch browser tools merely because one step is difficult.
 - Do not capture secrets, reusable auth state, or unrelated personal data.
 - Do not expand a focused audit into a full accessibility or heuristic review.
-

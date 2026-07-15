@@ -10,14 +10,16 @@ keep independent scenarios separate.
 Use this baseline:
 
 ```bash
+export HURL_SECRET_actor_password  # populate from the approved secret source
 hurl --test --jobs 1 --no-output \
   --connect-timeout <seconds> --max-time <seconds> \
-  --secret actor_password="$ACTOR_PASSWORD" \
   scenarios/journey.hurl
+unset HURL_SECRET_actor_password
 ```
 
-- Inject reusable credentials with `--secret` or a permission-restricted
-  secrets file. Never put values in the scenario, URL, command history, or report.
+- Inject reusable credentials with `HURL_SECRET_<name>` environment variables or
+  a `0600` temporary secrets file outside durable evidence. Never use `--secret`
+  arguments or put values in the scenario, URL, command history, or report.
 - Capture every dynamic token, cookie, CSRF value, signed URL, or reusable auth
   value with the `redact` modifier.
 - Capture nonsecret record IDs normally and use them for persistence checks.
