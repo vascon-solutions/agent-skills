@@ -1,0 +1,8 @@
+{
+  "version": "3.1.0",
+  "operations": [
+    { "method": "POST", "path": "/v3/jobs", "operationId": "startJob", "security": "bearerAuth", "parameters": ["header:x-tenant"], "contentTypes": ["application/json"] },
+    { "method": "GET", "path": "/v3/jobs/{id}", "operationId": "getJob", "security": "none", "parameters": ["path:id"], "contentTypes": [] }
+  ],
+  "unresolvedReferences": []
+}

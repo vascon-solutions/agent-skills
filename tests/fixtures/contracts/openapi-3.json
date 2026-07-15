@@ -1,0 +1,13 @@
+{
+  "openapi": "3.0.3",
+  "servers": [{ "url": "https://api.example.test/v2" }],
+  "security": [{ "oauth": ["orders:read"] }],
+  "paths": {
+    "/orders/{id}": {
+      "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+      "get": { "operationId": "getOrder", "responses": { "200": { "description": "ok", "content": { "application/json": {} } } } },
+      "delete": { "operationId": "deleteOrder", "security": [], "responses": { "204": { "description": "deleted" } } }
+    }
+  },
+  "components": { "securitySchemes": { "oauth": { "type": "oauth2", "flows": { "clientCredentials": { "tokenUrl": "/token", "scopes": { "orders:read": "read" } } } } } }
+}

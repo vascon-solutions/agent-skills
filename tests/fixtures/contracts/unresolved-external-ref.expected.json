@@ -1,0 +1,7 @@
+{
+  "version": "3.1.0",
+  "operations": [
+    { "method": "POST", "path": "/external", "operationId": "createExternal", "security": "none", "parameters": [], "contentTypes": [] }
+  ],
+  "unresolvedReferences": ["./missing-components.yaml#/CreateExternal", "https://contracts.example.test/responses.yaml#/Created"]
+}

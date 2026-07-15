@@ -1,0 +1,8 @@
+{
+  "version": "3.0.3",
+  "operations": [
+    { "method": "GET", "path": "/v2/orders/{id}", "operationId": "getOrder", "security": "oauth:orders:read", "parameters": ["path:id"], "contentTypes": ["application/json"] },
+    { "method": "DELETE", "path": "/v2/orders/{id}", "operationId": "deleteOrder", "security": "none", "parameters": ["path:id"], "contentTypes": [] }
+  ],
+  "unresolvedReferences": []
+}

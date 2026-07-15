@@ -12,6 +12,7 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 │   ├── install.sh        ← first-time install + link
 │   └── link-skills.sh    ← re-link after updates
 └── skills/
+    ├── audit-api/
     ├── audit-ui/
     ├── publish-branch/
     ├── prepare-frontend-handoff/
@@ -51,6 +52,7 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 
 | Skill                       | Purpose                                                                                                                                                                                                                                                                              |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `audit-api`                 | Audit focused endpoints, dependent API journeys, role boundaries, OpenAPI/Swagger surfaces, or rollout readiness with Hurl-first execution, hardened curl fallback, compact redacted evidence, and a calibrated verdict                                                              |
 | `audit-ui`                  | Audit a focused running UI feature or end-to-end journey with service readiness checks, critical-page screenshots, functional evidence, a calibrated verdict, and prioritized UI/UX improvements                                                                                     |
 | `prepare-frontend-handoff`  | Prepare implementation handoff notes for frontend developers, including API contracts, screen behavior, route state, form mapping, query/cache behavior, UI states, migration steps, and retired dependencies                                                                        |
 | `prepare-qa-handoff`        | Prepare QA sign-off notes for features with lifecycle flows, endpoint touchpoints, expected behavior, negative coverage, and release validation scope                                                                                                                                |
@@ -180,6 +182,11 @@ The link script is idempotent — it skips symlinks that already point to the co
 
 1. `audit-ui` — probe required services, start missing local services only when safe commands are provided, execute the smallest complete browser journey, capture critical-page evidence, and report functional plus UI/UX findings
 2. Use `playwright-cli` directly for one-off navigation or screenshots that do not need an audit workspace, verdict, or improvement report
+
+### Auditing a running API feature
+
+1. `audit-api` — inspect the bounded effective OpenAPI/Swagger contract, probe required services, run dependent scenarios with Hurl or hardened curl fallback, verify persistence and negative cases, and report a redacted evidence-backed verdict
+2. Use curl directly for one independent request, and use Swagger UI only for visual contract exploration rather than end-to-end API evidence
 
 ### Applying stack standards
 

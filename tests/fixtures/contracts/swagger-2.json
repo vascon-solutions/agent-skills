@@ -1,0 +1,15 @@
+{
+  "swagger": "2.0",
+  "basePath": "/v1",
+  "consumes": ["application/json"],
+  "produces": ["application/json"],
+  "security": [{ "bearer": [] }],
+  "paths": {
+    "/orders": {
+      "parameters": [{ "name": "tenant", "in": "header", "required": true, "type": "string" }],
+      "get": { "operationId": "listOrders", "responses": { "200": { "description": "ok" } } },
+      "post": { "operationId": "createOrder", "security": [], "responses": { "201": { "description": "created" } } }
+    }
+  },
+  "securityDefinitions": { "bearer": { "type": "apiKey", "name": "Authorization", "in": "header" } }
+}

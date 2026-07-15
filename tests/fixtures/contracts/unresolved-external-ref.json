@@ -1,0 +1,12 @@
+{
+  "openapi": "3.1.0",
+  "paths": {
+    "/external": {
+      "post": {
+        "operationId": "createExternal",
+        "requestBody": { "$ref": "./missing-components.yaml#/CreateExternal" },
+        "responses": { "201": { "$ref": "https://contracts.example.test/responses.yaml#/Created" } }
+      }
+    }
+  }
+}
