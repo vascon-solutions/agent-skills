@@ -82,12 +82,13 @@ slash — a `.worktrees/` ignore rule does not match the slash-less path until
 the directory actually exists, so the no-slash probe appends duplicates:
 
 ```bash
-git check-ignore -q "$WORKTREES_DIR/" || { echo ".worktrees/" >> "$REPO_ROOT/.gitignore"; }
+WORKTREES_NAME="${WORKTREES_DIR#"$REPO_ROOT"/}"   # repo-relative, e.g. .worktrees or worktrees
+git check-ignore -q "$WORKTREES_DIR/" || { echo "$WORKTREES_NAME/" >> "$REPO_ROOT/.gitignore"; }
 ```
 
-Append the selected directory's repo-relative name (never the absolute path)
-to the root `.gitignore`, and skip the gitignore step entirely when the
-selected directory lives outside the repository.
+The appended rule must be the selected directory's repo-relative name (never
+the absolute path, never a hard-coded default). Skip the gitignore step
+entirely when the selected directory lives outside the repository.
 
 Then create and enter it:
 
