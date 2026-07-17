@@ -45,10 +45,16 @@ You need:
 - existing docs, `AGENTS.md`, and `CONTRIBUTING.md` if present
 - current skill and command inventory (to avoid recommending what already exists)
 
+Resolve these locations once and reuse them everywhere below:
+
+- **`active_pack_root`** — the global skill pack that supplied this skill. Resolve it from the installed skill's symlink (its target's parent `skills/` directory is the pack); fall back to `~/agent-skills` only when no symlink resolves.
+- **`detected_skill_dir`** — the repo's existing repo-local skill directory: an existing `.claude/skills/` or `.cursor/skills/` wins for tool-first repos, then an existing `.agents/skills/`. Create the tool-appropriate one only when none exists.
+- **`detected_command_dir`** — same detection for commands: existing `.claude/commands/`, `.cursor/commands/`, or `.agents/commands/`; create only when none exists.
+
 Before scanning, check:
 
-- `~/agent-skills/skills/` — existing global skills
-- `.agents/commands/`, `.claude/commands/`, `agent-commands/` in the repo — existing repo-specific commands
+- `active_pack_root/skills/` — existing global skills
+- `detected_command_dir` and `detected_skill_dir` in the repo — existing repo-specific commands and skills
 
 Do not recommend what is already there.
 
@@ -151,7 +157,7 @@ Assign when:
 
 - A `package.json` script, CI job, Makefile target, or existing command already covers this
 - A linter, formatter, type-checker, or pre-commit hook enforces it automatically
-- An existing global skill in `~/agent-skills` already handles it
+- An existing global skill in `active_pack_root` already handles it
 
 Do not recommend what tooling already enforces.
 
@@ -172,9 +178,9 @@ Each candidate maps to exactly one destination:
 
 | Candidate type | Destination | Format |
 |---|---|---|
-| SKILL — global | `~/agent-skills/skills/<name>/SKILL.md` | Structured SKILL.md with frontmatter, decision rules, output contract |
-| SKILL — repo-specific | `.agents/commands/<name>/SKILL.md` or `.claude/commands/<name>/` | Same SKILL.md format, but may reference repo-specific detail |
-| AGENT COMMAND | `.agents/commands/<name>.md` or `.claude/commands/<name>.md` | Focused markdown prompt; no structured sections required |
+| SKILL — global | `active_pack_root/skills/<name>/SKILL.md` | Structured SKILL.md with frontmatter, decision rules, output contract |
+| SKILL — repo-specific | `detected_skill_dir/<name>/SKILL.md` | Same SKILL.md format, but may reference repo-specific detail |
+| AGENT COMMAND | `detected_command_dir/<name>.md` | Focused markdown prompt; no structured sections required |
 | CLI SCRIPT | `bin/<name>.sh`, `scripts/<name>.sh`, or `package.json` scripts | Shell script or npm script entry |
 
 **A SKILL is global when:**
@@ -192,7 +198,7 @@ When unsure on global vs repo-specific for a skill: prefer repo-specific. Do not
 
 ## Step-By-Step Instructions
 
-1. Check the existing global skill inventory (`~/agent-skills/skills/`) and any repo-local commands. Record what already exists — you will exclude these from recommendations.
+1. Resolve `active_pack_root`, `detected_skill_dir`, and `detected_command_dir` (see Required Inputs), then check the existing global skill inventory (`active_pack_root/skills/`) and any repo-local skills/commands. Record what already exists — you will exclude these from recommendations.
 
 2. Scan the repo using the six source types above. Take notes per source; do not collapse into a summary yet.
 
@@ -240,13 +246,13 @@ Top recommendations (ranked by value):
 1. …
 2. …
 
-Global skill proposals (~/agent-skills/skills/):
+Global skill proposals (active_pack_root/skills/):
 - …
 
-Repo-specific skill proposals (.agents/commands/ or .claude/commands/):
+Repo-specific skill proposals (detected_skill_dir):
 - …
 
-Agent command proposals (.agents/commands/ or .claude/commands/):
+Agent command proposals (detected_command_dir):
 - …
 
 CLI script proposals (bin/ or package.json):
@@ -266,10 +272,10 @@ Gate: for every candidate, present the proposed file structure, wait for explici
 
 See [references/scaffolding.md](references/scaffolding.md) for the per-type formats (SKILL / AGENT COMMAND / CLI SCRIPT), the required SKILL.md section order, the SKILL.md-vs-`references/` split, link-script and README wiring, and global-vs-repo-specific destination rules.
 
-Quick routing:
+Quick routing (using the locations resolved in Required Inputs):
 
-- Global skill → the active pack's `skills/<name>/`. Resolve the pack root from the installed skill itself — for example `readlink` on this skill's symlink (its target's parent `skills/` directory is the pack) — and fall back to `~/agent-skills` only when no symlink resolves. Follow the pack README's "How to add a new skill" section and wire into its `bin/link-skills.sh`.
-- Repo-specific skill/command/script → detect the repo's existing convention first: an existing `.cursor/skills/` tree wins for Cursor-first repos, then an existing `.agents/` tree with a link script, then whatever directory comparable repo-local skills already use. Only create the `.agents/` compatibility tree when no convention exists. Wire into that convention's link script and README when they exist, then re-run the link script; skip link-script wiring for conventions that have none (such as plain `.cursor/skills/`).
+- Global skill → `active_pack_root/skills/<name>/`. Follow the pack README's "How to add a new skill" section and wire into its `bin/link-skills.sh`.
+- Repo-specific skill → `detected_skill_dir/<name>/`; agent command → `detected_command_dir/<name>.md`. Wire into that convention's link script and README when they exist, then re-run the link script; skip link-script wiring for conventions that have none (such as plain `.claude/skills/` or `.cursor/skills/`).
 
 ## Portability Notes
 

@@ -49,7 +49,7 @@ Always in SKILL.md, never in references/: Purpose, Approval Gates, Decision Rule
 
 ### SKILL candidate
 
-1. Read the destination's existing skills to match conventions — section names, references structure, link-script format, README table layout. For a repo-specific candidate that is the repo's detected skill directory (`.cursor/skills/`, `.agents/skills/`, or its existing equivalent); for a global candidate it is the active pack's `skills/` directory (resolve via the installed skill symlink, falling back to `~/agent-skills`).
+1. Read the destination's existing skills to match conventions — section names, references structure, link-script format, README table layout. For a repo-specific candidate the destination is `detected_skill_dir`; for a global candidate it is `active_pack_root/skills/`. Both are resolved in the SKILL.md Required Inputs section — reuse those values, do not re-derive or hardcode paths here.
 2. Present the proposed structure and wait for approval:
    ```
    Proposed: <detected-repo-skill-dir|active-pack skills>/<name>/
@@ -71,15 +71,15 @@ Always in SKILL.md, never in references/: Purpose, Approval Gates, Decision Rule
 
 ### AGENT COMMAND candidate
 
-1. Read the repo's existing `.agents/commands/` to match the format.
+1. Read the repo's existing `detected_command_dir` to match the format.
 2. Present the proposed structure and wait for approval:
    ```
-   Proposed: .agents/commands/<name>.md
+   Proposed: <detected_command_dir>/<name>.md
    - Phase 1 Plan: [what the agent states before acting]
    - Phase 2 Implement: [what it does]
    - Phase 3 Validate: [how it confirms done]
    ```
-3. Write `.agents/commands/<name>.md`.
+3. Write `<detected_command_dir>/<name>.md`.
 4. Add `<name>.md` to `COMMAND_NAMES` in the link script.
 5. Add a row to the repo README commands table.
 6. Run the link script and confirm symlinks.
@@ -99,7 +99,7 @@ Always in SKILL.md, never in references/: Purpose, Approval Gates, Decision Rule
 
 ## Global vs repo-specific destination
 
-A candidate is **global** (the active pack's `skills/`) only when it can be written without hardcoding repo-specific paths, enums, or domain rules and applies across repos of the same type. Resolve the active pack root from the installed skill symlink (fall back to `~/agent-skills`) and follow its README's "How to add a new skill" section. Repo-specific candidates go to the repo's detected convention — an existing `.cursor/skills/` wins for Cursor-first repos, then an existing `.agents/` tree; create the `.agents/` compatibility tree only when no convention exists. Agent commands and CLI scripts are always repo-specific — never add them to the global pack. When unsure on global vs repo-specific, prefer repo-specific.
+A candidate is **global** (`active_pack_root/skills/`) only when it can be written without hardcoding repo-specific paths, enums, or domain rules and applies across repos of the same type; follow the pack README's "How to add a new skill" section. Repo-specific candidates go to `detected_skill_dir` / `detected_command_dir` per the Required Inputs detection order — an existing tool-first directory (`.claude/`, `.cursor/`) wins, then an existing `.agents/` tree; create a directory only when no convention exists. Agent commands and CLI scripts are always repo-specific — never add them to the global pack. When unsure on global vs repo-specific, prefer repo-specific.
 
 ## Cautions
 

@@ -11,6 +11,8 @@ Run one approved task doc or coherent ordered set as a bounded, single-repositor
 
 Default completion is one pushed branch with one draft PR and known check/comment state. Marking the PR ready for review, and any narrower endpoint (local-only, commit-only, or a pushed branch with no PR), each require explicit user wording. Never merge without explicit authorization.
 
+The PR-bound default assumes a GitHub remote with working PR tooling. When the repository has no remote, a non-GitHub remote (GitLab, Bitbucket, or other), or no usable PR tooling, do not attempt an equivalent mutation on another platform: complete at verified local completion — implemented, validated, reviewed, and committed on the working branch — and report why the publish step was narrowed. Pushing or platform-specific publishing beyond that requires explicit user wording.
+
 ## Preconditions
 
 Use only when every proposed task doc is approved by the current request, explicit approval after a review gate, or a clear repo status convention.
@@ -89,7 +91,7 @@ Escalate to explicit dependent-phase sequencing (or `executing-plans` if install
    Classify findings as valid, invalid, unclear, or out of scope. Fix valid, ask on behavior-changing ambiguity, reject invalid with evidence, and defer out-of-scope findings. Rerun affected checks and review again only after material remediation.
 
 7. **Publish**
-   Use `publish-branch` to reach the calibrated endpoint — by default a pushed branch with a draft PR. Stage only intended files, respect hooks, and never open or update a PR with known failing checks; remediate or report the blocker. Mark the PR ready for review only when the user asked and validation and review are accounted for. Stop at a narrower local endpoint (no PR, no push, or commit-only) only when the user explicitly requested it.
+   Use `publish-branch` to reach the calibrated endpoint — by default a pushed branch with a draft PR. Stage only intended files, respect hooks, and never open or update a PR with known failing checks; remediate or report the blocker. Mark the PR ready for review only when the user asked and validation and review are accounted for. Stop at a narrower local endpoint (no PR, no push, or commit-only) when the user explicitly requested it — or automatically, with the reason reported, when the repository has no GitHub remote or usable PR tooling (see Purpose).
 
 8. **PR Review**
    Inspect checks, reviews, comments, and unresolved threads. Treat bot notices and usage limits as external state. Pending required checks/reviewer decisions keep the ledger open; after the configured wait, report and pause.

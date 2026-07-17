@@ -1,6 +1,6 @@
 ---
 name: task-doc-intake
-description: Use to run a guided interview, map loose notes/screenshots, or derive codebase findings into an approved change inventory and durable task doc before any code. Entry point for task discovery; classifies and downshifts small work.
+description: Use when a page, route, form, workflow, refactor idea, loose notes, screenshots, acceptance criteria, or codebase findings need guided-interview or notes-first discovery before a durable task document. Classifies and downshifts small work; ends at an explicit implementation gate.
 ---
 
 # Task Doc Intake
@@ -71,7 +71,9 @@ Ask for approval or corrections. If decisions block a safe task doc, continue th
 
 ## Handoff And Gate
 
-On approval of the Final Summary, invoke `task-doc` to render the document (interview/notes work usually maps to `brief`, codebase-derived findings to `codebase-derived`). Before creating a new doc, check for an active same-session doc for the same page, endpoint, or workflow and update it instead of duplicating.
+On approval of the Final Summary, invoke `task-doc` to render the document (interview/notes work usually maps to `brief`, codebase-derived findings to `codebase-derived`). Intake's classification is authoritative at this handoff: an approved Final Summary for `improvement` or `feature-grade` work satisfies `task-doc`'s size rejection gate — the accumulated inventory is the evidence the work justifies a durable artifact, so `task-doc` renders rather than re-litigating scale. Work small enough to be rejected was already downshifted in Classify First and never reaches this step.
+
+Before creating a new doc, check for an active same-session doc for the same page, endpoint, or workflow and update it instead of duplicating.
 
 <HARD-GATE>
 Do NOT write code, edit implementation files, scaffold implementation artifacts, or run implementation generators. Approval of the Final Summary approves writing the task doc only. Implementation requires explicit user approval of the task doc itself, and belongs to `task-doc-delivery-loop` (or the normal session for downshifted work) — not to this skill.
