@@ -63,7 +63,14 @@ Push back — with technical reasoning, not defensiveness — when a finding is 
 
 Fix one finding or tightly related group at a time, in the order in Workflow step 7, and test each meaningful fix before moving on.
 
-When replying to inline review comments on GitHub, reply in the comment thread (`gh api repos/{owner}/{repo}/pulls/{pr}/comments/{id}/replies`), not as a top-level PR comment.
+When replying to an inline review comment on GitHub, reply in its thread rather than creating a top-level PR comment:
+
+```sh
+gh api --method POST "repos/{owner}/{repo}/pulls/{pr}/comments/{comment_id}/replies" \
+  -f body="<reply text>"
+```
+
+Replace `{pr}`, `{comment_id}`, and `<reply text>` with the PR number, top-level review-comment ID, and reply. The endpoint does not support replies to replies.
 
 ## Example Flow
 
