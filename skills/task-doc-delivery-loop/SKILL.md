@@ -50,6 +50,16 @@ Store the ledger in goal tooling when available; otherwise keep a compact sessio
 
 Track ordered `task_docs` (path, status, validation, checkpoint), repo, branch, phase, calibration, validation evidence, findings, PR state, and blockers.
 
+## Testing Policy
+
+Resolve one testing policy for the delivery set in this order:
+
+1. repository contract or capabilities, when the repository advertises a compatible testing-policy interface
+2. repository instructions, such as a testing section in `AGENTS.md` or `CLAUDE.md`
+3. the skill default in [../task-doc/references/default-testing-policy.md](../task-doc/references/default-testing-policy.md)
+
+Record the policy source in the ledger. Use the first applicable repository policy and apply the skill default to anything it leaves unspecified. Repository rules control the test framework, layout, commands, and any stricter risk requirements.
+
 ## Dependency Routing
 
 Load these skills lazily; do not restate them.
@@ -60,7 +70,7 @@ Local skills are the primary routes. External skills are optional enhancers; the
 | -------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | Missing/unapproved task doc            | Ask once; then `task-doc-intake` or `task-doc`                                                       |
 | Separate plan for high-risk sequencing | Sequence dependent phases explicitly in the ledger (`executing-plans` if installed)                 |
-| Behavior change with test surface      | Write or adjust tests before the change (`test-driven-development` if installed)                     |
+| Behavior change with test surface      | Follow the resolved testing policy: test first for bug fixes and critical-tier behavior; otherwise implement, then run focused validation |
 | Failed or surprising validation        | Isolate the root cause before fixing, not symptoms (`systematic-debugging` if installed)            |
 | Implementation review                  | `review-implementation`                                                                             |
 | Finding remediation                    | `address-review-findings`                                                                            |
@@ -73,16 +83,16 @@ Escalate to explicit dependent-phase sequencing (or `executing-plans` if install
 ## Workflow
 
 1. **Intake**
-   Read each task doc once, repo instructions, and git state. Verify approval, prerequisites, grouping, base branch, dirty scope, protected-branch risk, and calibration. Extract one ordered brief: objective, scope/exclusions, preserved behavior, likely files, validation, and publish assumptions.
+   Read each task doc once, repo instructions, and git state. Verify approval, prerequisites, grouping, base branch, dirty scope, protected-branch risk, calibration, and the resolved testing policy. Extract one ordered brief: objective, scope/exclusions, preserved behavior, likely files, validation, testing-policy source, and publish assumptions.
 
 2. **Ledger Start**
    Create or continue one matching ledger; do not create a duplicate goal. Record ordered docs, branch intent, calibration, validation plan, and publish assumptions.
 
 3. **Ordered Implementation**
-   Implement included scope in dependency order, using tests first for behavior changes. Finish focused validation and record a commit or ledger checkpoint before advancing. Do not add excluded follow-ups.
+   Implement included scope in dependency order under the resolved testing policy. Start with a failing reproduction for bug fixes and tests first for critical-tier behavior; for other work, implement first and then run the focused validation named by the task doc. Record a commit or ledger checkpoint before advancing. Do not add excluded follow-ups.
 
 4. **Group Validation**
-   Run one deduplicated group plan plus repo-required checks. Debug related failures systematically; record unrelated/environmental failures.
+   Run advertised validation in the active process as one deduplicated group plan plus repo-required checks. Do not assume pre-commit, pre-push, or CI hooks run the contract validator or validation union; account for checks they actually repeat. Debug related failures systematically and record unrelated or environmental failures.
 
 5. **Implementation Review**
    Unless calibrated to `none`, use the selected local or delegated report-only review against every task doc and the complete diff. For delegation, wait at most five minutes total by default, checking progress at least once per minute; on timeout, interrupt the reviewer when supported, perform the review locally, and record the fallback. Set and record a longer maximum before dispatch only for explicit deep review or high-risk work. Add a task-boundary review only for an explicit gate or high-risk boundary.

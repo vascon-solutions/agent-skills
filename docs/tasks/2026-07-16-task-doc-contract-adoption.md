@@ -11,7 +11,9 @@ PR feedback to repository event automation when available.
 
 Source mode: PRD.
 
-Generation style: transform-only.
+Generation style: synthesized from the approved source spec, current
+`agent-skills` behavior, the two follow-up comments on PR #5, and the merged
+consuming-repository hook baseline in `floatstar/ncdmb-procurement-ui#139`.
 
 This is the `agent-skills` repository workstream from the NCDMB fast task
 delivery system design. It must be implemented and published from this
@@ -24,6 +26,10 @@ repository as a separate goal/PR from the UI repository support.
 - Current skills: `skills/task-doc/SKILL.md` and
   `skills/task-doc-delivery-loop/SKILL.md`
 - Existing task convention: `docs/tasks/`
+- Source amendments:
+  - `https://github.com/vascon-solutions/agent-skills/pull/5#issuecomment-4996230279`
+  - `https://github.com/vascon-solutions/agent-skills/pull/5#issuecomment-4996264020`
+  - `https://github.com/floatstar/ncdmb-procurement-ui/pull/139`
 
 Before this task becomes approved, verify that the immutable Source Spec
 permalink resolves from GitHub. This is a prerequisite, not hidden chat context.
@@ -31,21 +37,25 @@ permalink resolves from GitHub. This is a prerequisite, not hidden chat context.
 ## Architecture Summary
 
 The skills remain generic and detect a repository-supported contract version
-rather than hardcoding one workspace. `task-doc` emits validated front matter
-and separates durable blocking tests from acceptance evidence.
-`task-doc-delivery-loop` parses one compatible group, uses ledger checkpoints
-without intermediate commits, runs one validation union, creates one initial
-commit, publishes observably, and delegates feedback to repository automation
-when installed.
+rather than hardcoding one workspace. Both skills resolve testing policy from
+an advertised repository contract, then repository instructions, then one
+shared lean default. `task-doc` emits validated front matter and separates
+durable blocking tests from acceptance evidence. `task-doc-delivery-loop`
+parses one compatible group, uses ledger checkpoints without intermediate
+commits, invokes advertised validation in the active process independently of
+git hooks, creates one initial commit, publishes to a draft PR by default, and
+delegates feedback to repository automation when installed.
 
 ## Code Evidence
 
 | Behavior | Source |
 | --- | --- |
-| `task-doc` rejects small tweaks and currently creates Markdown-only artifacts. | `skills/task-doc/SKILL.md:16-42`; `skills/task-doc/references/task-template.md` |
-| The delivery loop requires one primary repository/branch/PR and separate goals for cross-repository implementation. | `skills/task-doc-delivery-loop/SKILL.md:22-30` |
-| Ordered implementation currently allows a commit or ledger checkpoint after every task. | `skills/task-doc-delivery-loop/SKILL.md:77-81` |
-| PR review/remediation currently uses active-session inspection and waiting. | `skills/task-doc-delivery-loop/SKILL.md:92-99` |
+| `task-doc` rejects small tweaks and currently creates Markdown-only artifacts. | `skills/task-doc/SKILL.md#When-To-Use`; `skills/task-doc/SKILL.md#Constraints`; `skills/task-doc/references/task-template.md` |
+| The delivery loop requires one primary repository/branch/PR and separate goals for cross-repository implementation. | `skills/task-doc-delivery-loop/SKILL.md#Delivery-Set-Rules` |
+| Ordered implementation currently allows a commit or ledger checkpoint after every task. | `skills/task-doc-delivery-loop/SKILL.md#Ordered-Implementation` |
+| The delivery loop currently defaults to a draft PR and requires explicit user wording before ready-for-review. | `skills/task-doc-delivery-loop/SKILL.md#Purpose`; `skills/task-doc-delivery-loop/SKILL.md#Delivery-Calibration`; `skills/task-doc-delivery-loop/SKILL.md#Publish` |
+| PR review/remediation currently uses active-session inspection and waiting. | `skills/task-doc-delivery-loop/SKILL.md#PR-Review`; `skills/task-doc-delivery-loop/SKILL.md#PR-Remediation` |
+| The consuming repository's pre-push hook runs affected type-check only; it does not run task-contract validation or the delivery planner. | `https://github.com/floatstar/ncdmb-procurement-ui/pull/139`; `.husky/pre-push` on `develop` |
 | The repo already stores task artifacts under `docs/tasks/` and uses Node test files under `tests/`. | `docs/tasks/2026-07-01-task-doc-delivery-loop-calibration.md`; `tests/*.test.mjs` |
 
 ## Current Behavior To Preserve
@@ -61,6 +71,12 @@ when installed.
 - Findings are assessed rather than blindly applied.
 - Repositories without the new contract or event workflow retain safe generic
   fallbacks.
+- Testing policy resolves from a compatible repository contract first,
+  repository instructions second, and the shared lean skill default last.
+- Git hooks are treated as an observed repository baseline, not as proof that
+  contract validation or the validation union ran.
+- Default GitHub publication remains a draft PR. Ready-for-review requires
+  explicit user wording and satisfied validation/review gates.
 - The skills never merge without explicit authorization.
 
 ## Prerequisites
@@ -86,6 +102,13 @@ when installed.
   before approval.
 - Require every permanent test proposal to name its durable risk; route ordinary
   presentation checks to acceptance.
+- Add one shared default testing-policy reference used by both skills. Discover
+  policy from a compatible repository contract first, repository instructions
+  second, and the shared default last.
+- Require test-first work only for bug fixes and critical-tier behavior. For
+  other work, implement first and run the focused validation named by the task.
+- Extend the nearest affected test file before creating a new one and never
+  duplicate stronger existing coverage.
 - Preserve a documented generic fallback for repositories without the contract.
 - Update the delivery loop to parse one compatible group and run one
   deduplicated validation union.
@@ -98,13 +121,19 @@ when installed.
   that exceed 30 minutes.
 - Keep commit, push, and PR creation observable in the active process; prohibit
   detached/unobserved publication.
-- Apply the repository delivery-monitor label during ready-PR publication when
-  the repository advertises the completion observer.
+- Invoke advertised contract validation and the validation union in the active
+  process. Do not assume pre-commit, pre-push, or CI hooks provide them; account
+  only for checks the current hooks demonstrably repeat.
+- Apply the repository delivery-monitor label during draft-PR publication when
+  the repository advertises the completion observer. If the observer supports
+  only ready PRs, record the handoff as pending until the user explicitly
+  authorizes ready-for-review.
 - Hand remediation to repository automation when installed; otherwise use
   complete reaction-aware polling across reviews, comments, inline threads,
   checks, and reactions.
-- Emit implementation-to-ready-PR time, publication time/evidence, and
-  one-initial-commit compliance events for the repository rollout collector.
+- Emit implementation-to-draft-PR time, optional ready-promotion time,
+  publication evidence, and one-initial-commit compliance events for the
+  repository rollout collector.
 - Add `tests/task-doc-contract.test.mjs` and
   `tests/task-doc-delivery-loop.test.mjs` covering the new policy.
 - Update templates, examples, skill metadata, and README guidance.
@@ -119,6 +148,8 @@ when installed.
 - Allowing one goal to implement multiple primary repositories.
 - Requiring event remediation in repositories that do not advertise it.
 - Weakening publish safety or the never-merge rule.
+- Making ready-for-review the default or treating a repository hook as evidence
+  that active-process contract validation completed.
 
 ## Pre-Implementation Verification
 
@@ -130,6 +161,11 @@ when installed.
   to advertised compatible interface versions.
 - Confirm how consuming repositories advertise planner, lock, event remediation,
   completion observer, and metrics support.
+- Confirm the consuming repository's current hook commands. Plan active-process
+  validation independently, then deduplicate only checks those hooks actually
+  repeat.
+- Reconfirm that `task-doc-delivery-loop` still defaults to a draft PR and that
+  ready-for-review remains explicit.
 - Invoke the `writing-skills` workflow before editing reusable skills.
 
 ## Likely Files To Touch
@@ -137,11 +173,14 @@ when installed.
 - `skills/task-doc/SKILL.md`
 - `skills/task-doc/references/task-template.md`
 - `skills/task-doc/references/examples.md`
+- `skills/task-doc/references/default-testing-policy.md`
 - `skills/task-doc-delivery-loop/SKILL.md`
 - `skills/task-doc-delivery-loop/agents/openai.yaml`
 - `README.md`
 - `tests/task-doc-contract.test.mjs`
 - `tests/task-doc-delivery-loop.test.mjs`
+- `tests/task-doc-testing-policy.test.mjs`
+- `tests/skills-portability.test.mjs`
 
 ## Decisions Required Before Implementation
 
@@ -157,16 +196,22 @@ available. Those are explicit prerequisites; implementation must not guess them.
 - Treat ledger checkpoints as non-git progress records.
 - Do not create intermediate commits for the original delivery set.
 - Do not detach or delegate publication in a way that loses active observability.
+- Run advertised validators/planners in the active process; hooks may repeat
+  checks but never substitute for this evidence.
+- Publish a draft PR by default. Apply observer handoff at draft creation when
+  supported; ready-for-review remains an explicit later action.
 - Never infer completion from green checks alone and never merge.
 
 ## Deliverables
 
-- Contract-aware `task-doc` skill/templates/examples.
+- Contract-aware `task-doc` skill/templates/examples and one shared default
+  testing-policy reference.
 - One-initial-commit, deduplicated-validation delivery loop.
 - Observable publication, delivery-monitor handoff, review-batch commits, event
   handoff, and safe fallbacks.
-- Structured delivery/commit/timing metrics output.
-- Two focused Node policy test files and updated README/metadata.
+- Structured delivery/commit/timing metrics output, using draft publication as
+  the default milestone and recording ready promotion separately when present.
+- Three focused Node policy test files and updated README/metadata.
 
 ## Completion Verification
 
@@ -176,8 +221,12 @@ available. Those are explicit prerequisites; implementation must not guess them.
 - `node --test tests/task-doc-delivery-loop.test.mjs` passes and proves one
   initial commit for a three-task set, ledger-only internal checkpoints, one
   commit per later review batch, no-op batches, risk calibration, observable
-  publication, monitor-label handoff, event-enabled handoff, reaction-aware
-  fallback, metrics output, and never merge.
+  draft publication, monitor-label handoff, explicit ready promotion,
+  event-enabled handoff, reaction-aware fallback, hook-independent active
+  validation, metrics output, and never merge.
+- `node --test tests/task-doc-testing-policy.test.mjs` passes and proves policy
+  discovery order, shared-default use, durable-risk test selection,
+  presentation acceptance, and critical/bug-fix test-first behavior.
 - Existing `node --test tests/*.test.mjs` passes.
 - No NCDMB-specific implementation details appear in reusable skill prose.
 
@@ -189,9 +238,10 @@ belong to the consuming repository automation task.
 ## Completion Criteria
 
 Reusable task creation and delivery consume advertised repository contracts,
-avoid duplicate validation and original-task commit fragmentation, publish
-observably, support event automation, and remain safe in repositories without
-the new system.
+resolve a lean testing policy even without them, avoid duplicate validation and
+original-task commit fragmentation, publish observably to a draft PR by default,
+support event automation, and remain safe in repositories without the new
+system or hook-enforced contract validation.
 
 ## Follow-ups
 

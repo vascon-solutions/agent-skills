@@ -83,6 +83,16 @@ Use `synthesized` when the source is incomplete and the task must be inferred fr
 - Treat **Excluded** as work that will not ship in this task. Treat **Follow-ups** as separate future tasks, including excluded work that may become valid later. Approval gates for excluded follow-up work belong in the follow-up task, not the current one.
 - Add approval gates only for: security, auth, compliance, finance, destructive data work, infra changes, or permission model changes
 
+### Resolve testing policy
+
+When a task includes tests, validation, or acceptance evidence, resolve its testing policy in this order:
+
+1. repository contract or capabilities, when the repository advertises a compatible testing-policy interface
+2. repository instructions, such as a testing section in `AGENTS.md` or `CLAUDE.md`
+3. the skill default in [references/default-testing-policy.md](references/default-testing-policy.md)
+
+Use the first applicable repository policy and apply the skill default to anything it leaves unspecified. Keep permanent tests tied to a named durable risk, route presentation-only checks to acceptance, and preserve the repository's existing test framework and layout.
+
 ### Add implementation orientation
 
 Every task doc should carry enough context for an implementing agent to start safely without hidden chat history.
@@ -111,9 +121,10 @@ When decomposition is needed, list proposed sub tasks under Follow-ups. Do not g
 2. Classify the source mode.
 3. Choose `transform-only` or `synthesized`.
 4. Decide whether the work stays as one task or needs decomposition.
-5. Draft the task doc using [references/task-template.md](references/task-template.md).
-6. Verify the draft against the validation checks below.
-7. Output the task doc. Do not add commentary unless the user asked for it.
+5. Resolve the testing policy when the task includes tests, validation, or acceptance evidence.
+6. Draft the task doc using [references/task-template.md](references/task-template.md).
+7. Verify the draft against the validation checks below.
+8. Output the task doc. Do not add commentary unless the user asked for it.
 
 Read [references/examples.md](references/examples.md) for example outcomes and rejection cases.
 
@@ -139,6 +150,7 @@ Before declaring complete, verify:
 - excluded work is not mixed into current-task approval gates, deliverables, or completion criteria
 - the doc can be executed by another agent without relying on hidden chat context
 - any proposed sub tasks are real separable workstreams, not implementation steps
+- test proposals follow the resolved repository policy or the shared skill default, with durable risk separated from one-time acceptance evidence
 
 ## Output
 

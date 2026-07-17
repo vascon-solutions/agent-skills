@@ -177,6 +177,8 @@ The link script is idempotent — it skips symlinks that already point to the co
 
 1. `task-doc-delivery-loop` — run one approved task doc or a coherent ordered set in the current repository through calibrated implementation, deduplicated validation, review, a draft PR by default, and feedback closeout; marking the PR ready for review and merge are explicit
 
+`task-doc` and `task-doc-delivery-loop` resolve testing policy from an advertised repository contract first, repository instructions second, and their shared lean default last. Permanent tests must protect a named durable risk; presentation-only checks remain delivery acceptance evidence.
+
 ### Auditing a running UI feature
 
 1. `audit-ui` — probe required services, start missing local services only when safe commands are provided, execute the smallest complete browser journey, capture critical-page evidence, and report functional plus UI/UX findings
