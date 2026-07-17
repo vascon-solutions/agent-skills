@@ -9,8 +9,8 @@ description: Scan a repository for repeated patterns that are good candidates fo
 
 Identify repeated patterns in a repository that are worth formalizing as agent skills or CLI commands.
 
-This skill does not write docs, maintain agent instruction files, or audit documentation.
-It discovers workflow patterns that agents or developers repeat — and decides which deserve formalization, which should become deterministic scripts, and which should be left alone. After the user approves a candidate, it also scaffolds the skill, command, or script with the correct structure and wiring.
+This skill does not audit or rewrite project documentation, and it does not modify `AGENTS.md` or `CLAUDE.md`.
+It discovers workflow patterns that agents or developers repeat — and decides which deserve formalization, which should become deterministic scripts, and which should be left alone. After the user approves a candidate, it also scaffolds the skill, command, or script with the correct structure and may update existing linker and README inventory entries.
 
 ## When To Use
 
@@ -47,7 +47,7 @@ You need:
 
 Resolve these locations once and reuse them everywhere below:
 
-- **`active_pack_root`** — the global skill pack that supplied this skill. Resolve it from the installed skill's symlink (its target's parent `skills/` directory is the pack); fall back to `~/agent-skills` only when no symlink resolves.
+- **`active_pack_root`** — the global skill pack that supplied this skill. Resolve it from the installed skill's symlink by locating the target's containing `skills/` directory and taking that directory's parent. For a copied install, do not assume `~/agent-skills`: use an explicit user-provided pack path, or discover a single checkout containing both `bin/link-skills.sh` and `skills/repo-skill-scan/SKILL.md`. Treat `~/agent-skills` only as a candidate when it exists and has those markers. If no unique checkout is verifiable, ask the user to select the pack before scaffolding a global skill.
 - **`detected_skill_dir`** — the repo's existing repo-local skill directory: an existing `.claude/skills/` or `.cursor/skills/` wins for tool-first repos, then an existing `.agents/skills/`. Create the tool-appropriate one only when none exists.
 - **`detected_command_dir`** — same detection for commands: existing `.claude/commands/`, `.cursor/commands/`, or `.agents/commands/`; create only when none exists.
 
@@ -274,7 +274,7 @@ See [references/scaffolding.md](references/scaffolding.md) for the per-type form
 
 Quick routing (using the locations resolved in Required Inputs):
 
-- Global skill → `active_pack_root/skills/<name>/`. Follow the pack README's "How to add a new skill" section and wire into its `bin/link-skills.sh`.
+- Global skill → `active_pack_root/skills/<name>/`. Follow the pack README's "How to add a new skill" section, wire into `active_pack_root/bin/link-skills.sh`, and invoke that resolved linker rather than a home-directory default.
 - Repo-specific skill → `detected_skill_dir/<name>/`; agent command → `detected_command_dir/<name>.md`. Wire into that convention's link script and README when they exist, then re-run the link script; skip link-script wiring for conventions that have none (such as plain `.claude/skills/` or `.cursor/skills/`).
 
 ## Portability Notes

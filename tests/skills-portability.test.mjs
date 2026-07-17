@@ -54,14 +54,12 @@ test("repo-skill-scan resolves locations instead of hardcoding them", () => {
   assert.match(skill, /active_pack_root/);
   assert.match(skill, /detected_skill_dir/);
   assert.match(skill, /detected_command_dir/);
-  // ~/agent-skills may appear only as the documented symlink fallback
-  for (const [file, text] of [["SKILL.md", skill], ["references/scaffolding.md", reference]]) {
-    for (const line of text.split("\n")) {
-      if (!line.includes("~/agent-skills")) continue;
-      assert.match(line, /fall(s)? back|fallback/, `repo-skill-scan/${file} hardcodes ~/agent-skills outside the fallback: ${line.trim()}`);
-    }
-  }
+  assert.match(skill, /For a copied install, do not assume `~\/agent-skills`/);
+  assert.match(skill, /ask the user to select the pack/);
+  assert.match(skill, /active_pack_root\/bin\/link-skills\.sh/);
   assert.doesNotMatch(reference, /\.agents\/commands\/<name>/, "scaffolding reference hardcodes .agents/commands");
+  assert.match(reference, /If the detected command convention has a link script/);
+  assert.match(reference, /active_pack_root\/bin\/link-skills\.sh/);
 });
 
 test("task-doc-intake hands off to task-doc with authoritative classification", () => {
@@ -76,9 +74,19 @@ test("task-doc-intake hands off to task-doc with authoritative classification", 
 
 test("delivery loop documents its GitHub scope with a local fallback", () => {
   const loop = read("skills", "task-doc-delivery-loop", "SKILL.md");
+  const metadata = read("skills", "task-doc-delivery-loop", "agents", "openai.yaml");
   assert.match(loop, /draft PR/);
   assert.match(loop, /no remote|non-GitHub/i);
   assert.match(loop, /verified local completion/);
+  assert.match(metadata, /draft PR/);
+  assert.doesNotMatch(metadata, /ready PR/);
+});
+
+test("the pack authoring checklist invokes the current checkout linker", () => {
+  const readme = read("README.md");
+  const checklist = readme.split("## How To Add a Skill")[1].split("## Contributing")[0];
+  assert.match(checklist, /\.\/bin\/link-skills\.sh/);
+  assert.doesNotMatch(checklist, /~\/agent-skills\/bin\/link-skills\.sh/);
 });
 
 test("publish-branch defaults to inline execution", () => {

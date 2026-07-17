@@ -262,7 +262,7 @@ When adding a skill to this pack, complete all four steps:
    - Add a usage scenario if it fits a workflow not already covered
 4. Run the link script:
    ```bash
-   ~/agent-skills/bin/link-skills.sh
+   ./bin/link-skills.sh
    ```
 
 Do not consider the skill installed until step 4 is complete.
@@ -282,6 +282,6 @@ To contribute a new skill or fix:
 - The link script assumes the consuming tool discovers skills through filesystem directories and follows symlinked directories.
 - **Cursor symlinks:** Cursor had a symlink-discovery bug for home-directory skills; it was fixed in Cursor 2.5 (February 2026). Symlinks into `~/.cursor/skills` work on 2.5+. If you are on an older version, copy the skill directory directly instead.
 - **Cursor repo-local skills:** Use `.cursor/skills/` as the primary path. As of Cursor 2.5.26 (February 2026), `.agents/skills/` was not reliably discovered; Cursor staff confirmed `.agents/skills` support on March 11, 2026, but `.cursor/skills/` remains the safer default.
-- If a tool does not follow symlinks, copy the skill directory directly into that tool as a fallback — do not edit the copy; keep `~/agent-skills` as the source of truth.
+- If a tool does not follow symlinks, copy the skill directory directly into that tool as a fallback — do not edit the copy; keep the originating pack checkout as the source of truth (`~/agent-skills` for the default installation).
 - If a skill with the same name already exists in a target location, remove or rename it before linking.
 - If an environment uses a repo-local `.cursor/skills/` or `.agents/skills/` instead of the home-directory paths, adapt the linking target in `link-skills.sh` accordingly.
