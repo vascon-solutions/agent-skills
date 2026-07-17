@@ -1,6 +1,6 @@
 ---
 name: repo-skill-scan
-description: Scan a repository for repeated patterns that are good candidates for new agent skills or CLI commands. Produces a ranked candidate list with verdicts (skill / command / reject) and scope (global / repo-specific). Globally reusable across framework types.
+description: Scan a repository for repeated patterns that are good candidates for new agent skills or CLI commands, producing a ranked candidate list with verdicts (skill / command / reject) and scope (global / repo-specific), then scaffold approved candidates into correctly structured files. Globally reusable across framework types.
 ---
 
 # Repo Skill Scan
@@ -10,7 +10,7 @@ description: Scan a repository for repeated patterns that are good candidates fo
 Identify repeated patterns in a repository that are worth formalizing as agent skills or CLI commands.
 
 This skill does not write docs, maintain agent instruction files, or audit documentation.
-It discovers workflow patterns that agents or developers repeat — and decides which deserve formalization, which should become deterministic scripts, and which should be left alone.
+It discovers workflow patterns that agents or developers repeat — and decides which deserve formalization, which should become deterministic scripts, and which should be left alone. After the user approves a candidate, it also scaffolds the skill, command, or script with the correct structure and wiring.
 
 ## When To Use
 
@@ -22,6 +22,7 @@ Use when:
 - the user asks "what skills should we add for this repo?"
 - the user asks "what commands or scripts are missing?"
 - you have just finished `repo-docs-audit` and want to also identify automation gaps
+- a candidate has been approved and the user says to create, scaffold, or write it up as a skill, command, or script
 
 ## When Not To Use
 
@@ -257,6 +258,19 @@ Rejected candidates:
 
 If there are no candidates worth recommending, say so explicitly with the reason.
 
+## Scaffolding Approved Candidates
+
+After the user approves one or more candidates, scaffold each into the correct files. This is the only phase in which this skill writes files, and only for approved candidates — discovery (steps 1–9) still writes nothing.
+
+Gate: for every candidate, present the proposed file structure, wait for explicit approval of that structure, then write. Never write before this second approval, even if the candidate list was already approved.
+
+See [references/scaffolding.md](references/scaffolding.md) for the per-type formats (SKILL / AGENT COMMAND / CLI SCRIPT), the required SKILL.md section order, the SKILL.md-vs-`references/` split, link-script and README wiring, and global-vs-repo-specific destination rules.
+
+Quick routing:
+
+- Global skill → `~/agent-skills/skills/<name>/`; follow the "How to add a new skill" section in `~/agent-skills/README.md` and wire into `bin/link-skills.sh`.
+- Repo-specific skill/command/script → the repo's `.agents/` tree; wire into its link script and README, then re-run the link script.
+
 ## Portability Notes
 
 This skill is framework-agnostic. The six scan sources (explicit instructions, scripts, CI, git history, code structure, debugging sequences) apply to any repo type.
@@ -286,7 +300,7 @@ Adapt the scan focus per repo type:
 | Skill | What it does | Hard boundary |
 |---|---|---|
 | `repo-docs-audit` | Decides what docs should exist | `repo-skill-scan` does not evaluate docs or produce doc verdicts |
-| `rewrite-docs-from-code` | Writes or repairs project docs | `repo-skill-scan` does not create or modify any file |
+| `rewrite-docs-from-code` | Writes or repairs project docs | `repo-skill-scan` creates files only when scaffolding an approved skill/command/script, never docs |
 | `repair-agent-files` | Aligns AGENTS.md / CLAUDE.md | `repo-skill-scan` does not touch instruction files |
 | `review-doc-changes` | Reviews recent doc edits | `repo-skill-scan` does not review or validate changes |
 
@@ -314,3 +328,5 @@ Use this skill when a user says:
 - "Help me figure out what agent commands would be most useful here."
 - "What workflows keep recurring in this codebase that we should automate?"
 - "We just set up docs. Now what automation gaps exist?"
+- "Go ahead and create the skill for [approved candidate]."
+- "Scaffold the command / script we discussed."

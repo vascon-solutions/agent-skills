@@ -35,9 +35,8 @@ address-review-findings
 implementation-map
 repo-skill-scan
 roadmap-todo
-scaffold-repo-skill
 task-doc
-task-first-implementation
+task-doc-intake
 task-doc-delivery-loop
 audit-logging-standard
 forms-rhf-zod-standard
@@ -60,6 +59,8 @@ DEPRECATED_SKILL_NAMES="
 streamline-agents-md
 align-claude-and-agents
 agent-doc-handoff-review
+scaffold-repo-skill
+task-first-implementation
 "
 
 TARGET_DIRS="

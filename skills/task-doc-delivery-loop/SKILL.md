@@ -1,6 +1,6 @@
 ---
 name: task-doc-delivery-loop
-description: Use when one or more approved task docs in the current repository should share one delivery goal or be completed through PR readiness.
+description: Use when one or more approved task docs in the current repository should share one delivery goal and be carried through implementation, validation, and review to a pushed branch and draft PR by default.
 ---
 
 # Task Doc Delivery Loop
@@ -9,13 +9,13 @@ description: Use when one or more approved task docs in the current repository s
 
 Run one approved task doc or coherent ordered set as a bounded, single-repository delivery loop. Task docs remain the source of truth; this skill orchestrates implementation through closeout without duplicating dependent skills.
 
-Default PR-bound completion is one pushed branch with one ready-for-review PR and known check/comment state. Local-only, commit-only, pushed-branch-only, or draft-PR completion requires explicit user wording. Never merge without explicit authorization.
+Default completion is one pushed branch with one draft PR and known check/comment state. Marking the PR ready for review, and any narrower endpoint (local-only, commit-only, or a pushed branch with no PR), each require explicit user wording. Never merge without explicit authorization.
 
 ## Preconditions
 
 Use only when every proposed task doc is approved by the current request, explicit approval after a review gate, or a clear repo status convention.
 
-If any doc is missing, unapproved, stale, or blocked by unresolved decisions, ask once and stop. Use `task-first-implementation` or `task-doc` when no approved task doc exists.
+If any doc is missing, unapproved, stale, or blocked by unresolved decisions, ask once and stop. Use `task-doc-intake` (or `task-doc` directly for an already-bounded source) when no approved task doc exists.
 
 Do not use for report-only review, task-doc creation/repair, or publishing existing commits without implementation.
 
@@ -38,7 +38,7 @@ Choose and record calibration during intake:
 | Effort     | `medium`                           | `low` for docs/mechanical work; `high` for migrations, auth, permissions, security, finance, destructive data changes, unclear contracts, or broad refactors. Preserve explicit higher requests.                                                          |
 | Validation | `focused` per task + one group run | Use `affected`, `full`, and/or `repo-required` when risk or repo policy requires them; account for publish hooks that repeat checks.                                                                                                                      |
 | Review     | tight delegated review             | Use high-effort delegation for high risk/explicit deep review, or local review by explicit low-risk choice or as fallback. `none` requires agent-classified low risk, an explicit no-review/non-PR request, and repo permission. PR delivery gets review. |
-| Publish    | ready PR                           | Narrower modes require explicit wording.                                                                                                                                                                                                                  |
+| Publish    | pushed branch + draft PR           | Ready-for-review is explicit; a narrower endpoint (no PR, no push, or commit-only) requires explicit wording.                                                                                                                                             |
 
 After docs, import, or formatting-only remediation, rerun targeted checks instead of an unchanged full suite unless risk changed. Retrospect on runs over about 30 minutes or with repeated validation/review cycles.
 
@@ -52,19 +52,21 @@ Track ordered `task_docs` (path, status, validation, checkpoint), repo, branch, 
 
 Load these skills lazily; do not restate them.
 
-| Need                                   | Use                                                         |
-| -------------------------------------- | ----------------------------------------------------------- |
-| Missing/unapproved task doc            | Ask once; then `task-first-implementation` or `task-doc`    |
-| Separate plan for high-risk sequencing | `executing-plans`                                           |
-| Behavior change with test surface      | `test-driven-development`                                   |
-| Failed or surprising validation        | `systematic-debugging`                                      |
-| Implementation review                  | `review-implementation`                                     |
-| Finding remediation                    | `address-review-findings`                                   |
-| Commit, push, ready PR                 | `publish-branch` with ready-for-review explicitly requested |
-| PR comments                            | GitHub review-comment tooling, then `gh`/platform fallback  |
-| Final claim                            | `verification-before-completion`                            |
+Local skills are the primary routes. External skills are optional enhancers; the core rule stated inline holds when they are not installed.
 
-Escalate to `executing-plans` only for migrations, auth/security/permission work, broad refactors, unclear ordering, or delivery sets with several dependent phases.
+| Need                                   | Use                                                                                                 |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Missing/unapproved task doc            | Ask once; then `task-doc-intake` or `task-doc`                                                       |
+| Separate plan for high-risk sequencing | Sequence dependent phases explicitly in the ledger (`executing-plans` if installed)                 |
+| Behavior change with test surface      | Write or adjust tests before the change (`test-driven-development` if installed)                     |
+| Failed or surprising validation        | Isolate the root cause before fixing, not symptoms (`systematic-debugging` if installed)            |
+| Implementation review                  | `review-implementation`                                                                             |
+| Finding remediation                    | `address-review-findings`                                                                            |
+| Commit, push, PR                       | `publish-branch`; a draft PR is the default endpoint, ready-for-review is explicit                  |
+| PR comments                            | GitHub review-comment tooling, then `gh`/platform fallback                                           |
+| Final claim                            | Confirm with command evidence before claiming done (`verification-before-completion` if installed)  |
+
+Escalate to explicit dependent-phase sequencing (or `executing-plans` if installed) only for migrations, auth/security/permission work, broad refactors, unclear ordering, or delivery sets with several dependent phases.
 
 ## Workflow
 
@@ -87,7 +89,7 @@ Escalate to `executing-plans` only for migrations, auth/security/permission work
    Classify findings as valid, invalid, unclear, or out of scope. Fix valid, ask on behavior-changing ambiguity, reject invalid with evidence, and defer out-of-scope findings. Rerun affected checks and review again only after material remediation.
 
 7. **Publish**
-   Skip this step for local-only mode. Otherwise use `publish-branch`: stage only intended files, respect hooks, and apply the calibrated mode. Open a ready PR only after validation and review are accounted for and never with known failing checks; remediate or report the blocker.
+   Use `publish-branch` to reach the calibrated endpoint — by default a pushed branch with a draft PR. Stage only intended files, respect hooks, and never open or update a PR with known failing checks; remediate or report the blocker. Mark the PR ready for review only when the user asked and validation and review are accounted for. Stop at a narrower local endpoint (no PR, no push, or commit-only) only when the user explicitly requested it.
 
 8. **PR Review**
    Inspect checks, reviews, comments, and unresolved threads. Treat bot notices and usage limits as external state. Pending required checks/reviewer decisions keep the ledger open; after the configured wait, report and pause.
@@ -106,7 +108,7 @@ Continue only for new critical/blocking findings or explicit user instruction. R
 
 ## Worktree Policy
 
-Use the current checkout when clean, task-appropriate, and allowed by repo instructions. Prefer or require isolation for unrelated dirty changes, protected/default/integration branches without direct-work authorization, concurrent mutators, or flows escalated to `executing-plans`. Follow explicit user checkout instructions when they are safe and authorized.
+Use the current checkout when clean, task-appropriate, and allowed by repo instructions. Prefer or require isolation for unrelated dirty changes, protected/default/integration branches without direct-work authorization, concurrent mutators, or flows escalated to explicit dependent-phase sequencing (`executing-plans` if installed). Follow explicit user checkout instructions when they are safe and authorized.
 
 When isolated, verify pushed branch and PR state directly rather than relying on the parent checkout.
 

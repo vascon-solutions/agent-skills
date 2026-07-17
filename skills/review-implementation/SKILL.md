@@ -87,7 +87,7 @@ For each finding include file:line, the violated requirement or risk, why it mat
 - Important: missed requirement, risky architecture, bad error handling, meaningful test gap, accessibility issue, or likely user-facing defect.
 - Minor: polish, naming, small maintainability issue, or low-risk cleanup.
 
-These categories intentionally align with the `requesting-code-review` code-reviewer template so findings can move cleanly into `address-review-findings`.
+These categories are the finding vocabulary shared across this pack, so findings move cleanly into `address-review-findings`.
 
 Do not inflate severity. Do not bury blocking findings under summary text.
 
