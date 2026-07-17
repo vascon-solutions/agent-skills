@@ -38,6 +38,7 @@ roadmap-todo
 task-doc
 task-doc-intake
 task-doc-delivery-loop
+isolated-worktree
 audit-logging-standard
 forms-rhf-zod-standard
 migration-discipline
