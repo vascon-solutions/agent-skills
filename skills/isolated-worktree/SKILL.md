@@ -48,33 +48,46 @@ cannot manage.
 
 Directory priority: explicit instruction-file/user preference, then an existing
 `.worktrees/` (or `worktrees/`; `.worktrees` wins if both exist), then default
-to `.worktrees/` at the repo root. Carry the selected directory through every
-command below:
+to `.worktrees/` at the repo root. Anchor everything at the repository root —
+relative paths resolved from a nested directory such as `packages/api` would
+create the worktree in the wrong place and bypass the root `.gitignore`:
 
 ```bash
-WORKTREES_DIR=".worktrees"   # replace with the directory the priority selected
+REPO_ROOT=$(git rev-parse --show-toplevel)
+WORKTREES_DIR="$REPO_ROOT/.worktrees"   # swap .worktrees for the directory the priority selected
 ```
 
 Pick the branch name before creating anything — derive it from the task (for
-example `feat/<task-slug>`), then validate the format and confirm it is unused:
+example `feat/<task-slug>`) and validate the format:
 
 ```bash
 BRANCH_NAME="feat/example-task"
 git check-ref-format --branch "$BRANCH_NAME"
-git show-ref --verify --quiet "refs/heads/$BRANCH_NAME" \
-  && { echo "branch already exists — pick another name"; }
 ```
+
+If the branch already exists, STOP before any mutation — later steps touch
+`.gitignore`, and `git worktree add -b` would then fail and leave the parent
+checkout dirty without a workspace:
+
+```bash
+git show-ref --verify --quiet "refs/heads/$BRANCH_NAME" && echo "EXISTS"
+```
+
+On `EXISTS`, do not proceed: pick a different name, or — only when the user
+explicitly wants to resume that branch's existing work — create the worktree
+without `-b`: `git worktree add "$WORKTREES_DIR/$BRANCH_NAME" "$BRANCH_NAME"`.
 
 Project-local directories MUST be gitignored before use. Probe with a trailing
 slash — a `.worktrees/` ignore rule does not match the slash-less path until
 the directory actually exists, so the no-slash probe appends duplicates:
 
 ```bash
-git check-ignore -q "$WORKTREES_DIR/" || { echo "$WORKTREES_DIR/" >> .gitignore; }
+git check-ignore -q "$WORKTREES_DIR/" || { echo ".worktrees/" >> "$REPO_ROOT/.gitignore"; }
 ```
 
-Skip the gitignore step when the selected directory lives outside the
-repository.
+Append the selected directory's repo-relative name (never the absolute path)
+to the root `.gitignore`, and skip the gitignore step entirely when the
+selected directory lives outside the repository.
 
 Then create and enter it:
 
@@ -96,11 +109,17 @@ elif [ -f bun.lockb ];          then bun install
 elif [ -f yarn.lock ];          then yarn install
 elif [ -f package-lock.json ];  then npm install
 elif [ -f Cargo.toml ];         then cargo build
-elif [ -f pyproject.toml ];     then poetry install
+elif [ -f uv.lock ];            then uv sync
+elif [ -f pdm.lock ];           then pdm install
+elif [ -f poetry.lock ];        then poetry install
 elif [ -f requirements.txt ];   then pip install -r requirements.txt
 elif [ -f go.mod ];             then go mod download
 fi
 ```
+
+A bare `pyproject.toml` with no lockfile is a project manifest, not a
+package-manager marker — do not assume Poetry. Defer to the repository's
+documented setup command, or skip installation and say so.
 
 Verification is **checkout identity, not a test run**:
 
