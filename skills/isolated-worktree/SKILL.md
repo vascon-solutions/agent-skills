@@ -48,19 +48,39 @@ cannot manage.
 
 Directory priority: explicit instruction-file/user preference, then an existing
 `.worktrees/` (or `worktrees/`; `.worktrees` wins if both exist), then default
-to `.worktrees/` at the repo root.
-
-Project-local directories MUST be gitignored before use:
+to `.worktrees/` at the repo root. Carry the selected directory through every
+command below:
 
 ```bash
-git check-ignore -q .worktrees || { echo ".worktrees/" >> .gitignore; }
+WORKTREES_DIR=".worktrees"   # replace with the directory the priority selected
 ```
+
+Pick the branch name before creating anything — derive it from the task (for
+example `feat/<task-slug>`), then validate the format and confirm it is unused:
+
+```bash
+BRANCH_NAME="feat/example-task"
+git check-ref-format --branch "$BRANCH_NAME"
+git show-ref --verify --quiet "refs/heads/$BRANCH_NAME" \
+  && { echo "branch already exists — pick another name"; }
+```
+
+Project-local directories MUST be gitignored before use. Probe with a trailing
+slash — a `.worktrees/` ignore rule does not match the slash-less path until
+the directory actually exists, so the no-slash probe appends duplicates:
+
+```bash
+git check-ignore -q "$WORKTREES_DIR/" || { echo "$WORKTREES_DIR/" >> .gitignore; }
+```
+
+Skip the gitignore step when the selected directory lives outside the
+repository.
 
 Then create and enter it:
 
 ```bash
-git worktree add ".worktrees/$BRANCH_NAME" -b "$BRANCH_NAME"
-cd ".worktrees/$BRANCH_NAME"
+git worktree add "$WORKTREES_DIR/$BRANCH_NAME" -b "$BRANCH_NAME"
+cd "$WORKTREES_DIR/$BRANCH_NAME"
 ```
 
 If creation fails with a permission/sandbox error, say so and work in place.
@@ -110,8 +130,8 @@ more than the task itself.
 | Already in linked worktree | Skip creation (Step 0) |
 | In a submodule | Treat as normal checkout |
 | Native worktree tool available | Use it, never raw git |
-| No native tool | Git fallback under `.worktrees/` |
-| Worktree dir not gitignored | Add to `.gitignore` first |
+| No native tool | Git fallback under the selected dir (default `.worktrees/`) |
+| Worktree dir not gitignored | Probe with trailing slash, add to `.gitignore` first |
 | `pnpm-lock.yaml` present | `pnpm install`, never `npm install` |
 | Sandbox blocks creation | Report, work in place |
 | Many stale worktrees | Warn and offer to prune |
