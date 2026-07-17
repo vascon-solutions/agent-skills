@@ -28,7 +28,6 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
     ├── implementation-map/
     ├── repo-skill-scan/
     ├── roadmap-todo/
-    ├── scaffold-repo-skill/
     ├── html-artifact/
     ├── markdown-artifact/
     ├── image-artifact/
@@ -36,8 +35,9 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
     ├── repo-design-context/
     ├── publish-artifact/
     ├── task-doc/
-    ├── task-first-implementation/
+    ├── task-doc-intake/
     ├── task-doc-delivery-loop/
+    ├── isolated-worktree/
     ├── audit-logging-standard/
     ├── forms-rhf-zod-standard/
     ├── migration-discipline/
@@ -66,12 +66,11 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 | `review-implementation`     | Report-only review of finished code against a task doc, plan, spec, roadmap item, PRD, or acceptance criteria                                                                                                                                                                        |
 | `address-review-findings`   | Evaluate and remediate code, PR, or spec-compliance review findings; push back on invalid feedback and validate fixes                                                                                                                                                                |
 | `implementation-map`        | Produce a code-grounded Markdown map of an existing feature or module — entry points, runtime flow, ownership boundaries, tests, refactoring candidates, and HTML/image artifact decisions. Rejects work too small to justify a map                                                  |
-| `repo-skill-scan`           | Scan a repo for repeated patterns; recommend skills, commands, or no action                                                                                                                                                                                                          |
+| `repo-skill-scan`           | Scan a repo for repeated patterns; recommend skills, commands, or no action, then scaffold approved candidates into correctly structured files with link-script and README wiring                                                                                                     |
 | `roadmap-todo`              | Create and maintain durable roadmap or todo files for feature-grade work across repos                                                                                                                                                                                                |
-| `scaffold-repo-skill`       | Write an approved skill, command, or script candidate with correct structure and wiring                                                                                                                                                                                              |
 | `task-doc`                  | Create durable task documents for feature-grade work and reject small work that should stay in normal plan mode                                                                                                                                                                      |
-| `task-first-implementation` | Orchestrate bounded improvements through a task-doc-first review gate before implementation, with optional visual/HTML companions and post-implementation review                                                                                                                     |
-| `task-doc-delivery-loop`    | Deliver one approved task doc or a coherent ordered set in one repository through calibrated implementation, validation, review, one ready PR, feedback closeout, and final completion                                                                                               |
+| `task-doc-intake`           | Run a guided interview, map loose notes/screenshots, or derive codebase findings into an approved change inventory and task doc before code; classifies and downshifts small work, ends at an explicit implementation gate                                                            |
+| `task-doc-delivery-loop`    | Deliver one approved task doc or a coherent ordered set in one repository through calibrated implementation, validation, and review to a pushed branch and draft PR by default; marking the PR ready for review and merge are explicit                                                 |
 | `isolated-worktree`         | Ensure work happens in an isolated checkout: detect existing isolation, prefer native platform worktree tools, fall back to `git worktree` with lockfile-aware setup, identity-based verification, and cleanup hygiene                                                               |
 | `audit-logging-standard`    | Review or harden audit logging for APIs, admin workflows, sensitive mutations, compliance trails, and protected audit read surfaces                                                                                                                                                  |
 | `forms-rhf-zod-standard`    | Build or review React forms that use React Hook Form, Zod, typed payloads, resolver validation, API error mapping, or shared form contracts                                                                                                                                          |
@@ -161,8 +160,7 @@ The link script is idempotent — it skips symlinks that already point to the co
 
 ### Discovering and creating repo-specific skills or commands
 
-1. `repo-skill-scan` — scan for repeated patterns; get a ranked candidate list
-2. `scaffold-repo-skill` — for each approved candidate: propose structure → wait for approval → write files
+1. `repo-skill-scan` — scan for repeated patterns and get a ranked candidate list; then, for each approved candidate, propose the file structure → wait for approval → scaffold the skill, command, or script with link-script and README wiring (scaffolding folded in from the retired `scaffold-repo-skill`)
 
 ### Feature-grade task planning across agents
 
@@ -171,13 +169,13 @@ The link script is idempotent — it skips symlinks that already point to the co
 
 ### Review-gated implementation
 
-1. `task-first-implementation` — classify bounded improvement work, create or update a task doc, stop for review, then implement only after explicit approval
-2. Optional companions: `image-artifact` for visual/API/architecture summaries, `html-artifact` for browsable or interactive review surfaces
-3. Post-implementation: `review-implementation`, then `address-review-findings` when valid gaps need remediation
+1. `task-doc-intake` — classify the work (downshifting `small`/`fix`), run a guided interview or map notes into an approved change inventory, render the task doc via `task-doc`, and stop at the implementation gate
+2. Optional companions: `image-artifact` for visual/API/architecture summaries, `html-artifact` for browsable or interactive review surfaces; `review-task-docs` for high-risk scope
+3. After explicit task-doc approval: `task-doc-delivery-loop` implements; then `review-implementation` and `address-review-findings` when valid gaps need remediation
 
 ### Approved task-doc delivery
 
-1. `task-doc-delivery-loop` — run one approved task doc or a coherent ordered set in the current repository through calibrated implementation, deduplicated validation, one ready PR, feedback closeout, and final completion
+1. `task-doc-delivery-loop` — run one approved task doc or a coherent ordered set in the current repository through calibrated implementation, deduplicated validation, review, a draft PR by default, and feedback closeout; marking the PR ready for review and merge are explicit
 
 ### Auditing a running UI feature
 
@@ -214,7 +212,7 @@ The link script is idempotent — it skips symlinks that already point to the co
 3. `address-review-findings` — evaluate and fix valid review findings; when asked to "review and fix," run the review first, then remediate
 4. `roadmap-todo` — keep feature-grade backlog items concise, durable, and linked to task docs
 
-`address-review-findings` uses `receiving-code-review` for finding evaluation when that skill is installed, and otherwise falls back to its bundled evaluation rules.
+`address-review-findings` is self-contained: it evaluates findings with its own bundled rules — verify before implementing, push back on invalid feedback with evidence, no blind compliance — independent of any external code-review skill.
 
 ### Generating HTML artifact companions
 
@@ -264,7 +262,7 @@ When adding a skill to this pack, complete all four steps:
    - Add a usage scenario if it fits a workflow not already covered
 4. Run the link script:
    ```bash
-   ~/agent-skills/bin/link-skills.sh
+   ./bin/link-skills.sh
    ```
 
 Do not consider the skill installed until step 4 is complete.
@@ -284,6 +282,6 @@ To contribute a new skill or fix:
 - The link script assumes the consuming tool discovers skills through filesystem directories and follows symlinked directories.
 - **Cursor symlinks:** Cursor had a symlink-discovery bug for home-directory skills; it was fixed in Cursor 2.5 (February 2026). Symlinks into `~/.cursor/skills` work on 2.5+. If you are on an older version, copy the skill directory directly instead.
 - **Cursor repo-local skills:** Use `.cursor/skills/` as the primary path. As of Cursor 2.5.26 (February 2026), `.agents/skills/` was not reliably discovered; Cursor staff confirmed `.agents/skills` support on March 11, 2026, but `.cursor/skills/` remains the safer default.
-- If a tool does not follow symlinks, copy the skill directory directly into that tool as a fallback — do not edit the copy; keep `~/agent-skills` as the source of truth.
+- If a tool does not follow symlinks, copy the skill directory directly into that tool as a fallback — do not edit the copy; keep the originating pack checkout as the source of truth (`~/agent-skills` for the default installation).
 - If a skill with the same name already exists in a target location, remove or rename it before linking.
 - If an environment uses a repo-local `.cursor/skills/` or `.agents/skills/` instead of the home-directory paths, adapt the linking target in `link-skills.sh` accordingly.

@@ -35,10 +35,10 @@ address-review-findings
 implementation-map
 repo-skill-scan
 roadmap-todo
-scaffold-repo-skill
 task-doc
-task-first-implementation
+task-doc-intake
 task-doc-delivery-loop
+isolated-worktree
 audit-logging-standard
 forms-rhf-zod-standard
 migration-discipline
@@ -55,11 +55,13 @@ repo-design-context
 publish-artifact
 "
 
-# Skills removed in this version — unlink them if they still exist as symlinks
+# Skills removed in this version — unlink symlinks and flag copied installs.
 DEPRECATED_SKILL_NAMES="
 streamline-agents-md
 align-claude-and-agents
 agent-doc-handoff-review
+scaffold-repo-skill
+task-first-implementation
 "
 
 TARGET_DIRS="
@@ -76,12 +78,15 @@ for target in $TARGET_DIRS; do
   mkdir -p "$target"
   echo "Linking into: $target"
 
-  # Remove deprecated symlinks
+  # Remove deprecated symlinks. Preserve copied installs so users can migrate
+  # their local changes manually instead of losing them during relinking.
   for skill in $DEPRECATED_SKILL_NAMES; do
     dst="$target/$skill"
     if [ -L "$dst" ]; then
       rm "$dst"
       echo "  unlinked (deprecated) $skill"
+    elif [ -e "$dst" ]; then
+      echo "  warn  $skill is deprecated but was not removed because it is not a symlink: $dst. Remove or rename it manually." >&2
     fi
   done
 

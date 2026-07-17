@@ -51,10 +51,10 @@ Use when the user wants a durable Markdown artifact for:
 - Use `prepare-qa-handoff` for QA sign-off notes.
 - Use `prepare-frontend-handoff` for frontend developer handoffs.
 - Use `html-artifact` when Markdown already exists and the user only wants HTML.
-- Use existing `brainstorming` and `writing-plans` for repo implementation specs and execution plans.
+- Use `task-doc-intake` for repo implementation discovery that should end in a durable task doc; the external `brainstorming` and `writing-plans` skills are optional alternatives when installed and explicitly requested.
 - Use normal implementation workflows when the user asks to build or change code directly.
 
-If `brainstorming` or `writing-plans` is unavailable, state that clearly. For implementation-ready repo work, ask whether to continue as a plain artifact under `~/agent-artifacts/<slug>/` or advise installing the missing skill. Do not silently imitate the missing skill's full workflow or write to `docs/superpowers/` by default.
+For implementation-ready repo work, route to the task-doc chain rather than continuing as an artifact; ask once if the user's intent is ambiguous. Do not write to `docs/superpowers/` by default.
 
 ## Inputs
 
@@ -152,17 +152,17 @@ Do not invent certainty. Mark assumptions and recommendations explicitly.
 
 ## Clarification Before Writing
 
-Do not invoke the full `brainstorming` skill by default. `brainstorming` is for repo implementation specs that end at `writing-plans`; this skill creates portable artifacts.
+Do not run a full discovery interview by default — repo implementation discovery belongs to `task-doc-intake` (or the external `brainstorming` skill if installed and explicitly requested); this skill creates portable artifacts.
 
 Ask at most one focused question, and only when missing information would materially change the artifact: audience (developer vs. stakeholder), doc-type ambiguity, single-option vs. comparison, or whether source code context is required. Otherwise proceed, label assumptions explicitly, and list open questions in the document.
 
 If the input is too vague even with assumptions, ask one question or write a deliberately thin artifact with the gaps called out.
 
-Use `brainstorming` only when the user explicitly asks to brainstorm/spec a feature, or the request is repo implementation planning that belongs under `docs/superpowers/`.
+Switch to `task-doc-intake` when the request is actually repo implementation planning; use the external `brainstorming` skill only when it is installed and the user explicitly asks for it.
 
 ## Relationship To `docs/superpowers/`
 
-`docs/superpowers/` is the internal agent execution control plane for the current repository:
+When the external Superpowers pack is installed, `docs/superpowers/` is its execution control plane for the current repository:
 
 ```text
 brainstorming -> docs/superpowers/specs/<date>-<topic>-design.md

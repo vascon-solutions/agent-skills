@@ -7,7 +7,7 @@ description: Use when the user asks to commit, push, publish, ship, create a PR,
 
 ## Purpose
 
-Publish local work intentionally. The main agent owns safety preflight and final verification; a single worker subagent may own the mutable publish path: staging, committing, pushing, and opening a draft PR when requested.
+Publish local work intentionally. The main agent runs the publish path inline by default — safety preflight, staging, committing, pushing, opening a draft PR when requested, and final verification. A single worker subagent owns the mutable path only when the user asks for delegation or it is materially useful (large or risky publish, or parallel work in flight).
 
 Keep the change set scoped, rely on repo hooks where they already exist, and do not silently publish unrelated work.
 
@@ -22,7 +22,7 @@ These gates apply even in `/fast` mode:
 - Stop if another agent or process is already mutating the same worktree or publish path.
 - Do not force-push, merge, rebase shared history, or rewrite published history as part of normal publish.
 
-The main agent enforces gates before delegation. The worker re-checks them before staging, committing, pushing, and PR creation. If state diverges from preflight, the worker stops and reports the divergence.
+The main agent enforces these gates during preflight. When work is delegated, the worker re-checks them before staging, committing, pushing, and PR creation. If state diverges from preflight, whoever holds the publish path stops and reports the divergence.
 
 ## Action Rules
 
@@ -40,9 +40,9 @@ If the branch already has unpushed commits, publish includes those commits unles
 
 ## Delegation Rules
 
-Use one mutation-capable worker subagent by default after preflight. The main agent may inline trivial, low-risk publish work when delegation overhead exceeds the work, such as a one-line typo commit.
+Run the publish path inline after preflight by default. Delegate to one mutation-capable worker subagent only when the user explicitly asks for delegation, or when it is materially useful — a large or high-risk publish, or when other work must proceed in parallel. Routine commits, pushes, and draft PRs stay inline.
 
-Default worker mechanics:
+When delegating, default worker mechanics:
 
 - Spawn exactly one worker for the publish path.
 - Use the current repository checkout by default, not an isolated worktree.

@@ -21,6 +21,7 @@ Use when:
 - the output will be handed across agents or teammates
 - the task needs explicit scope, exclusions, verification, or approval gates
 - the source material exists in a roadmap, issue, PRD, feature brief, or codebase findings
+- `task-doc-intake` hands off an approved change inventory for `improvement` or `feature-grade` work — the intake classification satisfies the rejection gate below; render the doc rather than re-litigating scale
 
 ## When Not To Use
 
@@ -35,7 +36,7 @@ When not using this skill, default to normal plan mode and say so.
 ## Constraints
 
 - **Do not implement.** This skill produces a task document only. Do not write code, create implementation files, or begin any work described in the task.
-- **Reject small work.** If the work does not justify a durable artifact, refuse and recommend plan mode. This is not optional — agents default to creating what was asked; this skill must override that instinct.
+- **Reject small work.** If the work does not justify a durable artifact, refuse and recommend plan mode. This is not optional — agents default to creating what was asked; this skill must override that instinct. Exception: an approved `task-doc-intake` inventory has already passed intake's downshift gate; accept it.
 - **Prefer omission over invention.** Do not add scope, requirements, or features the source did not ask for. When in doubt, leave it out and add it to Excluded.
 - **Exclusions are mandatory.** Every task doc must have an Excluded section. Missing exclusions invite scope creep during implementation.
 - **Implementation orientation sections are mandatory.** Include the sections for design references, architecture summary, code evidence, current behavior to preserve, likely files to touch, and decisions required before implementation. Use `None` when the source genuinely lacks the input; do not invent context to satisfy a heading.
