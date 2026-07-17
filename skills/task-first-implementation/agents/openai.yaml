@@ -1,4 +1,0 @@
-interface:
-  display_name: "Task-First Implementation"
-  short_description: "Fix/refactor task-doc gating"
-  default_prompt: "Use $task-first-implementation. Classify scope first (fix / small / improvement / feature-grade), then take the matching path: one-shot fix/refactor without a task doc, refactoring ideas via inspection, or the task-doc gate for larger work."

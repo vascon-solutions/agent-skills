@@ -1,0 +1,4 @@
+interface:
+  display_name: "Task Doc Intake"
+  short_description: "Interview/notes to task doc"
+  default_prompt: "Use $task-doc-intake. Classify scope first (small / fix / improvement / feature-grade / open-ended) and downshift small work. Then run the matching intake: guided interview one question at a time, notes-first mapping, or codebase-derived findings. Build the change inventory, get Final Summary approval, render via task-doc, and stop at the implementation gate."

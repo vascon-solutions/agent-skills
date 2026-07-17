@@ -1,4 +1,4 @@
 interface:
   display_name: "Task Doc Delivery Loop"
-  short_description: "Deliver an approved task-doc set to a ready PR"
-  default_prompt: "Use $task-doc-delivery-loop to deliver the selected approved task doc or ordered task-doc set through one ready PR and feedback closeout."
+  short_description: "Deliver approved task docs to a draft PR or safe local fallback"
+  default_prompt: "Use $task-doc-delivery-loop to deliver the selected approved task doc or ordered task-doc set through one draft PR and feedback closeout when GitHub PR delivery is available; otherwise stop at verified local completion and report why."

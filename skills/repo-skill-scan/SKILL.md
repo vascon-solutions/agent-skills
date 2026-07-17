@@ -1,6 +1,6 @@
 ---
 name: repo-skill-scan
-description: Scan a repository for repeated patterns that are good candidates for new agent skills or CLI commands. Produces a ranked candidate list with verdicts (skill / command / reject) and scope (global / repo-specific). Globally reusable across framework types.
+description: Scan a repository for repeated patterns that are good candidates for new agent skills or CLI commands, producing a ranked candidate list with verdicts (skill / command / reject) and scope (global / repo-specific), then scaffold approved candidates into correctly structured files. Globally reusable across framework types.
 ---
 
 # Repo Skill Scan
@@ -9,8 +9,8 @@ description: Scan a repository for repeated patterns that are good candidates fo
 
 Identify repeated patterns in a repository that are worth formalizing as agent skills or CLI commands.
 
-This skill does not write docs, maintain agent instruction files, or audit documentation.
-It discovers workflow patterns that agents or developers repeat — and decides which deserve formalization, which should become deterministic scripts, and which should be left alone.
+This skill does not audit or rewrite project documentation, and it does not modify `AGENTS.md` or `CLAUDE.md`.
+It discovers workflow patterns that agents or developers repeat — and decides which deserve formalization, which should become deterministic scripts, and which should be left alone. After the user approves a candidate, it also scaffolds the skill, command, or script with the correct structure and may update existing linker and README inventory entries.
 
 ## When To Use
 
@@ -22,6 +22,7 @@ Use when:
 - the user asks "what skills should we add for this repo?"
 - the user asks "what commands or scripts are missing?"
 - you have just finished `repo-docs-audit` and want to also identify automation gaps
+- a candidate has been approved and the user says to create, scaffold, or write it up as a skill, command, or script
 
 ## When Not To Use
 
@@ -44,10 +45,16 @@ You need:
 - existing docs, `AGENTS.md`, and `CONTRIBUTING.md` if present
 - current skill and command inventory (to avoid recommending what already exists)
 
+Resolve these locations once and reuse them everywhere below:
+
+- **`active_pack_root`** — the global skill pack that supplied this skill. Resolve it from the installed skill's symlink by locating the target's containing `skills/` directory and taking that directory's parent. For a copied install, do not assume `~/agent-skills`: use an explicit user-provided pack path, or discover a single checkout containing both `bin/link-skills.sh` and `skills/repo-skill-scan/SKILL.md`. Treat `~/agent-skills` only as a candidate when it exists and has those markers. If no unique checkout is verifiable, ask the user to select the pack before scaffolding a global skill.
+- **`detected_skill_dir`** — the repo's existing repo-local skill directory: an existing `.claude/skills/` or `.cursor/skills/` wins for tool-first repos, then an existing `.agents/skills/`. Create the tool-appropriate one only when none exists.
+- **`detected_command_dir`** — same detection for commands: existing `.claude/commands/`, `.cursor/commands/`, or `.agents/commands/`; create only when none exists.
+
 Before scanning, check:
 
-- `~/agent-skills/skills/` — existing global skills
-- `.agents/commands/`, `.claude/commands/`, `agent-commands/` in the repo — existing repo-specific commands
+- `active_pack_root/skills/` — existing global skills
+- `detected_command_dir` and `detected_skill_dir` in the repo — existing repo-specific commands and skills
 
 Do not recommend what is already there.
 
@@ -150,7 +157,7 @@ Assign when:
 
 - A `package.json` script, CI job, Makefile target, or existing command already covers this
 - A linter, formatter, type-checker, or pre-commit hook enforces it automatically
-- An existing global skill in `~/agent-skills` already handles it
+- An existing global skill in `active_pack_root` already handles it
 
 Do not recommend what tooling already enforces.
 
@@ -171,9 +178,9 @@ Each candidate maps to exactly one destination:
 
 | Candidate type | Destination | Format |
 |---|---|---|
-| SKILL — global | `~/agent-skills/skills/<name>/SKILL.md` | Structured SKILL.md with frontmatter, decision rules, output contract |
-| SKILL — repo-specific | `.agents/commands/<name>/SKILL.md` or `.claude/commands/<name>/` | Same SKILL.md format, but may reference repo-specific detail |
-| AGENT COMMAND | `.agents/commands/<name>.md` or `.claude/commands/<name>.md` | Focused markdown prompt; no structured sections required |
+| SKILL — global | `active_pack_root/skills/<name>/SKILL.md` | Structured SKILL.md with frontmatter, decision rules, output contract |
+| SKILL — repo-specific | `detected_skill_dir/<name>/SKILL.md` | Same SKILL.md format, but may reference repo-specific detail |
+| AGENT COMMAND | `detected_command_dir/<name>.md` | Focused markdown prompt; no structured sections required |
 | CLI SCRIPT | `bin/<name>.sh`, `scripts/<name>.sh`, or `package.json` scripts | Shell script or npm script entry |
 
 **A SKILL is global when:**
@@ -191,7 +198,7 @@ When unsure on global vs repo-specific for a skill: prefer repo-specific. Do not
 
 ## Step-By-Step Instructions
 
-1. Check the existing global skill inventory (`~/agent-skills/skills/`) and any repo-local commands. Record what already exists — you will exclude these from recommendations.
+1. Resolve `active_pack_root`, `detected_skill_dir`, and `detected_command_dir` (see Required Inputs), then check the existing global skill inventory (`active_pack_root/skills/`) and any repo-local skills/commands. Record what already exists — you will exclude these from recommendations.
 
 2. Scan the repo using the six source types above. Take notes per source; do not collapse into a summary yet.
 
@@ -239,13 +246,13 @@ Top recommendations (ranked by value):
 1. …
 2. …
 
-Global skill proposals (~/agent-skills/skills/):
+Global skill proposals (active_pack_root/skills/):
 - …
 
-Repo-specific skill proposals (.agents/commands/ or .claude/commands/):
+Repo-specific skill proposals (detected_skill_dir):
 - …
 
-Agent command proposals (.agents/commands/ or .claude/commands/):
+Agent command proposals (detected_command_dir):
 - …
 
 CLI script proposals (bin/ or package.json):
@@ -256,6 +263,19 @@ Rejected candidates:
 ```
 
 If there are no candidates worth recommending, say so explicitly with the reason.
+
+## Scaffolding Approved Candidates
+
+After the user approves one or more candidates, scaffold each into the correct files. This is the only phase in which this skill writes files, and only for approved candidates — discovery (steps 1–9) still writes nothing.
+
+Gate: for every candidate, present the proposed file structure, wait for explicit approval of that structure, then write. Never write before this second approval, even if the candidate list was already approved.
+
+See [references/scaffolding.md](references/scaffolding.md) for the per-type formats (SKILL / AGENT COMMAND / CLI SCRIPT), the required SKILL.md section order, the SKILL.md-vs-`references/` split, link-script and README wiring, and global-vs-repo-specific destination rules.
+
+Quick routing (using the locations resolved in Required Inputs):
+
+- Global skill → `active_pack_root/skills/<name>/`. Follow the pack README's "How to add a new skill" section, wire into `active_pack_root/bin/link-skills.sh`, and invoke that resolved linker rather than a home-directory default.
+- Repo-specific skill → `detected_skill_dir/<name>/`; agent command → `detected_command_dir/<name>.md`. Wire into that convention's link script and README when they exist, then re-run the link script; skip link-script wiring for conventions that have none (such as plain `.claude/skills/` or `.cursor/skills/`).
 
 ## Portability Notes
 
@@ -286,7 +306,7 @@ Adapt the scan focus per repo type:
 | Skill | What it does | Hard boundary |
 |---|---|---|
 | `repo-docs-audit` | Decides what docs should exist | `repo-skill-scan` does not evaluate docs or produce doc verdicts |
-| `rewrite-docs-from-code` | Writes or repairs project docs | `repo-skill-scan` does not create or modify any file |
+| `rewrite-docs-from-code` | Writes or repairs project docs | `repo-skill-scan` creates files only when scaffolding an approved skill/command/script, never docs |
 | `repair-agent-files` | Aligns AGENTS.md / CLAUDE.md | `repo-skill-scan` does not touch instruction files |
 | `review-doc-changes` | Reviews recent doc edits | `repo-skill-scan` does not review or validate changes |
 
@@ -314,3 +334,5 @@ Use this skill when a user says:
 - "Help me figure out what agent commands would be most useful here."
 - "What workflows keep recurring in this codebase that we should automate?"
 - "We just set up docs. Now what automation gaps exist?"
+- "Go ahead and create the skill for [approved candidate]."
+- "Scaffold the command / script we discussed."
