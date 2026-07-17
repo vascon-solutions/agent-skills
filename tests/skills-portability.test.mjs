@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
@@ -17,6 +19,27 @@ test("retired skills are gone from skills/ and unlinked by the link script", () 
   for (const name of retired) {
     assert.ok(!skillNames.includes(name), `${name} should be deleted`);
     assert.match(deprecatedBlock, new RegExp(`^${name}$`, "m"));
+  }
+});
+
+test("link script preserves copied retired skills and tells users to remove them manually", () => {
+  const temporaryHome = fs.mkdtempSync(path.join(os.tmpdir(), "agent-skills-portability-"));
+  const copiedSkill = path.join(temporaryHome, ".codex", "skills", "scaffold-repo-skill");
+  fs.mkdirSync(copiedSkill, { recursive: true });
+
+  try {
+    const result = spawnSync("sh", ["bin/link-skills.sh", root], {
+      cwd: root,
+      encoding: "utf8",
+      env: { ...process.env, HOME: temporaryHome },
+    });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.ok(fs.statSync(copiedSkill).isDirectory(), "copied skill should be preserved");
+    assert.match(result.stderr, /scaffold-repo-skill is deprecated but was not removed because it is not a symlink/);
+    assert.match(result.stderr, /Remove or rename it manually/);
+  } finally {
+    fs.rmSync(temporaryHome, { recursive: true, force: true });
   }
 });
 
