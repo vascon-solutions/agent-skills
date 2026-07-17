@@ -49,10 +49,10 @@ Always in SKILL.md, never in references/: Purpose, Approval Gates, Decision Rule
 
 ### SKILL candidate
 
-1. Read the target repo's existing `.agents/skills/` (or `~/agent-skills/skills/` for a global candidate) to match conventions — section names, references structure, link-script format, README table layout.
+1. Read the destination's existing skills to match conventions — section names, references structure, link-script format, README table layout. For a repo-specific candidate that is the repo's detected skill directory (`.cursor/skills/`, `.agents/skills/`, or its existing equivalent); for a global candidate it is the active pack's `skills/` directory (resolve via the installed skill symlink, falling back to `~/agent-skills`).
 2. Present the proposed structure and wait for approval:
    ```
-   Proposed: <.agents/skills|~/agent-skills/skills>/<name>/
+   Proposed: <detected-repo-skill-dir|active-pack skills>/<name>/
    ├── SKILL.md
    │   ├── Purpose — [one line]
    │   ├── Approval Gates — [list stops, or "none"]
@@ -65,8 +65,8 @@ Always in SKILL.md, never in references/: Purpose, Approval Gates, Decision Rule
    ```
 3. Write `SKILL.md` in the required section order.
 4. Write `references/` files, one content type each — do not mix checklists with file maps.
-5. Add `<name>` to the link script's skill list (`.agents/bin/link-agents.sh` for a repo, `bin/link-skills.sh` for the global pack).
-6. Add a row to the relevant README skills table.
+5. Add `<name>` to the link script's skill list when the destination has one (`.agents/bin/link-agents.sh` or equivalent for a repo, `bin/link-skills.sh` for the global pack). Conventions without a link script, such as plain `.cursor/skills/`, skip this and step 7.
+6. Add a row to the relevant README skills table when one exists.
 7. Run the link script from the repo root and confirm symlinks were created.
 
 ### AGENT COMMAND candidate
@@ -99,7 +99,7 @@ Always in SKILL.md, never in references/: Purpose, Approval Gates, Decision Rule
 
 ## Global vs repo-specific destination
 
-A candidate is **global** (`~/agent-skills/skills/`) only when it can be written without hardcoding repo-specific paths, enums, or domain rules and applies across repos of the same type. For global additions, follow the "How to add a new skill" section in `~/agent-skills/README.md`. Agent commands and CLI scripts are always repo-specific — never add them to the global pack. When unsure on global vs repo-specific, prefer repo-specific.
+A candidate is **global** (the active pack's `skills/`) only when it can be written without hardcoding repo-specific paths, enums, or domain rules and applies across repos of the same type. Resolve the active pack root from the installed skill symlink (fall back to `~/agent-skills`) and follow its README's "How to add a new skill" section. Repo-specific candidates go to the repo's detected convention — an existing `.cursor/skills/` wins for Cursor-first repos, then an existing `.agents/` tree; create the `.agents/` compatibility tree only when no convention exists. Agent commands and CLI scripts are always repo-specific — never add them to the global pack. When unsure on global vs repo-specific, prefer repo-specific.
 
 ## Cautions
 

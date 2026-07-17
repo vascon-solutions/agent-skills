@@ -268,8 +268,8 @@ See [references/scaffolding.md](references/scaffolding.md) for the per-type form
 
 Quick routing:
 
-- Global skill → `~/agent-skills/skills/<name>/`; follow the "How to add a new skill" section in `~/agent-skills/README.md` and wire into `bin/link-skills.sh`.
-- Repo-specific skill/command/script → the repo's `.agents/` tree; wire into its link script and README, then re-run the link script.
+- Global skill → the active pack's `skills/<name>/`. Resolve the pack root from the installed skill itself — for example `readlink` on this skill's symlink (its target's parent `skills/` directory is the pack) — and fall back to `~/agent-skills` only when no symlink resolves. Follow the pack README's "How to add a new skill" section and wire into its `bin/link-skills.sh`.
+- Repo-specific skill/command/script → detect the repo's existing convention first: an existing `.cursor/skills/` tree wins for Cursor-first repos, then an existing `.agents/` tree with a link script, then whatever directory comparable repo-local skills already use. Only create the `.agents/` compatibility tree when no convention exists. Wire into that convention's link script and README when they exist, then re-run the link script; skip link-script wiring for conventions that have none (such as plain `.cursor/skills/`).
 
 ## Portability Notes
 
