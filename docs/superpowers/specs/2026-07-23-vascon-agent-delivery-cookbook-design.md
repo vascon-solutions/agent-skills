@@ -1,6 +1,6 @@
 # Vascon Agent Delivery Cookbook — Site Design
 
-**Status:** Approved design  
+**Status:** Approved design — revised after independent review
 **Date:** 2026-07-23  
 **Audience:** Vascon developers using coding agents  
 **Primary outcome:** Help a developer start feature work correctly with an approved task doc before implementation.
@@ -50,8 +50,7 @@ The site is one responsive route with anchored navigation and progressive disclo
 6. **Situation recipes:** focused routes for common work.
 7. **Stack standards:** standards surfaced by implementation context.
 8. **Skill reference:** searchable secondary index.
-9. **Friday workshop:** one worked team exercise.
-10. **Install/update:** one compact link to the public repository and its current installation instructions.
+9. **Install/update:** one compact link to the public repository and its current installation instructions.
 
 The homepage must not lead with installation, skill sources, a catalog, or a broad lifecycle diagram.
 
@@ -76,19 +75,22 @@ The site reduces feature delivery to four memorable stages.
 - Output: explicit task-doc approval or requested changes.
 - Gate: ambiguous approval does not authorize implementation.
 
-### 3. Implement and verify
+### 3. Deliver and verify
 
 - Primary skill: `task-doc-delivery-loop`
-- Purpose: implement the approved scope in dependency order, apply relevant standards, validate, review, and prepare a draft PR.
+- Purpose: implement the approved scope in dependency order, apply relevant standards, validate, and prepare the bounded delivery for review.
 - Contextual standards: TanStack frontend, TanStack Start, NestJS API, forms, migrations, audit logging, Nx, and Ultracite.
-- Output: validated implementation on a bounded branch with accounted-for evidence.
+- Output: a validated implementation on a bounded branch with accounted-for evidence.
 
-### 4. Review and close gaps
+### 4. Review, remediate, and close out
 
-- Review skill: `review-implementation`
-- Remediation skill: `address-review-findings`
-- Purpose: judge the completed diff against the task doc, separate review from remediation, verify findings before fixing them, and rerun affected checks.
-- Output: a verdict, dispositioned findings, validation evidence, and known PR state.
+- Orchestrator: the same `task-doc-delivery-loop` started in stage 3.
+- Internal review skill: `review-implementation`.
+- Internal remediation skill: `address-review-findings`.
+- Purpose: complete the delivery loop by judging the diff against the task doc, verifying findings before fixes, rerunning affected checks, publishing to the approved boundary, and accounting for PR state.
+- Output: a review verdict, dispositioned findings, final validation evidence, and known branch or PR state.
+
+Stages 3 and 4 are phases inside one `task-doc-delivery-loop` run, not instructions to invoke the delivery loop and then repeat a second standalone review cycle. The standalone review and remediation recipes remain available for completed work that did not enter through the delivery loop or for existing findings that need evaluation.
 
 Every stage presents:
 
@@ -163,6 +165,117 @@ Fields vary by recipe but reuse a small common vocabulary:
 
 Empty optional fields are omitted cleanly from the final prompt. Required fields show inline guidance.
 
+### Recipe contract
+
+Each Prompt Lab recipe is stored as structured data with:
+
+- `id` and display label;
+- `whenToUse`;
+- `requiredFields`;
+- `optionalFields`;
+- exact `template`;
+- `stopCondition`;
+- `expectedOutput`.
+
+The templates below are the approved first-release copy. Bracketed values are populated by the local composer. Optional sentences are omitted when their fields are blank.
+
+#### Start a feature
+
+- Required: `[feature]`, `[repo-area]`, `[source-notes]`
+- Optional: `[additional-context]`
+- Stop condition: task doc written and awaiting explicit approval; no implementation.
+
+```text
+Use $task-doc-intake for [feature] in [repo-area].
+
+Source notes and acceptance criteria:
+[source-notes]
+
+[additional-context]
+
+Inspect the current repository and classify the work first. If it is small or a known fix, return the classification and a short 1–3 step plan, then stop. If it is an improvement or feature-grade, map the notes and codebase evidence into a bounded change inventory, resolve material gaps one question at a time, and create the task doc through $task-doc.
+
+Include scope, decisions, current behavior to preserve, acceptance criteria, exclusions, likely files, risks, and verification. Do not write implementation code. Stop after the task doc is written and ask me to review and explicitly approve it.
+```
+
+#### Deliver an approved task doc
+
+- Required: `[task-doc-path]`
+- Optional: `[standards]`, `[validation]`, `[publish-boundary]`
+- Stop condition: delivery loop reaches its approved endpoint or reports a blocker.
+
+```text
+Use $task-doc-delivery-loop to deliver the explicitly approved task doc at [task-doc-path].
+
+[standards]
+[validation]
+[publish-boundary]
+
+Treat the task doc as the source of truth. Respect its exclusions and preserved behavior. Implement in dependency order, apply the relevant Vascon standards, run the required validation, perform implementation review, evaluate and remediate valid findings, and publish only to the approved boundary. Report calibration, validation evidence, review verdict, finding dispositions, and final branch or PR state.
+```
+
+#### Review implementation with standards
+
+- Required: `[task-doc-path]`, `[review-scope]`
+- Optional: `[standards]`, `[validation-context]`
+- Stop condition: report-only verdict; no edits.
+
+```text
+Use $review-implementation to review [review-scope] against [task-doc-path].
+
+[standards]
+[validation-context]
+
+Read the task doc, repository instructions, diff, relevant code, and tests. Review for spec compliance first and implementation quality second. Apply the listed standards as explicit review criteria. Report only: verdict, critical findings, important findings, minor findings, missing validation, and the smallest credible fix for each finding. Do not edit files.
+```
+
+#### Address review findings
+
+- Required: `[findings-source]`, `[task-doc-path]`
+- Optional: `[validation]`, `[publish-boundary]`
+- Stop condition: every finding is dispositioned and affected checks have run; behavior-changing ambiguity pauses for human input.
+
+```text
+Use $address-review-findings for the findings in [findings-source], evaluated against [task-doc-path].
+
+[validation]
+[publish-boundary]
+
+Verify each finding against the code, tests, task doc, repository instructions, and prior decisions. Classify every item as valid, invalid, unclear, or out of scope. Ask before editing when an unclear item could change behavior or affect other fixes. Fix valid findings, reject invalid findings with evidence, defer out-of-scope items, and rerun affected checks. If the fixes materially change behavior, run one final $review-implementation. Report all finding dispositions and remaining risk.
+```
+
+#### Handle QA findings
+
+- Required: `[qa-source]`, `[feature-area]`
+- Optional: `[authorized-report-fields]`, `[validation]`
+- Stop condition: every QA item has a disposition and focused validation evidence.
+
+```text
+Use $qa-triage-and-fix for the QA findings in [qa-source] covering [feature-area].
+
+[authorized-report-fields]
+[validation]
+
+Handle every issue individually. Reproduce or verify it, classify it, fix confirmed defects, contest unsupported findings with evidence, and escalate product decisions instead of guessing. Change only report fields I have authorized. Run focused validation for meaningful fixes and return the per-issue dispositions, files changed, validation evidence, and remaining blockers. Prepare or refresh a QA handoff only if I explicitly ask for one.
+```
+
+#### Plan a small fix
+
+- Required: `[symptom]`, `[repo-area]`
+- Optional: `[reproduction]`, `[validation]`
+- Stop condition: classification and short plan returned; no implementation.
+
+```text
+Classify the following work before implementation:
+
+Symptom: [symptom]
+Repository area: [repo-area]
+[reproduction]
+[validation]
+
+If this is a known fix with no new contract, permission boundary, migration, persistent state, or cross-module design, skip the task doc. Return the classification, evidence or reproduction, and a focused 1–3 step fix plan, then stop for confirmation. If the work crosses one of those boundaries, explain why it requires $task-doc-intake instead. Do not implement yet.
+```
+
 ### Deferred enhancement
 
 AI prompt refinement is explicitly deferred. If reconsidered, it requires a separate design covering API billing, team access, quotas, rate limits, privacy, retention, and failure behavior.
@@ -173,7 +286,7 @@ Recipes provide a short ordered chain, not a full narrative.
 
 ### Build a feature
 
-`task-doc-intake` → task-doc approval → `task-doc-delivery-loop` → `review-implementation` → `address-review-findings`
+`task-doc-intake` → task-doc approval → one `task-doc-delivery-loop` run, which internally uses `review-implementation` and `address-review-findings` when needed
 
 ### Review completed work
 
@@ -181,7 +294,9 @@ Task doc or source criteria → `review-implementation` + relevant stack standar
 
 ### Handle QA findings
 
-QA report → `qa-triage-and-fix` → focused validation → `prepare-qa-handoff`
+QA report → `qa-triage-and-fix` → focused validation → done report
+
+`prepare-qa-handoff` is optional and appears only when the team explicitly needs a new or refreshed feature handoff after the fixes. It is not the routine final step for fixing QA bugs.
 
 ### Understand existing code
 
@@ -206,36 +321,22 @@ It does not reproduce entire `SKILL.md` files. Each card provides the use case, 
 
 ## 9. Skill Reference
 
-The skill index remains secondary and searchable. It is sourced from structured site data rather than handwritten repeated markup.
+The skill index remains secondary and searchable. The current inventory comes from the registered `SKILL_NAMES` in `bin/link-skills.sh`, enriched with each registered skill's `name` and `description` frontmatter. Deprecated names are excluded.
 
-Suggested groups:
+Exact first-release groups:
 
-- intake and planning;
-- implementation and standards;
-- verification and audits;
-- review and remediation;
-- QA and handoffs;
-- documentation and repository health;
-- artifacts and publishing;
-- skill-system maintenance.
+- **Intake and planning:** `roadmap-todo`, `task-doc`, `task-doc-intake`, `review-task-docs`, `implementation-map`
+- **Delivery and publishing:** `task-doc-delivery-loop`, `isolated-worktree`, `publish-branch`
+- **Implementation standards:** `audit-logging-standard`, `forms-rhf-zod-standard`, `migration-discipline`, `nestjs-api-standard`, `nx-monorepo-standard`, `tanstack-fe-standard`, `tanstack-start-standard`, `ultracite-standard`
+- **Review and remediation:** `review-implementation`, `address-review-findings`, `review-doc-changes`
+- **QA, audits, and handoffs:** `audit-api`, `audit-ui`, `qa-triage-and-fix`, `prepare-frontend-handoff`, `prepare-qa-handoff`
+- **Documentation and repository health:** `repo-docs-audit`, `rewrite-docs-from-code`, `repair-agent-files`
+- **Artifacts:** `html-artifact`, `markdown-artifact`, `image-artifact`, `artifact-workbench`, `repo-design-context`, `publish-artifact`
+- **Skill-system maintenance:** `repo-skill-scan`
 
 Search matches skill name, purpose, and workflow tags. Empty results provide a reset action and direct the developer to situation recipes.
 
-## 10. Friday Workshop
-
-The workshop section gives the CTO or facilitator a repeatable live exercise:
-
-1. Start with a rough feature request.
-2. Run `task-doc-intake`.
-3. Review the resulting scope and task doc.
-4. Explicitly approve it.
-5. Explain how `task-doc-delivery-loop` would implement it under relevant standards.
-6. Run or demonstrate `review-implementation`.
-7. Evaluate and remediate one example finding.
-
-The workshop is a teaching path through the same site, not a separate course.
-
-## 11. Visual Design
+## 10. Visual Design
 
 The approved direction is “Vascon blue field manual.”
 
@@ -252,7 +353,7 @@ The approved direction is “Vascon blue field manual.”
 
 The site must meet accessible contrast requirements. The light sky blue is used as an accent or on sufficiently dark surfaces, not for low-contrast body text.
 
-## 12. Interaction Design
+## 11. Interaction Design
 
 - Sticky desktop navigation and compact mobile menu.
 - Anchor links support direct navigation to major sections.
@@ -264,17 +365,18 @@ The site must meet accessible contrast requirements. The light sky blue is used 
 - Keyboard focus is visible, controls have accessible names, and all interactions work without a pointer.
 - Motion is restrained and respects reduced-motion preferences.
 
-## 13. Technical Shape
+## 12. Technical Shape
 
-- One route built with the Sites starter structure.
+- The site is initialized in the dedicated project directory `sites/vascon-agent-cookbook/`; the skill-pack repository root is never replaced or treated as the site root.
+- One route built with the Sites starter structure inside that directory.
 - Static structured data for stages, principles, prompts, recipes, standards, and skills.
 - Small client-side components only where state is useful: prompt composer, copy feedback, filters, mobile navigation, and disclosure panels.
-- No database, object storage, authentication-owned application state, uploads, connectors, or external API.
+- No database, object storage, app-owned authentication state, uploads, connectors, or external API.
 - The official logo is copied into site assets and not hotlinked.
-- The skill data reflects the current repository at implementation time.
-- Deployment is private by default.
+- The skill index is generated from the registered public inventory in `bin/link-skills.sh` and enriched from skill frontmatter at implementation time.
+- The first deployment is owner-private for review. Team rollout requires an explicit access decision naming the supported workspace, group, or member list; that access is configured and verified only after approval. Public access is never inferred.
 
-## 14. Error and Empty States
+## 13. Error and Empty States
 
 - Missing required Prompt Lab input: inline explanation; copying remains disabled until resolved.
 - Clipboard unavailable: select-all fallback with concise manual instruction.
@@ -282,7 +384,7 @@ The site must meet accessible contrast requirements. The light sky blue is used 
 - Local interaction state never blocks reading the underlying guidance.
 - The site does not depend on the Vascon corporate site being online after the logo is bundled.
 
-## 15. Verification
+## 14. Verification
 
 Before publishing:
 
@@ -297,9 +399,10 @@ Before publishing:
 - color contrast and reduced-motion behavior are acceptable;
 - the official logo renders sharply at supported sizes;
 - no prompt input or interaction data is transmitted;
-- the deployed private URL loads successfully.
+- the owner-private review deployment loads successfully;
+- after an explicit team-access decision, at least one intended non-owner access path is verified without making the site public.
 
-## 16. Success Criteria
+## 15. Success Criteria
 
 The site succeeds when a Vascon developer can:
 
@@ -309,9 +412,9 @@ The site succeeds when a Vascon developer can:
 4. understand the human approval boundary;
 5. find the relevant implementation or review standard without scanning the full catalog;
 6. distinguish report-only review from remediation;
-7. complete the Friday workshop using the same workflow presented for daily work.
+7. customize and copy any Prompt Lab recipe while understanding its stop condition.
 
-## 17. Out of Scope
+## 16. Out of Scope
 
 - AI chat or prompt refinement;
 - OpenAI API usage;
@@ -320,6 +423,7 @@ The site succeeds when a Vascon developer can:
 - private AlphaDigital skills;
 - a third-party skill installation catalog;
 - the old ten-stage lifecycle;
+- a Friday workshop or training-course section;
 - full `SKILL.md` reproduction;
 - publishing or merging from the site;
 - live synchronization with GitHub in the first release.
