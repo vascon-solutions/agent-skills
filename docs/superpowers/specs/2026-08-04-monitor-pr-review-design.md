@@ -38,11 +38,11 @@ The monitor runs inline in the current session. It does not delegate its timer, 
 
 - Make `Monitor PR review` and `Use $monitor-pr-review` sufficient invocations.
 - Resolve the PR from the current branch when no PR identifier is supplied.
-- Process all new human review activity across reviews, top-level PR comments, inline review threads, replies, and requested-change state.
+- Process all new substantive review activity, whether human or automated, across reviews, top-level PR comments, inline review threads, replies, and requested-change state.
 - Keep every code change traceable to its originating review item.
 - Commit and push each coherent remediation batch.
 - Reply in the original inline thread and resolve it when its finding has been dispositioned.
-- Reset the quiet window after every handled human review event or pushed remediation commit.
+- Reset the quiet window after every handled substantive review event or pushed remediation commit.
 - Stop successfully only after the configured quiet window and one race-safe final refresh.
 - Let `task-doc-delivery-loop` invoke the monitor automatically after explicitly publishing or updating a ready PR.
 - Preserve the delivery loop's draft-PR default and bounded draft inspection.
@@ -191,7 +191,7 @@ Classify each event or tightly related cluster as:
 - `duplicate` — already represented by another handled event; or
 - `already resolved` — no current work remains.
 
-Bot/system notices are recorded separately and do not enter the finding workflow or reset the quiet window.
+Automated review findings remain review activity. Non-review bot/system notices such as usage limits and status chatter are recorded separately and do not enter the finding workflow or reset the quiet window.
 
 ### 8.3 Remediation batch
 
@@ -234,17 +234,17 @@ If a reply succeeds but resolution fails, retain the thread as unresolved and re
 
 After the current queue is drained:
 
-1. set `last_activity_at` to the later of the final handled human review event and final pushed remediation commit;
+1. set `last_activity_at` to the later of the final handled substantive review event and final pushed remediation commit;
 2. use the runtime's external-state wait or monitoring primitive when one exists; do not consume assistant turns merely to report unchanged polls;
 3. when no such primitive exists, run a bounded foreground polling process and observe it at intervals no longer than sixty seconds rather than starting a new conversational turn per poll;
 4. fetch a complete snapshot after each wait or watcher event;
-5. process every unseen human review event;
-6. reset the activity checkpoint after every handled human event or pushed remediation commit; and
+5. process every unseen substantive review event;
+6. reset the activity checkpoint after every handled substantive event or pushed remediation commit; and
 7. continue until the configured quiet window has elapsed from the latest checkpoint.
 
-Human review activity resets the window even when it results only in an evidenced rejection, informational disposition, approval, or clarification reply. Bot/system events do not.
+Substantive review activity resets the window even when it comes from an automated reviewer or results only in an evidenced rejection, informational disposition, approval, or clarification reply. Non-review bot/system events do not.
 
-At the quiet-window boundary, perform one final complete refresh. If any unseen human review event appears, process it and reset the window. Successful completion requires the final refresh to confirm:
+At the quiet-window boundary, perform one final complete refresh. If any unseen substantive review event appears, process it and reset the window. Successful completion requires the final refresh to confirm:
 
 - no unseen review activity;
 - no actionable unresolved thread;
@@ -308,7 +308,7 @@ Return one of:
 
 | Result | Meaning |
 | --- | --- |
-| `quiet_complete` | The configured quiet window passed; final refresh found no actionable unresolved review work. This means the observation window was quiet, not that human review is permanently finished. |
+| `quiet_complete` | The configured quiet window passed; final refresh found no actionable unresolved review work. This means the observation window was quiet, not that review is permanently finished. |
 | `waiting_for_reviewer` | A clarification or required reviewer decision remains unresolved after the observation window. |
 | `waiting_for_user` | A material product or architectural decision is required. |
 | `blocked` | Authentication, validation, permissions, unsafe worktree state, or a repeated technical blocker prevents progress. |
@@ -365,7 +365,7 @@ Skill authoring follows RED-GREEN-REFACTOR.
 - A duplicate event is not replied to or resolved twice.
 - A reply-success/resolution-failure sequence retries only resolution.
 - Bot notices do not reset the timer.
-- An approval or informational human review event does reset the timer.
+- An approval, informational review, or substantive automated review event does reset the timer.
 
 ### Failure scenarios
 
@@ -406,7 +406,7 @@ The design is implemented when:
 - thread-aware snapshots are complete, paginated, normalized, and read-only;
 - valid remediation batches are validated, committed, pushed, replied to, and resolved safely;
 - comment-only dispositions never create empty commits;
-- every handled human review event or pushed remediation commit resets the quiet checkpoint;
+- every handled substantive review event or pushed remediation commit resets the quiet checkpoint;
 - ten minutes is the default quiet window and explicit positive overrides are honored;
 - `quiet_complete` is reported as observed quiet, not permanent review completion;
 - the final refresh closes the race at the configured quiet-window boundary;

@@ -1,6 +1,6 @@
 ---
 name: address-review-findings
-description: Use when code review, PR review, requested changes, review comments, or spec-compliance findings need evaluation, code changes, clarification, pushback, tests, or validation.
+description: Use when a current batch of code review, PR review, requested changes, review comments, or spec-compliance findings needs evaluation, code changes, clarification, pushback, tests, or validation.
 ---
 
 # Address Review Findings
@@ -20,6 +20,8 @@ Use address-review-findings with a delegated review to review against <plan-or-s
 
 ## Source Routing
 
+If the request asks to monitor, babysit, keep watching, continue in a loop, or wait until quiet after the current PR findings batch, use `monitor-pr-review` instead. Continuation intent anywhere in the prompt takes precedence over an opening one-shot phrase.
+
 | Findings come from | Route |
 | --- | --- |
 | Implementation review, task doc, plan, spec, roadmap item, PRD, or acceptance criteria | Use this skill. Run `review-implementation` first if findings do not already exist. |
@@ -35,6 +37,7 @@ Do not use when:
 - the user wants QA issue triage - use `qa-triage-and-fix`
 - the user wants the task document reviewed before implementation - use `review-task-docs`
 - the user wants recent documentation changes reviewed - use `review-doc-changes`
+- the user wants ongoing PR review monitoring or repeated remediation until quiet - use `monitor-pr-review`
 
 ## Workflow
 

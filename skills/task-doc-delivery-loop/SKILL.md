@@ -65,7 +65,7 @@ Local skills are the primary routes. External skills are optional enhancers; the
 | Implementation review                  | `review-implementation`                                                                             |
 | Finding remediation                    | `address-review-findings`                                                                            |
 | Commit, push, PR                       | `publish-branch`; a draft PR is the default endpoint, ready-for-review is explicit                  |
-| PR comments                            | GitHub review-comment tooling, then `gh`/platform fallback                                           |
+| PR comments                            | `monitor-pr-review` for an explicitly ready PR; bounded GitHub review-comment tooling for a draft PR |
 | Final claim                            | Confirm with command evidence before claiming done (`verification-before-completion` if installed)  |
 
 Escalate to explicit dependent-phase sequencing (or `executing-plans` if installed) only for migrations, auth/security/permission work, broad refactors, unclear ordering, or delivery sets with several dependent phases.
@@ -94,17 +94,17 @@ Escalate to explicit dependent-phase sequencing (or `executing-plans` if install
    Use `publish-branch` to reach the calibrated endpoint — by default a pushed branch with a draft PR. Stage only intended files, respect hooks, and never open or update a PR with known failing checks; remediate or report the blocker. Mark the PR ready for review only when the user asked and validation and review are accounted for. Stop at a narrower local endpoint (no PR, no push, or commit-only) when the user explicitly requested it — or automatically, with the reason reported, when the repository has no GitHub remote or usable PR tooling (see Purpose).
 
 8. **PR Review**
-   Inspect checks, reviews, comments, and unresolved threads. Treat bot notices and usage limits as external state. Pending required checks/reviewer decisions keep the ledger open; after the configured wait, report and pause.
+   For an explicitly ready PR, invoke `monitor-pr-review` inline and let it own review-event monitoring through its configured quiet window. For a draft PR, keep the existing bounded inspection of checks, reviews, comments, and unresolved threads; do not start the monitor automatically. Treat non-review bot notices and usage limits as external state. Pending required checks/reviewer decisions keep the ledger open; after the configured wait, report and pause.
 
 9. **PR Remediation**
-   Evaluate actionable comments, fix valid findings, push, rerun focused validation, and inspect updated PR state. Use one final review if fixes materially change behavior.
+   For an explicitly ready PR, accept the `monitor-pr-review` ledger and terminal result without starting a duplicate PR remediation cycle. For a draft PR, evaluate actionable comments, fix valid findings, push, rerun focused validation, and inspect updated PR state within the normal one-cycle bound. A user may invoke `monitor-pr-review` explicitly for a draft PR outside automatic delivery delegation. Use one final report-only review if fixes materially change behavior.
 
 10. **Closeout**
-    Verify git status, validation, task checkpoints, and applicable commit, upstream, PR, check, review, comment, and thread state. Close only when every task is accounted for, findings are dispositioned, required checks/reviewer decisions are settled, and applicable PR state is known. A spent budget or wait window is not completion.
+    Verify git status, validation, task checkpoints, and applicable commit, upstream, PR, check, review, comment, and thread state. After monitoring, handle `quiet_complete` by continuing normal gates; report and pause on `waiting_for_reviewer`; ask and pause on `waiting_for_user`; record `blocked` under the runtime blocking policy; and verify closed/merged state before dispositioning `externally_terminated`. Close only when every task is accounted for, findings are dispositioned, required checks/reviewer decisions are settled, and applicable PR state is known. A spent budget or quiet window is not completion.
 
 ## Loop Bounds
 
-Except in review mode `none`, default to one group review, one remediation pass, and one optional final review after material fixes. For PR modes, allow one PR-comment remediation cycle and one optional final review after material PR fixes.
+Except in review mode `none`, default to one group review, one remediation pass, and one optional final review after material fixes. Draft PR delivery allows one PR-comment remediation cycle and one optional final review after material PR fixes. For an explicitly ready PR, the configured `monitor-pr-review` loop replaces that one-cycle bound; its repeated-blocker safeguard still applies.
 
 Continue only for new critical/blocking findings or explicit user instruction. Record a repeated blocker instead of spinning.
 
@@ -138,4 +138,4 @@ smallest credible fix.
 
 ## Final Report
 
-Report ordered task-doc paths and checkpoints, calibration, branch and commits, implementation summary, review verdicts, findings fixed/rejected/deferred/blocked, validation run/skipped, excluded dirty files, notable time sinks, remaining risks, and PR URL/check/comment state when applicable.
+Report ordered task-doc paths and checkpoints, calibration, branch and commits, implementation summary, review verdicts, findings fixed/rejected/deferred/blocked, validation run/skipped, excluded dirty files, notable time sinks, remaining risks, and PR URL/check/comment state when applicable. When `monitor-pr-review` ran, include its configured quiet duration, last activity, terminal result, reply/resolution state, and remaining reviewer or user dependency.

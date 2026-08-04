@@ -31,7 +31,7 @@ Run the monitor inline. Do not delegate its timer, ledger, edits, GitHub mutatio
 2. Verify `gh auth status`, repository identity, PR write access, current branch/upstream, and PR head SHA.
 3. Inspect `git status --short`. Preserve unrelated files and stop when intended changes cannot be staged separately.
 4. Require an open PR and a local branch matching its head branch. Closed or merged PRs are terminal.
-5. Accept an open draft only when this skill was invoked explicitly. `task-doc-delivery-loop` delegates automatically only for an explicitly ready PR.
+5. When explicitly invoked, accept an open draft PR. `task-doc-delivery-loop` delegates automatically only for an explicitly ready PR.
 6. Parse an explicit positive quiet duration; otherwise set `quiet_window_minutes: 10`. Ask when duration wording is ambiguous.
 
 Direct invocation authorizes a fresh full quiet window from invocation time even when the current head commit is older.
