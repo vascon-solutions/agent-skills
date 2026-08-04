@@ -119,6 +119,28 @@ test("ongoing PR review monitoring is distinct from one-shot remediation", () =>
   assert.match(loop, /draft PR[\s\S]*explicit/i);
 });
 
+test("PR review monitoring preserves lifecycle safety contracts", () => {
+  const monitor = read("skills", "monitor-pr-review", "SKILL.md");
+  const loop = read("skills", "task-doc-delivery-loop", "SKILL.md");
+  const publishSection = monitor.split("## Publish, Reply, Resolve")[1].split("## Quiet Window")[0];
+
+  assert.match(monitor, /current session[\s\S]*Do not delegate/i);
+  assert.match(monitor, /handled substantive review event[\s\S]*pushed remediation commit/i);
+  assert.match(monitor, /final complete snapshot[\s\S]*resets the window/i);
+  assert.match(publishSection, /reply succeeds[\s\S]*resolve/i);
+  assert.match(publishSection, /reply_sent: true[\s\S]*retry only resolution[\s\S]*never duplicate/i);
+  assert.match(monitor, /quiet_complete/);
+  assert.match(monitor, /waiting_for_reviewer/);
+  assert.match(monitor, /waiting_for_user/);
+  assert.match(monitor, /blocked/);
+  assert.match(monitor, /externally_terminated/);
+  assert.match(loop, /quiet_complete[\s\S]*waiting_for_reviewer[\s\S]*waiting_for_user[\s\S]*blocked[\s\S]*externally_terminated/);
+  assert.match(monitor, /pr_url:/);
+  assert.match(monitor, /pr_is_draft:/);
+  assert.match(monitor, /cycle_count:/);
+  assert.match(monitor, /monitor start time[\s\S]*final activity checkpoint/i);
+});
+
 test("the pack authoring checklist invokes the current checkout linker", () => {
   const readme = read("README.md");
   const checklist = readme.split("## How To Add a Skill")[1].split("## Contributing")[0];

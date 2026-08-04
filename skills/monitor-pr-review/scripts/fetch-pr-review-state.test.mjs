@@ -2,10 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  GH_MAX_BUFFER_BYTES,
   fetchPrReviewState,
   parseCliArgs,
   parsePullRequestUrl,
   redactSensitive,
+  runCli,
+  runGh,
 } from "./fetch-pr-review-state.mjs";
 
 const page = (nodes, hasNextPage = false, endCursor = null) => ({
@@ -270,6 +273,63 @@ test("fetchPrReviewState surfaces GraphQL errors without returning partial state
   );
 });
 
+test("fetchPrReviewState retrieves more than 100 replies from one review thread", async () => {
+  const firstHundred = Array.from({ length: 100 }, (_, index) => ({
+    id: `COMMENT_${String(index + 1).padStart(3, "0")}`,
+    databaseId: index + 1,
+    body: `Comment ${index + 1}`,
+    url: `https://example.test/comment/${index + 1}`,
+    createdAt: `2026-08-04T12:${String(Math.floor(index / 60)).padStart(2, "0")}:${String(index % 60).padStart(2, "0")}Z`,
+    updatedAt: null,
+    author: author("reviewer"),
+  }));
+  const client = createClient({
+    "PullRequestMeta::": {
+      data: { repository: { pullRequest: { number: 1, url: "u", title: "t", state: "OPEN", isDraft: false, headRefName: "h", headRefOid: "o", reviewDecision: null } } },
+    },
+    "PullRequestComments::": {
+      data: { repository: { pullRequest: { comments: page([]) } } },
+    },
+    "PullRequestReviews::": {
+      data: { repository: { pullRequest: { reviews: page([]) } } },
+    },
+    "PullRequestThreads::": {
+      data: { repository: { pullRequest: { reviewThreads: page([{
+        id: "THREAD_101",
+        isResolved: false,
+        isOutdated: false,
+        path: "src/a.js",
+        line: 1,
+        startLine: null,
+        diffSide: "RIGHT",
+        resolvedBy: null,
+        comments: page(firstHundred, true, "reply-101"),
+      }]) } } },
+    },
+    "ReviewThreadComments:THREAD_101:reply-101": {
+      data: { node: { comments: page([{
+        id: "COMMENT_101",
+        databaseId: 101,
+        body: "Comment 101",
+        url: "https://example.test/comment/101",
+        createdAt: "2026-08-04T12:01:41Z",
+        updatedAt: null,
+        author: author("reviewer"),
+      }]) } },
+    },
+  });
+
+  const result = await fetchPrReviewState({
+    client,
+    repository: "owner/repo",
+    prNumber: 1,
+    capturedAt: "2026-08-04T13:00:00Z",
+  });
+
+  assert.equal(result.reviewThreads[0].comments.length, 101);
+  assert.equal(result.reviewThreads[0].comments.at(-1).id, "COMMENT_101");
+});
+
 test("CLI parsing accepts PR URLs and explicit overrides", () => {
   assert.deepEqual(parsePullRequestUrl("https://github.com/vascon-solutions/agent-skills/pull/5"), {
     repository: "vascon-solutions/agent-skills",
@@ -287,4 +347,95 @@ test("redactSensitive removes GitHub and bearer credentials", () => {
   const redacted = redactSensitive("token ghp_abcdefghijklmnopqrstuvwxyz0123456789 bearer secret-value");
   assert.doesNotMatch(redacted, /ghp_|secret-value/);
   assert.match(redacted, /\[REDACTED\]/);
+});
+
+test("runGh reserves enough output capacity for a full GraphQL page", () => {
+  const output = "x".repeat(2 * 1024 * 1024);
+  let spawnOptions;
+  const actual = runGh(["api", "graphql"], {
+    spawn: (_command, _args, options) => {
+      spawnOptions = options;
+      return { status: 0, stdout: output, stderr: "" };
+    },
+  });
+
+  assert.equal(actual.length, output.length);
+  assert.equal(spawnOptions.maxBuffer, GH_MAX_BUFFER_BYTES);
+  assert.ok(GH_MAX_BUFFER_BYTES >= 16 * 1024 * 1024);
+});
+
+test("runGh redacts credentials from subprocess failures", () => {
+  assert.throws(
+    () => runGh(["api", "graphql"], {
+      spawn: () => ({ status: 1, stdout: "", stderr: "denied ghp_abcdefghijklmnopqrstuvwxyz0123456789" }),
+    }),
+    (error) => !error.message.includes("ghp_") && error.message.includes("[REDACTED]"),
+  );
+});
+
+const emptyCliGraphqlPayload = (query) => {
+  const operation = operationName(query);
+  if (operation === "PullRequestMeta") {
+    return { data: { repository: { pullRequest: { number: 5, url: "https://github.com/owner/repo/pull/5", title: "PR", state: "OPEN", isDraft: true, headRefName: "branch", headRefOid: "abc", reviewDecision: null } } } };
+  }
+  const key = { PullRequestComments: "comments", PullRequestReviews: "reviews", PullRequestThreads: "reviewThreads" }[operation];
+  return { data: { repository: { pullRequest: { [key]: page([]) } } } };
+};
+
+test("runCli authenticates and writes normalized JSON only after a complete snapshot", async () => {
+  let stdout = "";
+  const calls = [];
+  const runGhImpl = (args, { input } = {}) => {
+    calls.push(args);
+    if (args[0] === "auth") return "";
+    if (args[0] === "api") return JSON.stringify(emptyCliGraphqlPayload(input));
+    throw new Error(`Unexpected command: ${args.join(" ")}`);
+  };
+
+  await runCli(["--repo", "owner/repo", "--pr", "5", "--captured-at", "2026-08-04T12:00:00Z"], {
+    runGhImpl,
+    stdout: { write: (value) => { stdout += value; } },
+  });
+
+  const parsed = JSON.parse(stdout);
+  assert.equal(parsed.pullRequest.number, 5);
+  assert.equal(parsed.capturedAt, "2026-08-04T12:00:00.000Z");
+  assert.deepEqual(calls[0], ["auth", "status"]);
+});
+
+test("runCli fails before output on authentication, permission, and malformed target data", async () => {
+  let stdout = "";
+  const output = { write: (value) => { stdout += value; } };
+
+  await assert.rejects(
+    runCli(["--repo", "owner/repo", "--pr", "5"], {
+      runGhImpl: () => { throw new Error("authentication failed"); },
+      stdout: output,
+    }),
+    /authentication failed/,
+  );
+  assert.equal(stdout, "");
+
+  let calls = 0;
+  await assert.rejects(
+    runCli(["--pr", "5"], {
+      runGhImpl: () => (++calls === 1 ? "" : "not-json"),
+      stdout: output,
+    }),
+    /gh repo view returned malformed JSON/,
+  );
+  assert.equal(stdout, "");
+
+  await assert.rejects(
+    runCli(["--repo", "owner/repo", "--pr", "5"], {
+      runGhImpl: (args, { input } = {}) => {
+        if (args[0] === "auth") return "";
+        if (operationName(input) === "PullRequestMeta") return JSON.stringify({ errors: [{ message: "Resource not accessible" }] });
+        throw new Error("unexpected query");
+      },
+      stdout: output,
+    }),
+    /Resource not accessible/,
+  );
+  assert.equal(stdout, "");
 });

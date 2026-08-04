@@ -52,14 +52,17 @@ Keep this compact state in goal/ledger tooling when available, otherwise in sess
 pr_review_monitor:
   repository: owner/repo
   pr_number: 123
+  pr_url: https://github.com/owner/repo/pull/123
   head_sha: abc123
   seen_event_ids: []
   pending_event_ids: []
   last_activity_at: 2026-08-04T12:00:00Z
   quiet_window_minutes: 10
   last_push_sha: abc123
+  pr_is_draft: false
   validation_state: passing
   unresolved_actionable_threads: []
+  cycle_count: 0
   repeated_blocker_count: 0
 ```
 
@@ -150,4 +153,4 @@ If a ready PR becomes draft during monitoring, record and report it but keep the
 
 ## Final Report
 
-Report PR URL, branch and head SHA, configured quiet duration, last activity and observed quiet duration, findings by disposition, commits pushed, replies and resolutions, validation evidence, CI/review/approval state, preserved unrelated files, and remaining blockers or risks.
+Report PR URL, branch and head SHA, monitor start time, final activity checkpoint, configured quiet duration, observed quiet duration, findings by disposition, commits pushed, replies and resolutions, validation evidence, CI/review/approval state, preserved unrelated files, and remaining blockers or risks.

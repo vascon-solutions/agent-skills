@@ -302,8 +302,10 @@ export const redactSensitive = (value) => String(value ?? "")
   .replace(/\b(?:gh[pousr]_|github_pat_)[A-Za-z0-9_]+\b/g, "[REDACTED]")
   .replace(/\bBearer\s+\S+/gi, "Bearer [REDACTED]");
 
-const runGh = (args, { input } = {}) => {
-  const result = spawnSync("gh", args, { encoding: "utf8", input });
+export const GH_MAX_BUFFER_BYTES = 16 * 1024 * 1024;
+
+export const runGh = (args, { input, spawn = spawnSync } = {}) => {
+  const result = spawn("gh", args, { encoding: "utf8", input, maxBuffer: GH_MAX_BUFFER_BYTES });
   if (result.error) throw new Error(`Unable to run gh: ${result.error.message}`);
   if (result.status !== 0) {
     const detail = redactSensitive(result.stderr || result.stdout).trim();
@@ -312,14 +314,14 @@ const runGh = (args, { input } = {}) => {
   return result.stdout;
 };
 
-const createGhClient = () => ({
+export const createGhClient = (runGhImpl = runGh) => ({
   async graphql(query, variables) {
     const args = ["api", "graphql", "-F", "query=@-"];
     for (const [key, value] of Object.entries(variables)) {
       if (value === null || value === undefined) continue;
       args.push("-F", `${key}=${value}`);
     }
-    const output = runGh(args, { input: query });
+    const output = runGhImpl(args, { input: query });
     try {
       return JSON.parse(output);
     } catch (error) {
@@ -328,7 +330,15 @@ const createGhClient = () => ({
   },
 });
 
-const resolveCliTarget = (options) => {
+const parseGhJson = (output, command) => {
+  try {
+    return JSON.parse(output);
+  } catch (error) {
+    throw new Error(`${command} returned malformed JSON: ${error.message}`);
+  }
+};
+
+export const resolveCliTarget = (options, runGhImpl = runGh) => {
   const fromUrl = parsePullRequestUrl(options.pr);
   if (fromUrl && options.repository && options.repository !== fromUrl.repository) {
     throw new Error(`--repo '${options.repository}' conflicts with PR URL repository '${fromUrl.repository}'`);
@@ -336,7 +346,7 @@ const resolveCliTarget = (options) => {
 
   let repository = fromUrl?.repository ?? options.repository;
   if (!repository) {
-    const repo = JSON.parse(runGh(["repo", "view", "--json", "nameWithOwner"]));
+    const repo = parseGhJson(runGhImpl(["repo", "view", "--json", "nameWithOwner"]), "gh repo view");
     repository = repo.nameWithOwner;
   }
   splitRepository(repository);
@@ -347,7 +357,7 @@ const resolveCliTarget = (options) => {
     prNumber = Number(options.pr);
   }
   if (!prNumber) {
-    const pr = JSON.parse(runGh(["pr", "view", "--json", "number"]));
+    const pr = parseGhJson(runGhImpl(["pr", "view", "--json", "number"]), "gh pr view");
     prNumber = Number(pr.number);
   }
   if (!Number.isInteger(prNumber) || prNumber <= 0) throw new Error("Unable to resolve a positive PR number");
@@ -357,25 +367,25 @@ const resolveCliTarget = (options) => {
 
 const usage = `Usage: node fetch-pr-review-state.mjs [--repo OWNER/REPO] [--pr NUMBER|URL] [--captured-at ISO]`;
 
-const main = async () => {
-  const options = parseCliArgs(process.argv.slice(2));
+export const runCli = async (argv, { runGhImpl = runGh, stdout = process.stdout } = {}) => {
+  const options = parseCliArgs(argv);
   if (options.help) {
-    process.stdout.write(`${usage}\n`);
+    stdout.write(`${usage}\n`);
     return;
   }
-  runGh(["auth", "status"]);
-  const target = resolveCliTarget(options);
+  runGhImpl(["auth", "status"]);
+  const target = resolveCliTarget(options, runGhImpl);
   const result = await fetchPrReviewState({
-    client: createGhClient(),
+    client: createGhClient(runGhImpl),
     ...target,
     capturedAt: options.capturedAt,
   });
-  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 };
 
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
-  main().catch((error) => {
+  runCli(process.argv.slice(2)).catch((error) => {
     process.stderr.write(`fetch-pr-review-state: ${redactSensitive(error.message)}\n`);
     process.exitCode = 1;
   });
