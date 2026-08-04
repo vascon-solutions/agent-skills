@@ -25,6 +25,7 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
     ├── review-task-docs/
     ├── review-implementation/
     ├── address-review-findings/
+    ├── monitor-pr-review/
     ├── implementation-map/
     ├── repo-skill-scan/
     ├── roadmap-todo/
@@ -65,6 +66,7 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 | `review-task-docs`          | Independently review task docs for executability, scope control, and whether they should be split                                                                                                                                                                                    |
 | `review-implementation`     | Report-only review of finished code against a task doc, plan, spec, roadmap item, PRD, or acceptance criteria                                                                                                                                                                        |
 | `address-review-findings`   | Evaluate and remediate code, PR, or spec-compliance review findings; push back on invalid feedback and validate fixes                                                                                                                                                                |
+| `monitor-pr-review`         | Monitor an open GitHub PR, repeatedly address review activity, publish scoped remediation batches, and stop after a configurable quiet window                                                                                                                                         |
 | `implementation-map`        | Produce a code-grounded Markdown map of an existing feature or module — entry points, runtime flow, ownership boundaries, tests, refactoring candidates, and HTML/image artifact decisions. Rejects work too small to justify a map                                                  |
 | `repo-skill-scan`           | Scan a repo for repeated patterns; recommend skills, commands, or no action, then scaffold approved candidates into correctly structured files with link-script and README wiring                                                                                                     |
 | `roadmap-todo`              | Create and maintain durable roadmap or todo files for feature-grade work across repos                                                                                                                                                                                                |
@@ -176,6 +178,10 @@ The link script is idempotent — it skips symlinks that already point to the co
 ### Approved task-doc delivery
 
 1. `task-doc-delivery-loop` — run one approved task doc or a coherent ordered set in the current repository through calibrated implementation, deduplicated validation, review, a draft PR by default, and feedback closeout; marking the PR ready for review and merge are explicit
+
+### Ongoing PR review feedback
+
+1. `monitor-pr-review` — invoke explicitly with monitor, babysit, keep-watching, loop, or until-quiet wording for any open PR, including a draft. `task-doc-delivery-loop` delegates automatically only after an explicitly ready PR is published or updated.
 
 ### Auditing a running UI feature
 

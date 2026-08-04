@@ -32,6 +32,7 @@ review-doc-changes
 review-task-docs
 review-implementation
 address-review-findings
+monitor-pr-review
 implementation-map
 repo-skill-scan
 roadmap-todo
