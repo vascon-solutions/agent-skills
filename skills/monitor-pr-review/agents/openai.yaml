@@ -1,0 +1,4 @@
+interface:
+  display_name: "Monitor PR Review"
+  short_description: "Handle PR feedback until the quiet window"
+  default_prompt: "Use $monitor-pr-review to monitor the current branch GitHub PR, address new review findings, and stop after the default ten-minute quiet window unless I specify another duration."
