@@ -105,6 +105,20 @@ test("delivery loop documents its GitHub scope with a local fallback", () => {
   assert.doesNotMatch(metadata, /ready PR/);
 });
 
+test("ongoing PR review monitoring is distinct from one-shot remediation", () => {
+  const monitor = read("skills", "monitor-pr-review", "SKILL.md");
+  const address = read("skills", "address-review-findings", "SKILL.md");
+  const loop = read("skills", "task-doc-delivery-loop", "SKILL.md");
+
+  assert.match(monitor, /^description: Use when .*monitoring.*babysitting.*keep watching.*quiet/m);
+  assert.match(monitor, /explicitly invoked.*draft PR/i);
+  assert.match(monitor, /quiet_complete[\s\S]*not.*review.*finished/i);
+  assert.match(address, /^description: Use when a current batch/m);
+  assert.match(address, /monitor-pr-review/);
+  assert.match(loop, /ready PR[\s\S]*monitor-pr-review/i);
+  assert.match(loop, /draft PR[\s\S]*explicit/i);
+});
+
 test("the pack authoring checklist invokes the current checkout linker", () => {
   const readme = read("README.md");
   const checklist = readme.split("## How To Add a Skill")[1].split("## Contributing")[0];

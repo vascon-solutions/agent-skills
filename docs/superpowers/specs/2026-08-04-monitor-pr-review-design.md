@@ -2,8 +2,8 @@
 
 **Status:** Approved design
 **Date:** 2026-08-04
-**Audience:** Codex skill maintainers and users running GitHub PR delivery workflows
-**Primary outcome:** Let a user explicitly start one current-session loop that addresses GitHub PR review activity until the PR has been quiet for ten minutes.
+**Audience:** Coding-agent skill maintainers and users running GitHub PR delivery workflows
+**Primary outcome:** Let a user explicitly start one current-session loop that addresses GitHub PR review activity until the PR has been quiet for a configured window, ten minutes by default.
 
 ## 1. Context
 
@@ -16,7 +16,7 @@ The repeated operational need is broader:
 3. validate, commit, and push each coherent remediation batch;
 4. reply to and resolve addressed review threads;
 5. keep watching for additional review activity; and
-6. stop after ten genuinely quiet minutes.
+6. stop after the configured quiet window, ten minutes by default.
 
 Adding this behavior to `address-review-findings` would mix one-batch remediation with GitHub-specific publishing, thread mutation, time-based monitoring, and lifecycle state. The behavior therefore belongs in a separate orchestration skill.
 
@@ -43,14 +43,15 @@ The monitor runs inline in the current session. It does not delegate its timer, 
 - Commit and push each coherent remediation batch.
 - Reply in the original inline thread and resolve it when its finding has been dispositioned.
 - Reset the quiet window after every handled human review event or pushed remediation commit.
-- Stop successfully only after ten quiet minutes and one race-safe final refresh.
+- Stop successfully only after the configured quiet window and one race-safe final refresh.
 - Let `task-doc-delivery-loop` invoke the monitor automatically after explicitly publishing or updating a ready PR.
 - Preserve the delivery loop's draft-PR default and bounded draft inspection.
+- Allow a directly and explicitly invoked monitor to run against an open draft PR.
 
 ## 4. Non-Goals
 
 - Do not change one-shot `address-review-findings` requests into monitoring requests.
-- Do not monitor draft PRs automatically.
+- Do not monitor draft PRs automatically from `task-doc-delivery-loop`.
 - Do not merge, close, reopen, force-push, rebase, or rewrite PR history.
 - Do not take ownership of CI remediation; observe and report remote checks while leaving the delivery gate to `task-doc-delivery-loop` or a dedicated CI workflow.
 - Do not create a daemon, background service, scheduled automation, or durable repository state file.
@@ -73,7 +74,7 @@ Use $monitor-pr-review.
 Its metadata description should describe the triggering situation without summarizing the workflow. A suitable shape is:
 
 ```yaml
-description: Use when an open GitHub pull request needs continued attention after review activity or pushed remediation changes.
+description: Use when an open GitHub pull request needs ongoing monitoring or babysitting for new review comments, including requests to keep watching, loop, or wait until quiet.
 ```
 
 ### One-shot triggers
@@ -87,11 +88,13 @@ Fix the current PR review comments.
 
 Monitoring is opt-in. The presence of a PR alone must not silently broaden a one-shot remediation request.
 
+Continuation intent takes precedence anywhere in the prompt. A request that begins with one-shot wording but later says `monitor`, `babysit`, `keep watching`, `continue in a loop`, `until quiet`, or `stop when quiet` routes to `monitor-pr-review`. `address-review-findings` should describe itself as handling a current findings batch and route ongoing PR monitoring to the new skill.
+
 ### Delivery-loop routing
 
 `task-doc-delivery-loop` invokes `monitor-pr-review` only when the approved publish boundary is a ready PR. This includes creating a ready PR or explicitly transitioning/updating an existing PR as ready during that delivery.
 
-Draft PR delivery retains the existing bounded inspection and does not start the ten-minute monitor. The delivery loop must not repeat its own PR-remediation steps after delegating to the monitor.
+Draft PR delivery retains the existing bounded inspection and does not start the monitor automatically. A user may still invoke `monitor-pr-review` explicitly for that draft. The delivery loop must not repeat its own PR-remediation steps after delegating to the monitor.
 
 ## 6. Components
 
@@ -109,7 +112,7 @@ Define:
 
 ### `skills/monitor-pr-review/agents/openai.yaml`
 
-Expose a concise display name, description, and default prompt. The default prompt should explicitly request monitoring of the current branch PR through ten quiet minutes.
+Expose a concise display name, description, and default prompt. The default prompt should explicitly request monitoring of the current branch PR through the default ten-minute quiet window while allowing a user-specified override.
 
 ### Read-only review-state helper
 
@@ -150,7 +153,9 @@ pr_review_monitor:
   seen_event_ids: []
   pending_event_ids: []
   last_activity_at: 2026-08-04T12:00:00Z
+  quiet_window_minutes: 10
   last_push_sha: abc123
+  pr_is_draft: false
   validation_state: passing
   unresolved_actionable_threads: []
   cycle_count: 0
@@ -168,8 +173,9 @@ Event IDs, not timestamps alone, determine whether an event is new. Timestamps d
 1. Resolve an explicitly supplied PR URL or number; otherwise resolve the PR for the current branch.
 2. Verify GitHub authentication, repository identity, PR write access, branch/upstream state, and the current PR head SHA.
 3. Inspect the worktree for unrelated changes and determine whether remediation files can be staged safely.
-4. Reject draft, closed, or merged PRs as non-monitorable states unless the PR changed state after monitoring began, in which case return an external-state result.
-5. Set the initial activity checkpoint to invocation time. An explicit invocation always receives a fresh ten-minute observation window, even when the latest PR commit is older.
+4. Reject closed or merged PRs as non-monitorable states. Accept an open draft only for direct explicit invocation; automatic delivery-loop delegation remains ready-only.
+5. Resolve `quiet_window_minutes` from explicit user wording, defaulting to ten, and reject non-positive or unreasonably ambiguous values.
+6. Set the initial activity checkpoint to invocation time. An explicit invocation always receives a fresh configured observation window, even when the latest PR commit is older.
 
 ### 8.2 Snapshot and classification
 
@@ -229,15 +235,16 @@ If a reply succeeds but resolution fails, retain the thread as unresolved and re
 After the current queue is drained:
 
 1. set `last_activity_at` to the later of the final handled human review event and final pushed remediation commit;
-2. wait using the runtime's monitoring/wait mechanism, or poll at approximately one-minute intervals with no blocking wait longer than sixty seconds;
-3. fetch a complete snapshot after each wait;
-4. process every unseen human review event;
-5. reset the activity checkpoint after every handled human event or pushed remediation commit; and
-6. continue until ten minutes have elapsed from the latest checkpoint.
+2. use the runtime's external-state wait or monitoring primitive when one exists; do not consume assistant turns merely to report unchanged polls;
+3. when no such primitive exists, run a bounded foreground polling process and observe it at intervals no longer than sixty seconds rather than starting a new conversational turn per poll;
+4. fetch a complete snapshot after each wait or watcher event;
+5. process every unseen human review event;
+6. reset the activity checkpoint after every handled human event or pushed remediation commit; and
+7. continue until the configured quiet window has elapsed from the latest checkpoint.
 
 Human review activity resets the window even when it results only in an evidenced rejection, informational disposition, approval, or clarification reply. Bot/system events do not.
 
-At the ten-minute boundary, perform one final complete refresh. If any unseen human review event appears, process it and reset the window. Successful completion requires the final refresh to confirm:
+At the quiet-window boundary, perform one final complete refresh. If any unseen human review event appears, process it and reset the window. Successful completion requires the final refresh to confirm:
 
 - no unseen review activity;
 - no actionable unresolved thread;
@@ -271,7 +278,7 @@ Stop with a concrete blocker when:
 - the PR cannot be resolved unambiguously;
 - unrelated dirty changes cannot be separated safely;
 - the current branch does not match the PR head branch;
-- the PR is already draft, closed, or merged at preflight; or
+- the PR is already closed or merged at preflight; or
 - required repository instructions prohibit the intended action.
 
 ### Pause or continue selectively
@@ -283,11 +290,11 @@ Stop with a concrete blocker when:
 
 ### Repeated blockers
 
-If the same technical finding returns after three ineffective remediation cycles with no credible progress, stop and report the repeated blocker. Ten quiet minutes is the normal stop rule, but it is not permission to spin indefinitely on an unchanged failure.
+If the same technical finding returns after three ineffective remediation cycles with no credible progress, stop and report the repeated blocker. The configured quiet window is the normal stop rule, but it is not permission to spin indefinitely on an unchanged failure.
 
 ### External PR state changes
 
-If the PR becomes draft, closed, or merged while monitoring, stop immediately and report the new state. Do not attempt to reverse the external transition.
+If the PR becomes draft while monitoring, record and report the transition but continue the explicitly active monitor. If it becomes closed or merged, stop immediately and report the new state. Do not attempt to reverse an external transition.
 
 ### CI and approval state
 
@@ -301,11 +308,11 @@ Return one of:
 
 | Result | Meaning |
 | --- | --- |
-| `quiet_complete` | Ten quiet minutes passed; final refresh found no actionable unresolved review work. |
+| `quiet_complete` | The configured quiet window passed; final refresh found no actionable unresolved review work. This means the observation window was quiet, not that human review is permanently finished. |
 | `waiting_for_reviewer` | A clarification or required reviewer decision remains unresolved after the observation window. |
 | `waiting_for_user` | A material product or architectural decision is required. |
 | `blocked` | Authentication, validation, permissions, unsafe worktree state, or a repeated technical blocker prevents progress. |
-| `externally_terminated` | The PR became draft, closed, or merged while monitoring. |
+| `externally_terminated` | The PR became closed or merged while monitoring. |
 
 The final report includes:
 
@@ -328,9 +335,14 @@ When `task-doc-delivery-loop` publishes to an explicitly ready PR boundary:
 3. invoke `monitor-pr-review` inline;
 4. accept the monitor's review-event ledger and terminal result;
 5. retain ownership of CI and required-approval gates; and
-6. close the delivery goal only when the monitor is `quiet_complete` and every other delivery gate is satisfied.
+6. handle the monitor result explicitly:
+   - `quiet_complete` — continue closeout, but close only when every other delivery gate is satisfied;
+   - `waiting_for_reviewer` — keep the ledger open, report the unresolved reviewer dependency, and pause until the user resumes or a supported wake mechanism fires;
+   - `waiting_for_user` — ask for the required decision and pause without claiming completion;
+   - `blocked` — record the concrete blocker and pause or mark blocked only under the runtime's blocking policy; and
+   - `externally_terminated` — verify whether the PR was closed or merged, report the state, and let the parent determine cancellation or completed-delivery closeout from evidence.
 
-The monitor's explicit ten-minute review loop replaces the delivery loop's default one-cycle PR-comment bound for that ready PR. The three-cycle repeated-blocker safeguard still applies. Draft PR delivery keeps the existing one-cycle bound and bounded status inspection.
+The monitor's configured review loop replaces the delivery loop's default one-cycle PR-comment bound for that ready PR. The three-cycle repeated-blocker safeguard still applies. Draft PR delivery keeps the existing one-cycle bound and bounded status inspection unless the user separately invokes the monitor.
 
 ## 13. Verification Strategy
 
@@ -340,7 +352,9 @@ Skill authoring follows RED-GREEN-REFACTOR.
 
 - Baseline and forward-test `Address review findings on the PR`; it must remain one-shot.
 - Test `Monitor PR review`, `Babysit the PR review`, and explicit `$monitor-pr-review`; they must select the monitor.
+- Use the original repeated prompt as a routing fixture: `Address review findings on the PR review comments, when done commit accordingly and then keep looking out for PR review comments and stop when there is none within 10mins of the last commit, continue this in a loop according for every review findings and resolutions`; continuation wording must select the monitor.
 - Test ready and draft delivery-loop prompts; only the explicitly ready route delegates to the monitor.
+- Test direct explicit invocation against a draft PR; it must monitor normally.
 
 ### State-machine scenarios
 
@@ -358,7 +372,7 @@ Skill authoring follows RED-GREEN-REFACTOR.
 - Authentication loss, missing PR scope, branch mismatch, mixed dirty scope, validation failure, and repeated feedback return the correct non-success result.
 - Product ambiguity pauses for the user and leaves the thread unresolved.
 - Reviewer ambiguity posts one clarification and returns `waiting_for_reviewer` after the observation window if unanswered.
-- Draft, closed, or merged state prevents or terminates monitoring correctly.
+- Directly invoked draft state is accepted; closed or merged state prevents or terminates monitoring correctly.
 
 ### Helper tests
 
@@ -384,15 +398,18 @@ Use `node:test` fixtures to cover:
 
 The design is implemented when:
 
-- the new skill is discoverable through natural monitor/babysit wording and explicit invocation;
+- the new skill is discoverable through natural monitor/babysit/loop/until-quiet wording and explicit invocation;
 - one-shot PR finding requests still route to `address-review-findings`;
 - ready PRs from `task-doc-delivery-loop` enter the monitor automatically while drafts do not;
+- explicitly invoked draft PRs can be monitored;
 - the current session owns all monitoring and mutations;
 - thread-aware snapshots are complete, paginated, normalized, and read-only;
 - valid remediation batches are validated, committed, pushed, replied to, and resolved safely;
 - comment-only dispositions never create empty commits;
 - every handled human review event or pushed remediation commit resets the quiet checkpoint;
-- the final refresh closes the race at the ten-minute boundary;
+- ten minutes is the default quiet window and explicit positive overrides are honored;
+- `quiet_complete` is reported as observed quiet, not permanent review completion;
+- the final refresh closes the race at the configured quiet-window boundary;
 - unresolved ambiguity, unsafe state, and repeated blockers cannot report success;
 - CI and required approval remain delivery-loop gates rather than implicit monitor findings; and
 - tests cover routing, timer resets, deduplication, mutation ordering, failure states, and delivery-loop integration.
@@ -403,8 +420,10 @@ The design is implemented when:
 - `skills/monitor-pr-review/agents/openai.yaml`
 - `skills/monitor-pr-review/scripts/fetch-pr-review-state.mjs`
 - `skills/monitor-pr-review/scripts/fetch-pr-review-state.test.mjs`
+- `skills/address-review-findings/SKILL.md`
 - `skills/task-doc-delivery-loop/SKILL.md`
 - `bin/link-skills.sh`
+- `README.md`
 - `tests/skills-portability.test.mjs`
 
-No change to `address-review-findings` is required unless forward testing exposes a concrete one-shot routing ambiguity.
+The thread-state helper remains in v1: complete pagination, normalization, and event-ID deduplication are correctness requirements for the quiet-window ledger and must not depend on an optional external plugin.
