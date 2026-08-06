@@ -282,10 +282,10 @@ interface:
 Run:
 
 ```bash
-node --test tests/skills-portability.test.mjs
+node --test --test-name-pattern "GitHub issue intake" tests/skills-portability.test.mjs
 ```
 
-Expected: all portability tests pass.
+Expected: the GitHub issue intake contract passes; unrelated tests are skipped. The full portability suite runs after linker registration in Task 5.
 
 - [ ] **Step 4: Commit the skill package**
 
