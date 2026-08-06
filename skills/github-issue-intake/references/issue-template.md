@@ -44,4 +44,5 @@ Link only artifacts that exist. For teammate handoff without a task doc, write: 
 - Keep verified, reported, and inferred claims distinct.
 - Do not invent requirements, reproduction, code evidence, or metadata.
 - Do not mention a task-doc path, branch, or PR before it exists.
+- Exclude user-supplied nonexistent artifact paths rather than labeling them planned or intended.
 - Keep independently assignable outcomes in separate issue drafts.

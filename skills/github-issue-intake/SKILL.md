@@ -13,7 +13,11 @@ Turn a bug report, improvement, screenshot, or code finding into a truthful, cod
 
 - Do not modify implementation files or create implementation branches or PRs.
 - Do not write to GitHub until the user approves the exact title, exact body, repository, and metadata. Require explicit approval for every issue or approved split set.
+- Treat requests such as `just create it`, `do it quickly`, or `go ahead` as permission to run intake, not approval of a draft the user has not seen. Stop after the preview and wait.
+- When an initial request asks for one issue but contains independent outcomes, explain the split and ask once whether to proceed with separate issues. If the user explicitly confirms one umbrella issue after that warning, honor the override and preserve clearly separable sections.
 - Do not claim reproduction or artifact existence without evidence.
+- If the user supplies a path or link for a task doc, branch, or PR that does not exist, exclude it from the issue body. Do not preserve it as `planned`, `intended`, or a required future artifact.
+- Do not invent acceptance criteria or implementation requirements to make an incomplete report look actionable. Inspect the repository or ask one material question.
 - Treat issue approval as issue approval only, never implementation approval.
 
 ## Workflow
@@ -30,7 +34,7 @@ Inspect issue templates, issue guidance, and recent comparable issues. Search op
 
 Classify report type as `bug`, `improvement`, or `unresolved`. Classify delivery size as `small/fix`, `improvement`, or `feature-grade`.
 
-Split independently assignable or verifiable outcomes into separate issue drafts even when the user initially asks for one. Combine symptoms only when they share one root cause and one delivery outcome. For cross-repository work, identify the primary owner and split repository-specific deliverables when each can ship independently.
+Split independently assignable or verifiable outcomes into separate issue drafts by default. Combine symptoms only when they share one root cause and one delivery outcome. For cross-repository work, identify the primary owner and split repository-specific deliverables when each can ship independently.
 
 ### 4. Inspect the codebase
 
@@ -65,6 +69,7 @@ If authentication or write access fails, preserve the exact copy-ready draft and
 - For create-now, invoke `task-doc` in `issue` / `transform-only` mode and stop before implementation.
 - Offer a task-doc-only PR separately after the doc exists. Publishing requires explicit approval and the `isolated-worktree` plus `publish-branch` skills.
 - Do not mention a task-doc path, branch, or PR before it exists. Update the issue only after the referenced artifact is real.
+- A user-supplied nonexistent artifact path does not reserve that path. For teammate handoff, state only that no task doc was created and the assignee may create one after reviewing the issue.
 
 ## Completion
 
@@ -74,8 +79,10 @@ Report the classification, evidence limits, issue URL or write blocker, approved
 
 | Mistake | Correction |
 | --- | --- |
-| Bundling unrelated reports because the user asked for one issue | Split independently deliverable outcomes and explain why. |
+| Bundling unrelated reports on the first request for one issue | Recommend separate issues and ask once; honor an explicit override after the tradeoff is clear. |
+| Filling missing repository context with plausible requirements | Inspect the codebase or ask one material question; do not guess. |
 | Turning screenshots into verified reproduction | Label screenshot behavior as reported unless reproduced. |
 | Adding a planned task-doc path | State that no task doc exists without inventing a path. |
+| Treating `just create it` as draft approval | Complete intake, show the exact preview, and wait for explicit approval. |
 | Applying plausible labels automatically | Suggest only existing labels and wait for approval. |
 | Creating a task doc for a local fix | Hand off the approved issue directly. |
