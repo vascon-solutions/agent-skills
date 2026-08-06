@@ -26,6 +26,7 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
     ├── review-implementation/
     ├── address-review-findings/
     ├── monitor-pr-review/
+    ├── github-issue-intake/
     ├── implementation-map/
     ├── repo-skill-scan/
     ├── roadmap-todo/
@@ -67,6 +68,7 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 | `review-implementation`     | Report-only review of finished code against a task doc, plan, spec, roadmap item, PRD, or acceptance criteria                                                                                                                                                                        |
 | `address-review-findings`   | Evaluate and remediate code, PR, or spec-compliance review findings; push back on invalid feedback and validate fixes                                                                                                                                                                |
 | `monitor-pr-review`         | Monitor an open GitHub PR, repeatedly address review activity, publish scoped remediation batches, and stop after a configurable quiet window                                                                                                                                         |
+| `github-issue-intake`       | Turn bug reports, improvements, screenshots, or code findings into approved, code-grounded GitHub issues for teammate handoff before optional task-doc creation                                                                                                                       |
 | `implementation-map`        | Produce a code-grounded Markdown map of an existing feature or module — entry points, runtime flow, ownership boundaries, tests, refactoring candidates, and HTML/image artifact decisions. Rejects work too small to justify a map                                                  |
 | `repo-skill-scan`           | Scan a repo for repeated patterns; recommend skills, commands, or no action, then scaffold approved candidates into correctly structured files with link-script and README wiring                                                                                                     |
 | `roadmap-todo`              | Create and maintain durable roadmap or todo files for feature-grade work across repos                                                                                                                                                                                                |
@@ -163,6 +165,11 @@ The link script is idempotent — it skips symlinks that already point to the co
 ### Discovering and creating repo-specific skills or commands
 
 1. `repo-skill-scan` — scan for repeated patterns and get a ranked candidate list; then, for each approved candidate, propose the file structure → wait for approval → scaffold the skill, command, or script with link-script and README wiring (scaffolding folded in from the retired `scaffold-repo-skill`)
+
+### Creating teammate-ready GitHub issues
+
+1. `github-issue-intake` — turn bug reports, improvements, screenshots, or code findings into an approved, code-grounded GitHub issue; then hand off directly or create an eligible task doc.
+2. `task-doc` — optionally transform an approved improvement or feature-grade issue into a durable implementation artifact.
 
 ### Feature-grade task planning across agents
 
