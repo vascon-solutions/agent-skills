@@ -33,6 +33,7 @@ review-task-docs
 review-implementation
 address-review-findings
 monitor-pr-review
+github-issue-intake
 implementation-map
 repo-skill-scan
 roadmap-todo

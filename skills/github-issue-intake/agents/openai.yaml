@@ -1,0 +1,4 @@
+interface:
+  display_name: "GitHub Issue Intake"
+  short_description: "Turn code findings into teammate-ready issues"
+  default_prompt: "Use $github-issue-intake to investigate this bug or improvement and prepare an approved GitHub issue for teammate handoff."

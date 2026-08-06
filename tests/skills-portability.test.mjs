@@ -161,3 +161,29 @@ test("link script lists every skill directory exactly once", () => {
   assert.deepEqual([...listed].sort(), [...skillNames].sort(), "SKILL_NAMES must match skills/ directories");
   assert.equal(new Set(listed).size, listed.length, "duplicate entries in SKILL_NAMES");
 });
+
+test("GitHub issue intake preserves evidence, approval, and handoff contracts", () => {
+  const skill = read("skills", "github-issue-intake", "SKILL.md");
+  const template = read("skills", "github-issue-intake", "references", "issue-template.md");
+  const metadata = read("skills", "github-issue-intake", "agents", "openai.yaml");
+
+  assert.match(skill, /^description: Use when .*bug.*improvement.*GitHub issue/m);
+  assert.match(skill, /open and closed issues/i);
+  assert.match(skill, /verified[\s\S]*reported[\s\S]*inferred/i);
+  assert.match(skill, /independently assignable[\s\S]*separate issue drafts/i);
+  assert.match(skill, /exact title[\s\S]*exact body[\s\S]*explicit approval/i);
+  assert.match(skill, /small\/fix[\s\S]*Do not offer task-doc creation/i);
+  assert.match(skill, /task doc now[\s\S]*assignee[\s\S]*deliberat/i);
+  assert.match(skill, /Do not mention a task-doc path, branch, or PR before it exists/i);
+  assert.match(skill, /just create it[\s\S]*not approval[\s\S]*Stop after the preview/i);
+  assert.match(skill, /does not exist[\s\S]*exclude it[\s\S]*Do not preserve it as `planned`, `intended`/i);
+  assert.match(skill, /Do not combine independent outcomes because the user requested one issue/i);
+  assert.match(skill, /Do not invent acceptance criteria or implementation requirements/i);
+  assert.match(skill, /Always read `references\/issue-template\.md` as the required-content contract/i);
+  assert.match(skill, /Propose assignees, milestones, or project placement only when the user requests them or provides explicit direction/i);
+  assert.match(template, /^## Problem$/m);
+  assert.match(template, /^## Current code evidence$/m);
+  assert.match(template, /^## Acceptance criteria$/m);
+  assert.match(template, /^## Excluded$/m);
+  assert.match(metadata, /\$github-issue-intake/);
+});
