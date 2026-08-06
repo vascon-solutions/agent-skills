@@ -177,8 +177,10 @@ test("GitHub issue intake preserves evidence, approval, and handoff contracts", 
   assert.match(skill, /Do not mention a task-doc path, branch, or PR before it exists/i);
   assert.match(skill, /just create it[\s\S]*not approval[\s\S]*Stop after the preview/i);
   assert.match(skill, /does not exist[\s\S]*exclude it[\s\S]*Do not preserve it as `planned`, `intended`/i);
-  assert.match(skill, /initial request asks for one issue[\s\S]*ask once[\s\S]*honor the override/i);
+  assert.match(skill, /Do not combine independent outcomes because the user requested one issue/i);
   assert.match(skill, /Do not invent acceptance criteria or implementation requirements/i);
+  assert.match(skill, /Always read `references\/issue-template\.md` as the required-content contract/i);
+  assert.match(skill, /Propose assignees, milestones, or project placement only when the user requests them or provides explicit direction/i);
   assert.match(template, /^## Problem$/m);
   assert.match(template, /^## Current code evidence$/m);
   assert.match(template, /^## Acceptance criteria$/m);

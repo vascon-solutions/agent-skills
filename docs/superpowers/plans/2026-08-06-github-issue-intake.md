@@ -392,6 +392,19 @@ Repeat the three RED prompts with `Use $github-issue-intake at /Users/dee/agent-
 - keep the small-fix task-doc boundary; and
 - preview rather than claim a GitHub write.
 
+Then run eight additional read-only scenarios covering:
+
+- screenshot-backed intake with a nearby authoritative implementation;
+- a likely duplicate issue;
+- eligible improvement handoff to `task-doc`;
+- a repository with a useful issue template;
+- assignee, milestone, project, and label metadata approval;
+- inference versus confirmed reproduction;
+- unavailable GitHub authentication or write access; and
+- a request that tries to broaden issue intake into implementation.
+
+Confirm that each result follows the approved evidence, approval, scope, and handoff contracts without performing external writes.
+
 - [ ] **Step 5: Refactor only against observed failures**
 
 If a forward test exposes a loophole, patch the smallest relevant instruction or template rule, rerun that scenario, rerun the portability test, and commit with:

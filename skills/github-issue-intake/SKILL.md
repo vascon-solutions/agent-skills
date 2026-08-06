@@ -14,7 +14,7 @@ Turn a bug report, improvement, screenshot, or code finding into a truthful, cod
 - Do not modify implementation files or create implementation branches or PRs.
 - Do not write to GitHub until the user approves the exact title, exact body, repository, and metadata. Require explicit approval for every issue or approved split set.
 - Treat requests such as `just create it`, `do it quickly`, or `go ahead` as permission to run intake, not approval of a draft the user has not seen. Stop after the preview and wait.
-- When an initial request asks for one issue but contains independent outcomes, explain the split and ask once whether to proceed with separate issues. If the user explicitly confirms one umbrella issue after that warning, honor the override and preserve clearly separable sections.
+- Do not combine independent outcomes because the user requested one issue. Explain the decomposition and prepare separate issue previews whenever outcomes can be assigned or verified independently.
 - Do not claim reproduction or artifact existence without evidence.
 - If the user supplies a path or link for a task doc, branch, or PR that does not exist, exclude it from the issue body. Do not preserve it as `planned`, `intended`, or a required future artifact.
 - Do not invent acceptance criteria or implementation requirements to make an incomplete report look actionable. Inspect the repository or ask one material question.
@@ -34,7 +34,7 @@ Inspect issue templates, issue guidance, and recent comparable issues. Search op
 
 Classify report type as `bug`, `improvement`, or `unresolved`. Classify delivery size as `small/fix`, `improvement`, or `feature-grade`.
 
-Split independently assignable or verifiable outcomes into separate issue drafts by default. Combine symptoms only when they share one root cause and one delivery outcome. For cross-repository work, identify the primary owner and split repository-specific deliverables when each can ship independently.
+Split independently assignable or verifiable outcomes into separate issue drafts, including when the user initially asks for one. Combine symptoms only when they share one root cause and one delivery outcome. For cross-repository work, identify the primary owner and split repository-specific deliverables when each can ship independently.
 
 ### 4. Inspect the codebase
 
@@ -52,9 +52,9 @@ Ask one focused question at a time only when the answer changes scope, ownership
 
 ### 6. Draft and preview
 
-Map the required content into useful repository templates. Otherwise read and use `references/issue-template.md`.
+Always read `references/issue-template.md` as the required-content contract. Map every applicable contract field into a useful repository template; use the reference's literal fallback structure only when the repository has no useful template.
 
-Show the repository, exact title, exact body, duplicate-search result, split set, and proposed existing metadata. Suggest only labels that already exist. Do not invent or apply labels, assignees, milestones, or project placement without explicit approval.
+Show the repository, exact title, exact body, duplicate-search result, split set, and proposed existing metadata. Suggest only labels that already exist. Propose assignees, milestones, or project placement only when the user requests them or provides explicit direction. Do not invent or apply any metadata without explicit approval.
 
 ### 7. Create and verify
 
@@ -79,7 +79,7 @@ Report the classification, evidence limits, issue URL or write blocker, approved
 
 | Mistake | Correction |
 | --- | --- |
-| Bundling unrelated reports on the first request for one issue | Recommend separate issues and ask once; honor an explicit override after the tradeoff is clear. |
+| Bundling unrelated reports because the user asked for one issue | Split independently assignable outcomes and explain the decomposition. |
 | Filling missing repository context with plausible requirements | Inspect the codebase or ask one material question; do not guess. |
 | Turning screenshots into verified reproduction | Label screenshot behavior as reported unless reproduced. |
 | Adding a planned task-doc path | State that no task doc exists without inventing a path. |
