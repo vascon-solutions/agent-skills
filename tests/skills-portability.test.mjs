@@ -105,6 +105,27 @@ test("delivery loop documents its GitHub scope with a local fallback", () => {
   assert.doesNotMatch(metadata, /ready PR/);
 });
 
+test("delivery policy is proportional", () => {
+  const loop = read("skills", "task-doc-delivery-loop", "SKILL.md");
+  const implementation = loop.split("### Checkpoint 2: Focused Implementation")[1].split("### Checkpoint 3: Report-Only Review")[0];
+  const review = loop.split("### Checkpoint 3: Report-Only Review")[1].split("### Checkpoint 4: Publish and CI")[0];
+
+  assert.match(loop, /four checkpoints/i);
+  assert.match(loop, /exit code zero.*authoritative|first green/i);
+  assert.match(loop, /retained log.*before.*rerun/i);
+  assert.match(loop, /immutable candidate/i);
+  assert.match(loop, /push-only/i);
+  assert.match(loop, /monitoring.*explicit/i);
+  assert.doesNotMatch(loop, /ready PR[\s\S]*invoke `monitor-pr-review`/i);
+  assert.match(loop, /named durable risk|durable-risk/i);
+  assert.match(loop, /presentation/i);
+  assert.match(loop, /dependency synchronization[\s\S]*does not.*(?:merge|cherry-pick|import)/i);
+  assert.match(loop, /CI.*(?:omits|missing)[\s\S]*required local lane|remote.*cannot waive/i);
+  assert.match(loop, /complete failure evidence[\s\S]*selected failed job[\s\S]*complete scope/i);
+  assert.match(implementation, /stage only intended files[\s\S]*immutable candidate[\s\S]*candidate gate[\s\S]*exact.*OID/i);
+  assert.match(review, /replacement.*candidate[\s\S]*invalidat.*evidence[\s\S]*candidate gate/i);
+});
+
 test("ongoing PR review monitoring is distinct from one-shot remediation", () => {
   const monitor = read("skills", "monitor-pr-review", "SKILL.md");
   const address = read("skills", "address-review-findings", "SKILL.md");
