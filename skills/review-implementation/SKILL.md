@@ -59,7 +59,7 @@ Review the current implementation against:
 
 Read the plan/spec, applicable repo instructions, supplied git status and diff, supplied validation evidence, and relevant files.
 
-Report only. Do not run commands, modify files or Git, access GitHub, or delegate. Consume the supplied validation evidence; do not recreate it.
+Report only. Do not run validation or mutation commands (tests, type-checks, builds, linters, formatters, generators, installs, servers, browsers), modify files or Git, access GitHub, or delegate. Read-only file reads and read-only Git inspection such as `git status`, `git diff`, and `git log` are allowed. Consume the supplied validation evidence; do not recreate it.
 
 Check:
 - every requirement is implemented

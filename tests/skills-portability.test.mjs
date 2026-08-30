@@ -141,6 +141,11 @@ test("report-only review consumes validation evidence without execution", () => 
   assert.match(review, /must not.*tests.*type-checks.*builds.*linters.*installs.*servers.*browsers/i);
   assert.match(review, /consume.*validation evidence/i);
   assert.match(review, /read-only Git.*status.*diff.*log/i);
+
+  const delegatedPrompt = review.split("## Delegated Review Prompt")[1].split("## Severity")[0];
+  assert.doesNotMatch(delegatedPrompt, /Do not run commands,/i);
+  assert.match(delegatedPrompt, /Do not run validation or mutation commands/i);
+  assert.match(delegatedPrompt, /read-only Git inspection.*allowed/i);
 });
 
 test("one-shot GitHub operations are bounded", () => {
@@ -171,6 +176,11 @@ test("one-shot GitHub operations are bounded", () => {
   assert.match(address, /supply.*diff.*validation evidence/i);
   assert.match(loop, /Push, PR[\s\S]*publish-branch[\s\S]*immutable candidate mode/i);
   assert.match(loop, /hand.*candidate OID.*gate evidence.*publish-branch/i);
+  const publishCheckpoint = loop.split("### Checkpoint 4: Publish and CI")[1].split("## Closeout")[0];
+  assert.match(
+    publishCheckpoint,
+    /code-changing CI remediation[\s\S]*replacement immutable candidate[\s\S]*candidate gate[\s\S]*replacement OID[\s\S]*report-only review[\s\S]*remote identity verified[\s\S]*final complete PR\/CI snapshot/i,
+  );
   for (const skill of [address, monitor, publish]) {
     assert.match(skill, /read-back mismatch.*edit.*existing.*never.*second/i);
   }
