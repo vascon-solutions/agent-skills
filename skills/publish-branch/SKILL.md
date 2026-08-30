@@ -11,6 +11,8 @@ Publish local work intentionally. The main agent runs the publish path inline by
 
 Keep the change set scoped, rely on repo hooks where they already exist, and do not silently publish unrelated work.
 
+When the caller provides a validated immutable candidate, switch to push-only candidate mode. Publish the exact candidate OID and preserve its validation identity; the general staging and commit rules below do not apply to that mode.
+
 ## Approval Gates
 
 These gates apply even in `/fast` mode:
@@ -37,6 +39,18 @@ User wording maps to actions this way unless the user narrows it:
 - Ready-for-review PRs require explicit user wording.
 
 If the branch already has unpushed commits, publish includes those commits unless the user explicitly asks to publish only new local changes.
+
+## Immutable Candidate Mode
+
+Record the expected candidate OID, verify that `HEAD` equals it, and require a clean worktree before publication: no modified tracked files and no staged changes. Untracked or ignored transient artifacts (coverage output, caches, logs) do not make the worktree dirty and must not be staged. Candidate mode is push-only with respect to repository contents: it must not format, generate, stage, commit, amend, or otherwise mutate the candidate, and it must not invent a second validation plan. Existing non-mutating push hooks may run; if a hook changes tracked files, the index, or the OID, stop and report that the candidate identity was invalidated.
+
+Push the branch containing the exact validated candidate OID, then verify the remote ref resolves to that OID. Open or update the requested PR only after this identity check succeeds.
+
+## GitHub Markdown Transport
+
+For PR titles or other plain values, use non-interpolating argument transport. For PR bodies, comments, or replies containing Markdown, use `--body-file` or an equivalent file-backed, non-interpolating transport. Never place Markdown backticks or command substitutions inside an interpolated shell string.
+
+After each GitHub Markdown mutation, perform one remote read-back and compare the stored content with the intended file. On a read-back mismatch, edit the existing remote object in place and read it back once more; never create a second body, comment, or reply. If a safe in-place edit is unavailable or fails, stop and report the mismatch. Retry only a failed mutation; never repeat a successful creation because the read-back or a later operation failed.
 
 ## Delegation Rules
 
@@ -101,8 +115,10 @@ Send the worker a structured handoff in this shape:
 ```yaml
 publish_worker_handoff:
   repo_path: "/absolute/path/to/repo"
-  requested_action: "commit_only | commit_and_push | push_only | publish_branch | draft_pr"
+  requested_action: "commit_only | commit_and_push | push_only | publish_branch | draft_pr | candidate_push | candidate_draft_pr | candidate_ready_pr"
   action_source: "user wording or inferred default"
+  candidate_oid: "40-hex validated OID or none"
+  candidate_gate_evidence: "supplied evidence identity or none"
   branch:
     current: "feature/example"
     upstream: "origin/feature/example or none"
@@ -134,7 +150,7 @@ Also instruct the worker:
 
 - Do not revert unrelated user changes.
 - Do not spawn competing publish workers.
-- Stage only intended files. Use `git add -A` only after the full worktree scope is confirmed.
+- In non-candidate mode, stage only intended files. Use `git add -A` only after the full worktree scope is confirmed. In candidate mode, do not stage or commit anything.
 - Respect existing repo hooks. Do not bypass hooks unless the user explicitly asked.
 - Prefer repo-standard commands and root scripts over ad hoc tool entrypoints.
 - If SSH auth is required for push, retry with the environment's standard SSH bootstrap helper if one exists, for example `zsh -ic 'source ~/.zshrc; loadssh; git push ...'`.
@@ -159,6 +175,11 @@ publish_worker_report:
     attempted: true
     status: "pushed | skipped | failed"
     remote_ref: "origin/feature/example or none"
+    remote_ref_oid: "40-hex OID or none"
+  candidate:
+    candidate_oid: "40-hex validated OID or none"
+    local_head_oid: "40-hex OID or none"
+    identity_verified: "true | false | not applicable"
   pr:
     requested: true
     status: "created | skipped | failed"
@@ -182,6 +203,8 @@ Partial publish is a valid terminal state. If commit succeeds but push or PR cre
 
 ## Validation
 
+In immutable candidate mode, consume the supplied candidate evidence and do not start a second manual validation plan. The remaining rules in this section apply to non-candidate publication.
+
 - Treat repo hooks as the default baseline when they already run on commit or push.
 - Run manual validation only when the user asked for it, when hooks are intentionally skipped, or when the change risk justifies extra checks.
 - If manual validation runs, choose the smallest relevant command, for example `pnpm typecheck`, `npm test -- <target>`, `pytest <path>`, `cargo test -p <crate>`, or the workspace's affected target command.
@@ -197,6 +220,8 @@ Before reporting completion, verify final state independently:
 - push evidence when relevant, such as remote ref state or `git ls-remote`
 - PR evidence when relevant, such as the PR URL and state from the GitHub integration or `gh`
 
+In candidate mode, verify the remote ref OID equals the candidate OID. A pushed branch name or local `HEAD` alone is insufficient identity evidence.
+
 Append a main-agent verification block to the worker report:
 
 ```yaml
@@ -204,6 +229,9 @@ main_agent_verification:
   git_status: "git status -sb output"
   head: "git log -1 --oneline output or not checked"
   push_evidence: "remote ref, gh output, or not checked"
+  candidate_oid: "40-hex validated OID or none"
+  remote_ref_oid: "40-hex OID or none"
+  candidate_identity_verified: "true | false | not applicable"
   pr_evidence: "PR URL/state, gh output, or not checked"
 ```
 
