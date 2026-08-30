@@ -105,6 +105,15 @@ test("delivery loop documents its GitHub scope with a local fallback", () => {
   assert.doesNotMatch(metadata, /ready PR/);
 });
 
+test("CI monitoring authorization is read-only by default", () => {
+  const readme = read("README.md");
+
+  assert.match(readme, /read-only by default/i);
+  assert.match(readme, /\$monitor-ci/);
+  assert.match(readme, /Nx Cloud self-healing/i);
+  assert.match(readme, /owning distribution[\s\S]*incompatible/i);
+});
+
 test("delivery policy is proportional", () => {
   const loop = read("skills", "task-doc-delivery-loop", "SKILL.md");
   const implementation = loop.split("### Checkpoint 2: Focused Implementation")[1].split("### Checkpoint 3: Report-Only Review")[0];

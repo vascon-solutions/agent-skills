@@ -139,6 +139,12 @@ cd ~/agent-skills && git pull && bin/link-skills.sh
 
 The link script is idempotent — it skips symlinks that already point to the correct source and only adds new ones.
 
+## CI Monitoring Authorization
+
+Generic `monitor CI`, `watch CI`, `check CI`, and `track CI` requests are read-only by default. They authorize observing and reporting CI state, not applying or enhancing fixes, rerunning workflows or environment state, changing code, committing, or pushing.
+
+Mutation-capable Nx behavior requires explicit `$monitor-ci` invocation or explicit `Nx Cloud self-healing` wording. Externally installed skills with broader generic triggers must be narrowed by their owning distribution or treated as incompatible with this policy; this repository does not claim ownership of those installed contracts.
+
 ## Typical Usage
 
 ### New repo with no docs
@@ -188,7 +194,7 @@ The link script is idempotent — it skips symlinks that already point to the co
 
 ### Ongoing PR review feedback
 
-1. `monitor-pr-review` — invoke explicitly with monitor, babysit, keep-watching, loop, or until-quiet wording for any open PR, including a draft. `task-doc-delivery-loop` delegates automatically only after an explicitly ready PR is published or updated.
+1. `monitor-pr-review` — invoke explicitly with monitor, babysit, keep-watching, loop, or until-quiet wording for any open PR, including a draft. `task-doc-delivery-loop` selects it only when monitoring was separately and explicitly requested; ready-for-review status alone never starts monitoring.
 
 ### Auditing a running UI feature
 
