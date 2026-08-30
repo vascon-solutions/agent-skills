@@ -42,7 +42,7 @@ If the branch already has unpushed commits, publish includes those commits unles
 
 ## Immutable Candidate Mode
 
-Record the expected candidate OID, verify that `HEAD` equals it, and require a clean worktree before publication. Candidate mode is push-only with respect to repository contents: it must not format, generate, stage, commit, amend, or otherwise mutate the candidate, and it must not invent a second validation plan. Existing non-mutating push hooks may run; if a hook changes files or the OID, stop and report that the candidate identity was invalidated.
+Record the expected candidate OID, verify that `HEAD` equals it, and require a clean worktree before publication: no modified tracked files and no staged changes. Untracked or ignored transient artifacts (coverage output, caches, logs) do not make the worktree dirty and must not be staged. Candidate mode is push-only with respect to repository contents: it must not format, generate, stage, commit, amend, or otherwise mutate the candidate, and it must not invent a second validation plan. Existing non-mutating push hooks may run; if a hook changes tracked files, the index, or the OID, stop and report that the candidate identity was invalidated.
 
 Push the branch containing the exact validated candidate OID, then verify the remote ref resolves to that OID. Open or update the requested PR only after this identity check succeeds.
 

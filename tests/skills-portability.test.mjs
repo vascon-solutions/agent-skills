@@ -133,6 +133,13 @@ test("delivery policy is proportional", () => {
   assert.match(loop, /complete failure evidence[\s\S]*selected failed job[\s\S]*complete scope/i);
   assert.match(implementation, /stage only intended files[\s\S]*immutable candidate[\s\S]*candidate gate[\s\S]*exact.*OID/i);
   assert.match(review, /replacement.*candidate[\s\S]*invalidat.*evidence[\s\S]*candidate gate/i);
+  assert.doesNotMatch(implementation, /Any later file or Git mutation/i);
+  assert.match(implementation, /tracked candidate contents, the index, or the candidate OID[\s\S]*invalidates evidence/i);
+  assert.match(implementation, /transient untracked or ignored artifacts[\s\S]*do not invalidate/i);
+
+  const publish = read("skills", "publish-branch", "SKILL.md");
+  assert.match(publish, /clean worktree[^.]*no modified tracked files and no staged changes/i);
+  assert.match(publish, /hook changes tracked files, the index, or the OID/i);
 });
 
 test("report-only review consumes validation evidence without execution", () => {

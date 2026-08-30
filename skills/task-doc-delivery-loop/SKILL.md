@@ -88,7 +88,7 @@ Before consumer checks, dependency synchronization rebuilds or consumes the decl
 
 Capture raw command output in a retained log. Exit code zero plus the lane's required completion evidence is authoritative. After completion, filter retained output for diagnostics and read the retained log before any rerun. Do not rerun an unchanged successful lane, and do not rerun merely because live output was truncated, delayed, or difficult to scan.
 
-Complete the calibrated pre-candidate validation lanes. Stage only intended files and create one clean immutable candidate commit; record its OID. Run the required candidate gate once against that exact clean candidate OID and record its evidence. Treat the first green result as authoritative. Any later file or Git mutation creates a replacement candidate and invalidates evidence tied to the former OID.
+Complete the calibrated pre-candidate validation lanes. Stage only intended files and create one clean immutable candidate commit; record its OID. Run the required candidate gate once against that exact clean candidate OID and record its evidence. Treat the first green result as authoritative. Any later change to tracked candidate contents, the index, or the candidate OID creates a replacement candidate and invalidates evidence tied to the former OID. Transient untracked or ignored artifacts that a gate or hook writes or removes (coverage output, caches, logs) do not alter the candidate and do not invalidate its evidence; never stage them or create an empty replacement commit for them.
 
 ### Checkpoint 3: Report-Only Review
 
