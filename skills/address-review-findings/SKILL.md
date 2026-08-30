@@ -41,15 +41,22 @@ Do not use when:
 
 ## Workflow
 
-1. Read all findings, referenced plans/specs, repo instructions, and relevant diffs before changing files.
-2. If the user asks to review and fix against a plan/spec and findings do not already exist, run `review-implementation` first. If the user explicitly asks for a delegated review and the environment supports it, use `review-implementation` delegated review mode; otherwise review locally.
+1. Read all findings, referenced plans/specs, repo instructions, and relevant diffs before changing files. For PR work, take one complete starting snapshot and freeze it as one frozen current batch; findings that arrive later are outside this invocation.
+2. If the user asks to review and fix against a plan/spec and findings do not already exist, supply the current diff and validation evidence—or an explicit record that evidence is missing—to `review-implementation` first. If the user explicitly asks for a delegated review and the environment supports it, use `review-implementation` delegated review mode; otherwise review locally.
 3. Route the source using the table above. If the right owner is another skill, switch to that skill before editing.
 4. Evaluate every finding before implementing, using the Evaluating Findings rules below.
-5. Classify each finding as `valid`, `invalid`, `unclear`, or `out of scope`.
+5. Assign each frozen item one normalized disposition: `valid`, `invalid`, `unclear`, `out_of_scope`, `informational`, `duplicate`, or `already_resolved`.
 6. Stop and ask before implementing if any finding is unclear and could affect the other fixes.
-7. Fix valid findings in this order: critical or blocking issues, simple low-risk fixes, then complex refactors or behavior changes.
-8. Validate after meaningful fixes, then run final validation appropriate to the repo. Confirm success with command output before declaring the loop done (`verification-before-completion` if installed).
-9. If the original request asked for a full review-and-fix loop, run one final `review-implementation` after fixes and report any remaining findings.
+7. Fix valid findings in this order: critical or blocking issues, simple low-risk fixes, then complex refactors or behavior changes. Consolidate code changes into one immutable candidate and one push for the frozen batch.
+8. Validate the candidate with the smallest affected lanes plus any required candidate gate. Confirm success with command output before publication (`verification-before-completion` if installed).
+9. For PR items, send one reply per item. Reply to `invalid`, `out_of_scope`, `unclear`, and `informational` items with their evidence, question, or acknowledgement and leave unresolved. Resolve an inline thread only after the corresponding valid fix, duplicate, or `already_resolved` disposition is remotely confirmed.
+10. After replies and the optional candidate push, take one final complete read-only snapshot and stop. Do not absorb new findings into this batch or begin monitoring; a separate explicit monitoring request routes to `monitor-pr-review`.
+
+## GitHub Markdown Transport
+
+For PR bodies, comments, and replies containing Markdown, use `--body-file` or an equivalent file-backed, non-interpolating transport. For an inline reply, prepare a JSON request file and pass it with `gh api --input`; for a PR body or top-level comment, pass the Markdown file with `--body-file`. Never embed Markdown backticks or command substitutions in an interpolated shell string.
+
+After each GitHub Markdown mutation, perform one remote read-back of the created or updated body, comment, or reply. Compare the remote content with the intended file before recording the item as replied. On a read-back mismatch, edit the existing remote object in place and read it back once more; never create a second body, comment, or reply. If a safe in-place edit is unavailable or fails, stop and report the mismatch. Do not retry a successful mutation merely because a later resolution operation failed.
 
 ## Evaluating Findings
 
@@ -60,20 +67,21 @@ For each finding:
 - **Understand first.** Restate the technical requirement in your own words. If it is unclear, ask before touching anything — do not partially implement a related set on partial understanding, since items often interact.
 - **Verify against reality.** Check the finding against the codebase, tests, requirements, platform/version constraints, and prior user decisions. Confirm whether it is technically correct *for this codebase*, whether it breaks existing behavior, and whether there is a reason the current code is the way it is.
 - **Apply YAGNI.** If a finding asks to "implement properly", grep for actual usage first. Unused speculative functionality gets flagged for removal, not built.
-- **Classify** as `valid`, `invalid`, `unclear`, or `out of scope`.
+- **Classify** with the normalized disposition vocabulary from Workflow.
 
 Push back — with technical reasoning, not defensiveness — when a finding is technically wrong, breaks existing behavior, adds unused speculative functionality, is outside the requested scope, or conflicts with the user's prior architectural decisions. Cite the file, test, or requirement that supports the pushback. If you cannot verify a finding, say so and ask for direction rather than guessing. If you pushed back and were wrong, state the correction factually and move on.
 
 Fix one finding or tightly related group at a time, in the order in Workflow step 7, and test each meaningful fix before moving on.
 
-When replying to an inline review comment on GitHub, reply in its thread rather than creating a top-level PR comment:
+When replying to an inline review comment on GitHub, reply in its thread rather than creating a top-level PR comment. Use a file-backed JSON request so Markdown is not interpolated by the shell:
 
 ```sh
-gh api --method POST "repos/{owner}/{repo}/pulls/{pr}/comments/{comment_id}/replies" \
-  -f body="<reply text>"
+gh api --method POST \
+  "repos/{owner}/{repo}/pulls/{pr}/comments/{comment_id}/replies" \
+  --input /absolute/path/to/reply.json
 ```
 
-Replace `{pr}`, `{comment_id}`, and `<reply text>` with the PR number, top-level review-comment ID, and reply. The endpoint does not support replies to replies.
+The request file contains the reply body. Replace `{pr}` and `{comment_id}` with the PR number and top-level review-comment ID. The endpoint does not support replies to replies. Read the reply back from GitHub once before resolving the thread.
 
 ## Example Flow
 
@@ -84,7 +92,7 @@ Replace `{pr}`, `{comment_id}`, and `<reply text>` with the PR number, top-level
 5. Ask about the unclear finding before editing if it affects the others.
 6. Fix valid findings from highest risk to lowest, validating as you go.
 7. Push back on the invalid finding with file, test, or requirement evidence.
-8. Run final validation and, for a full review-and-fix loop, run a final `review-implementation`.
+8. Publish one validated candidate when needed, reply once per item, take one final snapshot, and stop.
 
 ## Output
 

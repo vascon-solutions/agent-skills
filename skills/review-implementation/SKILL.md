@@ -9,14 +9,14 @@ description: Use when reviewing a finished implementation, completed branch, or 
 
 Verify whether finished code satisfies the referenced task, spec, plan, roadmap item, PRD, or acceptance criteria.
 
-This is a report-only skill. Review the implementation as a work product, not the author's reasoning, and do not edit files while using it.
+This is a strict report-only skill. Review the implementation as a work product, not the author's reasoning. The reviewer must not run tests, type-checks, builds, linters, formatters, generators, installs, servers, or browsers; mutate files or Git; access GitHub; or perform nested delegation. It may run read-only Git inspection commands such as `git status`, `git diff`, and `git log`, read the referenced source and relevant files, consume supplied validation evidence, and inspect a supplied or locally collected diff.
 
 ## Mode
 
 Use one mode per review:
 
-- **Direct review:** read the referenced source, inspect the diff and relevant code, then report findings yourself.
-- **Delegated review:** only when the user explicitly asks for an agent, subagent, or delegated review and the environment supports it, dispatch a fresh review agent with the focused prompt below. The delegated reviewer also reports only.
+- **Direct review:** read the referenced source, supplied or read-only Git diff, supplied validation evidence, and relevant code, then report findings yourself without running validation or mutation commands.
+- **Delegated review:** only when the user explicitly asks for an agent, subagent, or delegated review and the environment supports it, dispatch one fresh review agent with the focused prompt below. The delegated reviewer reports only and must not delegate again.
 
 If the user asks to review and fix in one request, use `address-review-findings` as the orchestration skill. It will run this review flow first, then evaluate and fix valid findings.
 
@@ -41,12 +41,12 @@ Do not use when:
 
 1. Read the referenced plan/spec/task doc. If no source is referenced, ask once. If the user declines to provide one or none exists, run a quality-only review and label the verdict accordingly.
 2. Read applicable repo instructions such as `AGENTS.md` or `CLAUDE.md`.
-3. Inspect the implementation diff and relevant code. Use `git status`, `git diff`, and targeted file reads.
+3. Inspect the supplied implementation diff, validation evidence, and relevant code. When no diff was supplied, collect it with read-only Git inspection. When validation evidence was not supplied, report it as missing rather than running validation to recreate it.
 4. In delegated review mode, dispatch the most capable review agent available with only the focused review context. If delegation is unavailable, perform the review locally and state that limitation.
 5. Review in two passes:
    - spec compliance: requirements met, missed, or exceeded
    - implementation quality: correctness, architecture, maintainability, tests, regressions
-6. Report findings first, ordered by severity. Do not edit files during the review.
+6. Report findings first, ordered by severity. Do not edit files or perform validation during the review.
 
 ## Delegated Review Prompt
 
@@ -57,9 +57,9 @@ Review the current implementation against:
 
 {PLAN_OR_SPEC_PATH}
 
-Read the plan/spec, applicable repo instructions, git status, git diff, and relevant files.
+Read the plan/spec, applicable repo instructions, supplied git status and diff, supplied validation evidence, and relevant files.
 
-Report only. Do not modify files.
+Report only. Do not run commands, modify files or Git, access GitHub, or delegate. Consume the supplied validation evidence; do not recreate it.
 
 Check:
 - every requirement is implemented
@@ -98,7 +98,7 @@ To act on findings, use `address-review-findings`.
 ## Example Flow
 
 1. User asks for a review of the current branch against `docs/tasks/payments.md`.
-2. Read the task doc, repo instructions, `git status`, `git diff`, and the touched files.
+2. Read the task doc, repo instructions, supplied or read-only Git status and diff, supplied validation evidence, and the touched files.
 3. Report `Verdict: pass-with-fixes` with findings ordered as Critical, Important, then Minor.
 4. Stop. Do not fix the findings in this skill.
 

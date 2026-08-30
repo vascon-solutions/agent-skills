@@ -126,18 +126,61 @@ test("delivery policy is proportional", () => {
   assert.match(review, /replacement.*candidate[\s\S]*invalidat.*evidence[\s\S]*candidate gate/i);
 });
 
+test("report-only review consumes validation evidence without execution", () => {
+  const review = read("skills", "review-implementation", "SKILL.md");
+
+  assert.match(review, /must not.*tests.*type-checks.*builds.*linters.*installs.*servers.*browsers/i);
+  assert.match(review, /consume.*validation evidence/i);
+  assert.match(review, /read-only Git.*status.*diff.*log/i);
+});
+
+test("one-shot GitHub operations are bounded", () => {
+  const address = read("skills", "address-review-findings", "SKILL.md");
+  const monitor = read("skills", "monitor-pr-review", "SKILL.md");
+  const publish = read("skills", "publish-branch", "SKILL.md");
+  const loop = read("skills", "task-doc-delivery-loop", "SKILL.md");
+  const loopReviewPrompt = loop.split("## Subagent Review Prompt")[1].split("## Final Report")[0];
+
+  assert.match(address, /one frozen.*batch/i);
+  assert.match(address, /one final.*snapshot.*stop/i);
+  assert.match(address, /invalid.*unclear.*leave unresolved/i);
+  assert.match(monitor, /explicit/i);
+  assert.doesNotMatch(loop, /automatically.*monitor-pr-review/i);
+  assert.match(publish, /exact.*candidate OID/i);
+  assert.match(publish, /must not.*format|push-only/i);
+  assert.match(`${address}\n${publish}`, /(?:body-file|file-backed|non-interpolating)[\s\S]*read-back/i);
+  assert.match(publish, /candidate_oid/i);
+  assert.match(publish, /remote_ref_oid/i);
+  assert.match(publish, /candidate mode.*remote ref OID.*candidate OID/i);
+  assert.doesNotMatch(loopReviewPrompt, /actionable PR comments/i);
+  assert.match(address, /out_of_scope[\s\S]*already_resolved/i);
+  assert.match(monitor, /out_of_scope[\s\S]*already_resolved/i);
+  assert.match(loop, /out_of_scope[\s\S]*already_resolved/i);
+  assert.doesNotMatch(monitor, /`out of scope`|`already resolved`/i);
+  assert.match(monitor, /explicit.*watch.*PR review/i);
+  assert.match(address, /informational.*leave unresolved/i);
+  assert.match(address, /supply.*diff.*validation evidence/i);
+  assert.match(loop, /Push, PR[\s\S]*publish-branch[\s\S]*immutable candidate mode/i);
+  assert.match(loop, /hand.*candidate OID.*gate evidence.*publish-branch/i);
+  for (const skill of [address, monitor, publish]) {
+    assert.match(skill, /read-back mismatch.*edit.*existing.*never.*second/i);
+  }
+});
+
 test("ongoing PR review monitoring is distinct from one-shot remediation", () => {
   const monitor = read("skills", "monitor-pr-review", "SKILL.md");
   const address = read("skills", "address-review-findings", "SKILL.md");
   const loop = read("skills", "task-doc-delivery-loop", "SKILL.md");
+  const readme = read("README.md");
 
   assert.match(monitor, /^description: Use when .*monitoring.*babysitting.*keep watching.*quiet/m);
   assert.match(monitor, /explicitly invoked.*draft PR/i);
   assert.match(monitor, /quiet_complete[\s\S]*not.*review.*finished/i);
   assert.match(address, /^description: Use when a current batch/m);
   assert.match(address, /monitor-pr-review/);
-  assert.match(loop, /ready PR[\s\S]*monitor-pr-review/i);
+  assert.match(loop, /ready PR does not itself authorize `monitor-pr-review`/i);
   assert.match(loop, /draft PR[\s\S]*explicit/i);
+  assert.doesNotMatch(`${monitor}\n${readme}`, /task-doc-delivery-loop.*delegates automatically/i);
 });
 
 test("PR review monitoring preserves lifecycle safety contracts", () => {
