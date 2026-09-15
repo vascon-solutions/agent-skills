@@ -1,9 +1,11 @@
 ---
 name: nestjs-api-standard
-description: Use when creating, reviewing, or hardening NestJS REST API templates or services that need PostgreSQL, TypeORM, JWT auth, Swagger, validation, auditability, and production-ready checks.
+description: Create or review NestJS API templates and service boundaries, including auth, validation, and persistence conventions.
 ---
 
 # NestJS API Standard
+
+Apply the rules relevant to the requested boundary. Full template requirements apply to template creation or an explicit standards audit, not every ordinary edit. Reuse existing validation evidence; choose affected checks using [validation guidance](../task-doc-delivery-loop/references/validation.md).
 
 ## Purpose
 
@@ -43,7 +45,7 @@ Use generic modules unless the host repo has a stronger convention:
 
 ## Verification
 
-Expect these checks, adjusted to repo scripts:
+For template readiness, account for the relevant checks below. For scoped service edits, use affected checks and required gates; install only when dependency state requires it:
 
 ```bash
 pnpm install

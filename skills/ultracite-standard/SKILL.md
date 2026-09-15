@@ -1,9 +1,11 @@
 ---
 name: ultracite-standard
-description: Use when setting up, migrating, or reviewing JavaScript or TypeScript projects that use Ultracite, Biome, check/fix scripts, generated path exclusions, or ESLint/Prettier replacement.
+description: Configure or troubleshoot Ultracite/Biome scripts, exclusions, and formatter integration. Not for merely running an existing check.
 ---
 
 # Ultracite Standard
+
+Apply the rules relevant to the requested boundary. Full template requirements apply to template creation or an explicit standards audit, not every ordinary edit. Reuse existing validation evidence; choose affected checks using [validation guidance](../task-doc-delivery-loop/references/validation.md).
 
 ## Core Rules
 

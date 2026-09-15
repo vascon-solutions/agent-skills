@@ -1,86 +1,45 @@
 ---
 name: task-doc-intake
-description: Use when a page, route, form, workflow, refactor idea, loose notes, screenshots, acceptance criteria, or codebase findings need guided-interview or notes-first discovery before a durable task document. Classifies and downshifts small work; ends at an explicit implementation gate.
+description: Use when an intended code or product change needs scoped discovery before a task doc. Accept complete notes; downshift small fixes to normal execution.
 ---
 
 # Task Doc Intake
 
-## Purpose
+Ground an intended change in current code, resolve delivery scope, and pass an approved inventory to `task-doc`. Intake authors scope; `task-doc-delivery-loop` implements. Do not start a second external discovery or planning workflow.
 
-Turn a guided interview, a set of notes, or codebase-derived findings into an approved change inventory, then a durable task doc via `task-doc`, ending at an explicit implementation gate.
+For open-ended research before delivery scope is chosen, use `brainstorm`. A research recommendation or spec need not become a task doc. Keep ordinary implementation choices here rather than bouncing between skills. Reuse settled spec decisions and verify codebase fit, drift, and delivery boundaries.
 
-This skill owns task discovery only. `task-doc` renders the document; `task-doc-delivery-loop` implements after approval. This skill never writes code.
+## Classify And Route
 
-It is self-contained: the interview discipline is inlined below and does not depend on any external discovery skill. If a product-discovery skill such as `brainstorming` is installed and the work needs broad product/architecture exploration first, you may use it for that phase and return here — never require it.
+Give a brief classification when it helps explain the next step:
 
-## Classify First
+- **Small/fix:** bounded immediate work with no material contract, persistent-state, permission, or migration change. Skip the task doc and return control to normal execution. If the user asked for a fix, perform that authorized work rather than ending the turn with a plan.
+- **Improvement:** bounded multi-file change/refactor with known desired behavior. A durable task is useful when handoff, risk, or multiple sessions justify it.
+- **Feature-grade:** new contracts/state, cross-module workflow, migration, or broad refactor requiring explicit scope and verification.
+- **Open decisions:** investigate or interview the gaps before choosing delivery scope; use `brainstorm` only when exploration itself is the user's goal.
 
-State the classification and a one-sentence rationale before choosing an intake mode.
+Honor explicit no-task-doc and output-only requests. Skipping documentation does not waive actual safety or permission boundaries, but it does not by itself require approval. Flag a material unresolved risk and ask only when it prevents safe execution. Do not turn a simple fix into a feature because adjacent improvements are possible.
 
-- `small`: one file, one behavior; no API/schema/route contract, cross-module dependency, new persistent state, auth/permission, migration, or recoverability need. Output: `Skipping task doc — classified small because <reason>. Plan: <1-3 steps>.` Then stop — implementation belongs to the normal session, not this skill.
-- `fix`: a known bug with a clear repro or stated symptom and no new behavior to design; no contract, auth boundary, migration, or new persistent state change. Output: `Classified fix — skipping task doc. Repro: <…>. Fix plan: <1-3 steps>.` Then stop, as above.
-- `improvement`: bounded change or behavior-preserving refactor to an existing screen, endpoint, service, package, or workflow; desired behavior is known.
-- `feature-grade`: multiple modules/layers, new endpoint/route, schema/model change, background job, auth boundary, shared-package contract, cross-app workflow, migration, or broad refactor.
-- `open-ended`: product behavior, architecture, or refactoring direction is still being decided. Run the guided interview until it resolves into one of the above. Before converging, propose 2-3 realistic approaches with trade-offs and lead with your recommendation — do not settle on the first viable design.
+Split independent outcomes only when separate delivery boundaries materially help; retain coherent vertical work and its necessary dependencies.
 
-If the request spans multiple independent subsystems (e.g., "a platform with chat, billing, and analytics"), flag that immediately instead of refining details: help the user decompose into separately shippable pieces and their order, then run intake on the first piece. Each piece gets its own inventory and task doc.
+## Discover Only What Is Missing
 
-Classify refactors by risk: local behavior-preserving cleanup → `small`; bounded multi-file cleanup with known boundaries → `improvement`; cross-module/package/app refactor or public contract change → `feature-grade` or `open-ended`.
+Use guided interview when the user wants collaboration or behavior is unsettled, notes-first when requirements are supplied, and codebase-derived discovery when requested. Inspect relevant code before asserting current behavior or asking questions it can answer. Do not require a full repo map.
 
-The agent makes the first call; the user may override. If the target area needs a code-grounded map first, use `implementation-map`.
+In an interview, ask one focused question at a time and carry answers into the inventory. For complete notes, inspect code and ask only material gaps; the first response may contain the completed inventory or task doc. For meaningful unsettled choices, compare credible options and tradeoffs with a recommendation. Preserve explicit user choices; do not manufacture alternatives or checkpoints.
 
-### User Overrides
+For UI, cover the relevant route/search state, transitions, data, loading/errors, permissions, and reusable components. For refactors, identify the coupling/problem, preserved behavior, proposed boundary, and evidence that behavior stays intact. Use a visual only when it helps resolve a decision.
 
-Wording such as `one-shot`, `fix`, `no task doc`, or `skip task doc` forces a downshift. Honor it: state `User-forced downshift to <fix|small>: <one-line rationale>.` and stop intake. If the change would cross a hard scope boundary (contract, auth/permission, migration, new persistent state, cross-module refactor), flag the specific risk in one sentence and ask the user to confirm the bypass first.
+## Inventory And Handoff
 
-## Intake Mode
+Keep a compact record of objective, source/user intent, current behavior with file/symbol evidence, proposed scope, preserved contracts, exclusions, likely files, verification, and unresolved decisions. Stay within the requested page/workflow/system boundary.
 
-State the intake mode immediately after classification.
+Present the inventory for approval when scope was newly synthesized or a material decision remains. Already approved complete notes or an explicit instruction to create and implement do not require another approval solely because they passed through intake. If only part is unsettled, pause that part and continue independent discovery.
 
-- `guided interview`: default when the user names a page, route, form, workflow, or a starting change without a complete list of desired changes. Bare page references such as `/service-requests/new?budgetYear=2032` hard-default here.
-- `notes-first`: use when the user provides notes, screenshots, acceptance criteria, or a list of requested changes. Map each item to code findings, then interview only the gaps.
-- `codebase-derived`: use when the user asks for findings, cleanup opportunities, or refactoring ideas without product input. Inspect the code, propose candidate changes, and label assumptions.
+On approval or existing sufficient authorization, invoke `task-doc`. Intake's classification is authoritative for improvement/feature-grade work; do not repeat the size gate. Update an existing matching document rather than creating a duplicate.
 
-## Guided Interview Discipline
+## Authorization Boundary (HARD-GATE)
 
-Run the interview yourself, one question at a time — never dump every question at once.
+Intake does not edit implementation code. Document-only requests end with the document and any unresolved decisions. Approval of a spec or task doc alone is not an instruction to implement it. Conversely, explicit creation-and-implementation authorization carries through to `task-doc-delivery-loop` once the task is concrete and material blockers are resolved; do not ask again merely to cross the skill boundary.
 
-- Start exactly where the user pointed. Inspect only enough code to ask the next useful question.
-- Ask one focused question, wait, then add the answer to a working change inventory with code evidence before asking the next.
-- Move through adjacent concerns as they become relevant: route/search params, entry state, step sequence, field groups, validation, data selection, review/submit behavior, navigation, loading/empty/error states, permissions, and tests.
-- Use understanding checks as checkpoints, not as the end of discovery. Never produce the Final Summary on the first response.
-- Continue until the user approves the accumulated scope. The working inventory is conversation state, not the task doc.
-
-## Inventory
-
-For page, route, or form work, build a page-local change inventory from both inputs: the user's answers/notes/screenshots/criteria, and codebase findings about current behavior, route state, data flow, validation, permissions, tests, and nearby reusable patterns.
-
-For refactors, build a refactor inventory: goal or suspected smell; current behavior and tests that must stay unchanged; code evidence for coupling, duplication, size, or repetition; proposed extraction/move/rename/decomposition; risk boundary and the validation that proves behavior is preserved; follow-up scope that must not be smuggled in.
-
-Each entry records: user intent or source note; current behavior with code evidence; proposed change or realistic options; decision needed, if any; excluded or follow-up scope.
-
-Keep scopes page-local. Do not absorb broader roadmap items, sibling-role workflows, backend contract changes, or adjacent pages unless the user explicitly asks to combine them.
-
-For UI work, offer an early exploratory `image-artifact` variant board only when visual direction blocks shared understanding; early visuals are conversation aids, not the source of truth.
-
-## Final Summary
-
-Present only after the inventory has accumulated and the user is ready to decide whether it becomes a task doc: classification and rationale; intake mode; objective; change or refactor inventory; requested changes; behavior to preserve; excluded scope; likely risk areas; unresolved decisions.
-
-Ask for approval or corrections. If decisions block a safe task doc, continue the question loop. If they only block implementation, record them under `Decisions Required Before Implementation`.
-
-## Handoff And Gate
-
-On approval of the Final Summary, invoke `task-doc` to render the document (interview/notes work usually maps to `brief`, codebase-derived findings to `codebase-derived`). Intake's classification is authoritative at this handoff: an approved Final Summary for `improvement` or `feature-grade` work satisfies `task-doc`'s size rejection gate — the accumulated inventory is the evidence the work justifies a durable artifact, so `task-doc` renders rather than re-litigating scale. Work small enough to be rejected was already downshifted in Classify First and never reaches this step.
-
-Before creating a new doc, check for an active same-session doc for the same page, endpoint, or workflow and update it instead of duplicating.
-
-<HARD-GATE>
-Do NOT write code, edit implementation files, scaffold implementation artifacts, or run implementation generators. Approval of the Final Summary approves writing the task doc only. Implementation requires explicit user approval of the task doc itself, and belongs to `task-doc-delivery-loop` (or the normal session for downshifted work) — not to this skill.
-</HARD-GATE>
-
-Recommend `review-task-docs` when `Decisions Required Before Implementation` is non-empty or the scope spans cross-module, auth, migration, or other high-risk work. Offer `image-artifact` or `html-artifact` companions when a visual or browsable review surface would speed approval.
-
-Close with: `Task doc written to <path>. Intake complete — review it, or ask me to run review-task-docs. On your approval, task-doc-delivery-loop implements it.`
-
-Ambiguous replies such as "looks fine" or "continue" approve implementation only if they clearly refer to the task doc; otherwise ask a concise confirmation before any handoff to implementation.
+Recommend `review-task-docs` when independent checking would materially reduce risk or the user requests it. Do not require an extra review or companion offer for every document. Report the task path and remaining decisions or continue the already-authorized delivery.

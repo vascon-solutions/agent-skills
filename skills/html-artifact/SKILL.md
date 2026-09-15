@@ -33,7 +33,7 @@ Use `image-artifact` when the user wants a low-text concept visual such as a pos
 ## When Not To Use
 
 - To generate Markdown from scratch — use task-doc, roadmap-todo, or prepare-qa-handoff
-- To host or serve the HTML file
+- To host or serve the HTML file directly — hand local preview to `artifact-workbench`
 - When the destination expects Markdown (Slack, GitHub, README)
 
 ## Input
@@ -205,7 +205,11 @@ Repo design context: found multiple themes; applied neutral default; confidence 
 ## Cautions
 
 - **Sanitization bypass** — if the source Markdown contains raw HTML, it may look like valid content but must be escaped, not rendered. The most common mistake is passing Markdown through a lenient renderer that interprets embedded HTML.
-- **Treating this as a generation skill** — this skill converts existing Markdown. If there is no source doc yet, the agent must stop and tell the user to run task-doc, roadmap-todo, or similar first.
+- **Treating this as a generation skill** — this skill converts existing Markdown. If there is no source yet and creation is requested, capture a concise brief through `markdown-artifact` or `brainstorm` and continue; no task doc or separate approval turn is required.
 - **Skipping the output path resolution** — if `--out` is not provided, the repo name must be derived from git remote, not hardcoded or guessed. A wrong repo name silently writes to the wrong folder.
-- **Calling this from inside a priority skill before the skill's own output is complete** — the HTML invitation is a post-completion affordance. Do not invoke html-artifact until the calling skill has fully written its Markdown output and delivered its report.
+- **Calling this from inside a priority skill before the skill's own output is complete** — the HTML invitation is a post-completion affordance. Write the source before generating HTML. When the user requests the combined output, continue into HTML and preview before delivering one final report.
 - **Over-confident repo design matching** — do not apply project branding from ambiguous signals. Prefer neutral output unless repo design confidence is high.
+
+## Prototype Preview Handoff
+
+For a request to create and preview, finish the source, generate and validate HTML, then start `artifact-workbench` without another confirmation. Use explicit `--out ~/agent-artifacts/<topic>/html/<variant>.html` paths. Use `--live` for iterative review; add `--capture-selections` only for requested browser choice capture. Mark choice buttons with `data-workbench-choice="stable-choice-id"`. These attributes need no network code in the saved HTML; the workbench supplies the runtime helper. Keep CSS and JS inline and use complete HTML documents. Use mocked state for standalone prototypes; a real backend or application dev server belongs to normal implementation workflows.

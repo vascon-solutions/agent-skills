@@ -1,9 +1,11 @@
 ---
 name: migration-discipline
-description: Use when adding, reviewing, or hardening database migrations, TypeORM/PostgreSQL configuration, seed scripts, e2e database setup, schema changes, or template migration commands.
+description: Review or change database migrations, schema rollout, or isolated database setup. Use for migration safety, not ordinary database queries.
 ---
 
 # Migration Discipline
+
+Apply the rules relevant to the requested boundary. Full template requirements apply to template creation or an explicit standards audit, not every ordinary edit. Reuse existing validation evidence; choose affected checks using [validation guidance](../task-doc-delivery-loop/references/validation.md).
 
 ## Purpose
 
@@ -57,7 +59,7 @@ Seeds are for local development, demos, and isolated tests:
 
 ## Verification
 
-Before calling migration work complete, run the strongest available set:
+For migration work, verify relevant apply/revert or recovery behavior in an appropriate isolated database. Select applicable commands below; seed, full e2e, and typecheck are not automatically required for every migration edit:
 
 ```bash
 pnpm migration:run

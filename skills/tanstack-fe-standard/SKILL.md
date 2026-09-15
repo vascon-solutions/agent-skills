@@ -1,9 +1,11 @@
 ---
 name: tanstack-fe-standard
-description: Use when building or reviewing React SPA/admin frontends that use TanStack Router, TanStack Query, Vite, Tailwind, protected routes, route search state, feature folders, or browser smoke tests.
+description: Guide TanStack Router SPA routing, auth, and query boundaries. Use for those architectural changes or requested frontend standards review.
 ---
 
 # TanStack FE Standard
+
+Apply the rules relevant to the requested boundary. Full template requirements apply to template creation or an explicit standards audit, not every ordinary edit. Reuse existing validation evidence; choose affected checks using [validation guidance](../task-doc-delivery-loop/references/validation.md).
 
 ## Core Rules
 
@@ -42,7 +44,7 @@ Use this standard for client-rendered TanStack Router frontends. Keep route file
 
 ## Verification
 
-Run the project checks the repo exposes, usually:
+Select the relevant project checks and required gates; this list is a command reference, not a mandate to run every command:
 
 ```bash
 pnpm check

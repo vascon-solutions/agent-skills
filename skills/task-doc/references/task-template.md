@@ -84,9 +84,9 @@ If no file changes are expected, list the docs or external artifacts to inspect 
 
 ## Decisions Required Before Implementation
 
-List unresolved decisions that must be made before implementation starts.
+List unresolved material decisions and the implementation work that depends on each.
 For each unresolved decision, include at least two realistic options, their implications or tradeoffs, and who or what should resolve it.
-If this section is non-empty, the implementing agent must stop and resolve these decisions before writing code.
+Resolve each material decision before writing the code that depends on it. Continue independent authorized work when safe; do not reopen decisions already settled by the user.
 If all decisions are already settled by the source, say `None`.
 
 ## Execution Rules
@@ -110,9 +110,9 @@ Prefer observable outcomes over vague statements like "works correctly".
 
 ## Approval Gates
 
-Only include this section when relevant.
-Do not add approval gates for excluded follow-up work unless the current task itself touches that gated area.
-Use it for work involving:
+Only include specific unresolved decisions/actions requiring approval. Preserve existing authorization; a topic label alone does not introduce another gate.
+Do not add approval gates for excluded follow-up work. If a current-task action needs approval, describe that action and its unresolved decision directly.
+Potentially consequential areas to assess in context include:
 
 - security
 - auth

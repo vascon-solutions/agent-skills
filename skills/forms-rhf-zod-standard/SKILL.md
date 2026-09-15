@@ -1,9 +1,11 @@
 ---
 name: forms-rhf-zod-standard
-description: Use when building or reviewing React forms that use React Hook Form, Zod schemas, typed submit payloads, resolver validation, API error mapping, or shared monorepo form contracts.
+description: Design or review React Hook Form and Zod form behavior, validation, and submit contracts. Not for incidental label or styling changes.
 ---
 
 # Forms RHF Zod Standard
+
+Apply the rules relevant to the requested boundary. Full template requirements apply to template creation or an explicit standards audit, not every ordinary edit. Reuse existing validation evidence; choose affected checks using [validation guidance](../task-doc-delivery-loop/references/validation.md).
 
 ## Core Rules
 
@@ -39,6 +41,6 @@ Add focused tests for meaningful forms:
 - Submit uses the typed, normalized payload.
 - Submit controls expose loading or disabled states.
 - API validation errors map to the right field or form message.
-- Shared form wrappers render labels, required markers, and error text consistently.
+- Shared wrappers preserve meaningful accessible label/error associations; do not freeze incidental label wording or DOM structure in tests.
 
-Run the repo's normal check, type-check, and test commands before claiming the form is ready.
+Run focused form/contract checks and repo-required gates, reusing applicable evidence rather than repeating the full suite.

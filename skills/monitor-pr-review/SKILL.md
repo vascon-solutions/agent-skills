@@ -1,156 +1,50 @@
 ---
 name: monitor-pr-review
-description: Use when an open GitHub pull request needs ongoing monitoring or babysitting for new review comments, including requests to keep watching, loop, or wait until quiet.
+description: Use when explicitly asked for ongoing PR review monitoring or babysitting, to keep watching or remediate until quiet.
 ---
 
 # Monitor PR Review
 
-## Purpose
+Own one explicitly requested PR review/remediation loop in the current session. Default to ten minutes of quiet. `quiet_complete` means the observed window was quiet, not that review is permanently finished.
 
-Own one GitHub PR review/remediation loop in the current session until a configurable quiet window passes. Default to ten minutes. `quiet_complete` means the observation window was quiet, not that review is permanently finished.
+Use `address-review-findings` for one current batch. Require affirmative user intent targeting ongoing PR review; a ready PR, an open PR, generic CI watching, or 'do not monitor' does not authorize this workflow. When explicitly invoked, accept an open draft PR too. A read-only watch request stays read-only; do not infer permission to fix or post from it.
 
-This is the ongoing route. Use `address-review-findings` for one current findings batch without continued monitoring. Continuation wording anywhere in a prompt—`monitor`, `babysit`, `keep watching`, `continue in a loop`, `until quiet`, or `stop when quiet`—takes precedence over an opening one-shot phrase.
+## Authorization And Ownership
 
-## Authorization Boundary
+An explicit request to run this review/remediation skill authorizes scoped fixes, focused validation, commits/pushes, replies, and verified thread resolutions on the named PR. It does not authorize merging, closing/reopening, force-pushing, rewriting history, bypassing hooks, or unrelated CI fixes. Preserve any narrower user instruction.
 
-Invoking this skill authorizes the current PR branch workflow to:
+Run inline. Do not delegate the timer, ledger, GitHub mutations, or branch ownership. A bounded delivery-review-mode reviewer may assess material changes when authorized; it does not run duplicate validation or mutate anything.
 
-- evaluate review items through `address-review-findings`
-- make scoped fixes and run focused validation
-- commit and push coherent remediation batches through `publish-branch`
-- reply to addressed PR comments and resolve addressed inline threads
-- keep reading PR state until the quiet window ends
+## Establish State
 
-It does not authorize merging, closing, reopening, rebasing, force-pushing, rewriting history, bypassing hooks, changing unrelated files, or fixing CI failures unrelated to review findings.
+Verify PR identity, open state, head branch/commit, working checkout, write access when needed, and intended scope. Preserve separable unrelated edits; resolve overlapping ownership or concurrent mutators before changing files. Closed or merged PRs end monitoring. Keep existing working authentication rather than rerunning setup every cycle.
 
-Run the monitor inline. Do not delegate its timer, ledger, edits, GitHub mutations, or branch ownership to a subagent. A single bounded, report-only `review-implementation` subagent is optional after material behavior changes; it must not edit or mutate GitHub.
-
-## Preflight
-
-1. Resolve an explicit PR URL/number, otherwise the current branch PR.
-2. Verify `gh auth status`, repository identity, PR write access, current branch/upstream, and PR head SHA.
-3. Inspect `git status --short`. Preserve unrelated files and stop when intended changes cannot be staged separately.
-4. Require an open PR and a local branch matching its head branch. Closed or merged PRs are terminal.
-5. When explicitly invoked, accept an open draft PR. `task-doc-delivery-loop` delegates automatically only for an explicitly ready PR.
-6. Parse an explicit positive quiet duration; otherwise set `quiet_window_minutes: 10`. Ask when duration wording is ambiguous.
-
-Direct invocation authorizes a fresh full quiet window from invocation time even when the current head commit is older.
-
-## Read Complete Review State
-
-Locate the helper relative to this `SKILL.md`, then run:
+Locate the read-only helper relative to this skill:
 
 ```sh
 node <skill-dir>/scripts/fetch-pr-review-state.mjs --repo OWNER/REPO --pr NUMBER
 ```
 
-Omit `--repo` and `--pr` to resolve the current branch PR. The helper is read-only and returns normalized, paginated PR metadata, conversation comments, reviews, inline threads, and every thread reply.
+It returns paginated metadata, conversation comments, reviews, inline threads, and replies. Start with a complete snapshot, track event IDs and outstanding dispositions, and choose the explicit quiet duration or the default. Read [monitor state and timing](references/state-and-timing.md) for the ledger and terminal conditions. Keep session state; do not create goal tooling unless explicitly requested.
 
-Keep this compact state in goal/ledger tooling when available, otherwise in session:
+## Process Batches
 
-```yaml
-pr_review_monitor:
-  repository: owner/repo
-  pr_number: 123
-  pr_url: https://github.com/owner/repo/pull/123
-  head_sha: abc123
-  seen_event_ids: []
-  pending_event_ids: []
-  last_activity_at: 2026-08-04T12:00:00Z
-  quiet_window_minutes: 10
-  last_push_sha: abc123
-  pr_is_draft: false
-  validation_state: passing
-  unresolved_actionable_threads: []
-  cycle_count: 0
-  repeated_blocker_count: 0
-```
+Cluster new items by behavior/thread and apply `address-review-findings` evaluation rules. The monitor owns repeated batches; the remediation skill's one-batch endpoint does not terminate an authorized monitor.
 
-Use GraphQL event IDs for deduplication and timestamps only for the quiet duration. On the first snapshot, queue all unresolved actionable items. On later snapshots, queue unseen substantive review events.
+Continue independent clusters while one is blocked. Investigate unclear technical facts; ask for material user decisions, or post a focused reviewer question when authorized. Preserve established scope and reject unsupported findings with evidence. Repeated ineffective fixes require reassessment; report a repeated blocker rather than spinning or automatically widening scope.
 
-Automated review findings are substantive review activity. Usage-limit messages, status chatter, and other non-review bot/system notices are external state: record them, but do not reset the window.
-
-## Process a Review Batch
-
-1. Cluster new items by thread, file, and behavior.
-2. Apply `address-review-findings` evaluation rules and classify each cluster as `valid`, `invalid`, `unclear`, `out of scope`, `informational`, `duplicate`, or `already resolved`.
-3. Continue independent clusters when one cluster is blocked.
-4. For valid clusters, implement the smallest credible fix and run focused validation.
-5. For invalid or out-of-scope clusters, prepare a concise evidence-backed reply without a code change.
-6. For unclear reviewer intent, reply with one focused question and leave the thread unresolved. Ask the user instead when product, architecture, security, permission, migration, or other behavior-changing judgment is required.
-7. If the same technical finding returns after three ineffective cycles, stop as `blocked` instead of spinning.
+Use [validation guidance](../task-doc-delivery-loop/references/validation.md) for focused checks and evidence reuse. Use [debugging](../task-doc-delivery-loop/references/debugging.md) for failures. A new event does not invalidate unchanged passing tests.
 
 ## Publish, Reply, Resolve
 
-For a code-bearing batch:
+For valid code fixes, use `publish-branch` with the candidate/evidence, stage only related files, respect hooks, and verify the remote commit. Never create empty commits for reply-only work.
 
-1. Use `publish-branch` in commit-and-push mode.
-2. Stage only files traceable to the handled clusters.
-3. Use a scoped commit message and respect repository hooks.
-4. Confirm the commit is pushed before claiming its findings are fixed.
+Read [GitHub transport](../publish-branch/references/github-transport.md) before posting. Send one reply per handled item in its original thread. Only after the reply succeeds and the valid fix or duplicate/already-resolved disposition is remotely verified, resolve its GraphQL thread ID. Leave invalid, unclear, out-of-scope, and informational threads unresolved unless the user directs otherwise.
 
-Never create an empty commit for reply-only, invalid, informational, or out-of-scope dispositions.
+If reply succeeds but resolution fails, record `reply_sent: true`, refresh remote state, retry only resolution when appropriate, and never duplicate the reply. An uncertain mutation response requires a read-back before any creation retry.
 
-Reply to an inline thread through its root comment database ID:
+## Quiet Window And Closeout
 
-```sh
-gh api --method POST \
-  "repos/OWNER/REPO/pulls/PR/comments/ROOT_DATABASE_ID/replies" \
-  -f body="DISPOSITION, COMMIT WHEN APPLICABLE, AND VALIDATION EVIDENCE"
-```
+Measure quiet from the later of the last handled substantive review event and pushed remediation commit. At the end take a final complete snapshot; any unseen substantive review event resets the window. Non-review bot chatter and usage notices do not. Waiting must follow the runtime's scheduling/waiting facilities; do not leave an unmanaged background loop after the turn ends.
 
-After the reply succeeds, resolve its GraphQL thread ID:
-
-```sh
-gh api graphql \
-  -f query='mutation($thread:ID!){resolveReviewThread(input:{threadId:$thread}){thread{id isResolved}}}' \
-  -F thread="THREAD_GRAPHQL_ID"
-```
-
-For a top-level conversation comment, use `gh pr comment --repo OWNER/REPO PR --body "..."`; it has no resolvable review thread.
-
-If reply succeeds but resolution fails, record `reply_sent: true`, retry only resolution after the next snapshot, and never duplicate the reply. Leave ambiguous threads unresolved.
-
-## Quiet Window
-
-After draining the queue:
-
-1. Set `last_activity_at` to the later of the last handled substantive review event and last pushed remediation commit.
-2. Prefer the runtime's external-state wait or monitor primitive. Do not spend assistant turns announcing unchanged polls.
-3. Without such a primitive, run one bounded foreground polling process that calls the helper approximately once per minute; observe that process through the runtime's execution-session wait facility at intervals no longer than sixty seconds.
-4. On changed state, process every unseen substantive review event and reset the full quiet window after the final disposition or push.
-5. At the configured boundary, run one final complete snapshot. Any unseen substantive event resets the window.
-
-Return `quiet_complete` only when the final refresh confirms:
-
-- no unseen substantive review activity
-- no actionable unresolved thread
-- no unresolved local remediation diff
-- the latest remediation commit is pushed
-- focused validation for the latest code batch passed
-
-An approval, informational review, or substantive automated review resets the window. Non-review bot/system chatter does not.
-
-## Terminal Results
-
-| Result | Use when |
-| --- | --- |
-| `quiet_complete` | The configured window was quiet and no actionable unresolved review work remains; this is not proof that review is permanently finished. |
-| `waiting_for_reviewer` | A clarification or required reviewer decision remains after the observation window. |
-| `waiting_for_user` | A material user decision is required. |
-| `blocked` | Authentication, validation, permissions, unsafe worktree state, or a repeated technical blocker prevents progress. |
-| `externally_terminated` | The PR became closed or merged while monitoring. |
-
-When called by `task-doc-delivery-loop`, return the ledger and result. The parent:
-
-- continues closeout after `quiet_complete`, subject to CI and required-approval gates
-- reports and pauses on `waiting_for_reviewer`
-- asks and pauses on `waiting_for_user`
-- records `blocked` under the runtime's blocking policy
-- verifies closed/merged state before dispositioning `externally_terminated`
-
-If a ready PR becomes draft during monitoring, record and report it but keep the explicitly active monitor running; the delivery parent decides whether its ready-PR gate is still satisfied.
-
-## Final Report
-
-Report PR URL, branch and head SHA, monitor start time, final activity checkpoint, configured quiet duration, observed quiet duration, findings by disposition, commits pushed, replies and resolutions, validation evidence, CI/review/approval state, preserved unrelated files, and remaining blockers or risks.
+Return the terminal result and ledger to the delivery owner once, without starting another remediation cycle there. Report PR/head, monitor start time, final activity checkpoint, quiet duration, dispositions, pushed fixes, validation gaps, reply/resolution state, and remaining dependencies. A ready PR becoming draft does not end an explicitly active monitor, but must be reported to the owner.

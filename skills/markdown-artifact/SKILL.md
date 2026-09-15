@@ -51,7 +51,7 @@ Use when the user wants a durable Markdown artifact for:
 - Use `prepare-qa-handoff` for QA sign-off notes.
 - Use `prepare-frontend-handoff` for frontend developer handoffs.
 - Use `html-artifact` when Markdown already exists and the user only wants HTML.
-- Use `task-doc-intake` for repo implementation discovery that should end in a durable task doc; the external `brainstorming` and `writing-plans` skills are optional alternatives when installed and explicitly requested.
+- Use `brainstorm` for unsettled research/design and `task-doc-intake` for scoped delivery discovery; this skill formats portable artifacts from sufficiently understood material.
 - Use normal implementation workflows when the user asks to build or change code directly.
 
 For implementation-ready repo work, route to the task-doc chain rather than continuing as an artifact; ask once if the user's intent is ambiguous. Do not write to `docs/superpowers/` by default.
@@ -102,7 +102,7 @@ Default paths:
 
 If the resolved workspace exists, inspect `metadata.md` and current files before writing. Reuse it only when the title, source context, or user request clearly matches. If it appears to belong to a different project, or contains unrelated files without metadata, ask whether to reuse it, choose a new slug, or provide another workspace.
 
-If the target Markdown file exists, ask before overwriting. If the user wants a new variant, append a descriptive or numeric suffix.
+If the target Markdown file exists, honor an explicit request to update it; ask only when replacement intent or ownership is unclear. If the user wants a new variant, append a descriptive or numeric suffix.
 
 ## Document Types
 
@@ -152,36 +152,23 @@ Do not invent certainty. Mark assumptions and recommendations explicitly.
 
 ## Clarification Before Writing
 
-Do not run a full discovery interview by default — repo implementation discovery belongs to `task-doc-intake` (or the external `brainstorming` skill if installed and explicitly requested); this skill creates portable artifacts.
+Do not run a full discovery interview by default. Unsettled exploration belongs to `brainstorm`; delivery discovery belongs to `task-doc-intake`. This skill creates portable artifacts from the resulting material.
 
 Ask at most one focused question, and only when missing information would materially change the artifact: audience (developer vs. stakeholder), doc-type ambiguity, single-option vs. comparison, or whether source code context is required. Otherwise proceed, label assumptions explicitly, and list open questions in the document.
 
 If the input is too vague even with assumptions, ask one question or write a deliberately thin artifact with the gaps called out.
 
-Switch to `task-doc-intake` when the request is actually repo implementation planning; use the external `brainstorming` skill only when it is installed and the user explicitly asks for it.
+Switch to `task-doc-intake` for delivery scoping or `brainstorm` for open research. Preserve existing decisions and avoid restarting discovery.
 
-## Relationship To `docs/superpowers/`
+## Relationship To Specs
 
-When the external Superpowers pack is installed, `docs/superpowers/` is its execution control plane for the current repository:
-
-```text
-brainstorming -> docs/superpowers/specs/<date>-<topic>-design.md
-writing-plans -> docs/superpowers/plans/<date>-<topic>.md
-```
-
-`markdown-artifact` creates portable, user-facing artifact workspaces under `~/agent-artifacts/<slug>/`.
-
-Do not write to `docs/superpowers/` unless the user explicitly asks for a Superpowers implementation spec or plan.
+`brainstorm` owns exploratory decisions and saves developed specs using the user's path, the repo's spec convention, or `docs/specs/<topic>.md`. Repo-independent research uses `~/agent-artifacts/<topic>/`. `markdown-artifact` may format a requested portable companion, but does not relocate the authoritative spec or create another implementation plan. Existing `docs/superpowers/` documents remain valid inputs; installing an external pack does not make its workflow mandatory.
 
 ## Relationship To Companions
 
 ### HTML
 
-After writing Markdown, append:
-
-> "HTML companion available. Run `html-artifact` on this Markdown file for a browser-ready version. (yes / skip)"
-
-If the user says yes, invoke `html-artifact` with an explicit `--out` path:
+Offer an HTML companion only when a browsable surface would materially help the current task. Do not append a mandatory offer to every closeout. When requested, invoke `html-artifact` with an explicit `--out` path:
 
 ```text
 html-artifact ~/agent-artifacts/<slug>/markdown/<doc-type>.md --out ~/agent-artifacts/<slug>/html/<doc-type>.html
@@ -206,11 +193,9 @@ Do not rely on `html-artifact`'s default destination when rendering a workspace 
 
 ### Images
 
-After writing Markdown, offer an image companion only when the document clearly benefits from a visual summary, diagram, option board, or variant board:
+After writing Markdown, create an image companion when requested. Otherwise offer one only when a visual summary, diagram, or variant board would materially help; no fixed yes/skip prompt is required.
 
-> "Image companion available. Run `image-artifact` on this Markdown file for visual summaries or variant boards. (yes / skip)"
-
-If the user says yes, invoke `image-artifact` with an explicit source path and workspace:
+If the user requests the image or accepts an offer, invoke `image-artifact` with an explicit source path and workspace:
 
 ```text
 image-artifact ~/agent-artifacts/<slug>/markdown/<doc-type>.md --workspace ~/agent-artifacts/<slug>
@@ -220,15 +205,13 @@ If Markdown was written through `--out`, substitute the resolved Markdown path a
 
 ### Local Workbench
 
-After Markdown, HTML, or image companions exist in a workspace, offer local preview only when the user wants browser review, variant comparison, screenshots, or pre-publish inspection:
-
-> "Local workbench available. Run `artifact-workbench` on this workspace for read-only browser preview. (yes / skip)"
-
-If the user says yes, invoke:
+After artifacts exist, invoke `artifact-workbench` when browser preview is requested. A combined request to create and preview is sufficient authorization; do not ask yes/skip again. Use `--live` for iteration and `--capture-selections` for requested browser choice capture. If preview was not requested, offer it only when materially useful.
 
 ```text
-artifact-workbench ~/agent-artifacts/<slug>
+artifact-workbench ~/agent-artifacts/<slug> --live
 ```
+
+Complete requested source, companions, and preview before one final report. A concise prototype brief is sufficient; do not create a delivery task doc just to unlock visual exploration.
 
 ## Workflow
 
