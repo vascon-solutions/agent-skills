@@ -241,3 +241,28 @@ test('workflow wrapper refresh preserves originals and refuses missing provenanc
     assert.match(fs.readFileSync(entry, 'utf8'), /owned-workflow-routing/);
   } finally { fs.rmSync(home, { recursive: true, force: true }); }
 });
+
+test("unslop is linked, cited by publication and delivery, and scans its own prose clean", async () => {
+  const linker = read("bin", "link-skills.sh");
+  assert.match(linker.split('SKILL_NAMES="')[1].split('"')[0], /^unslop$/m);
+  assert.match(read("README.md"), /^\| `unslop` \|/m);
+  assert.match(read("skills", "publish-branch", "SKILL.md"), /\.\.\/unslop\/references\/surfaces\.md/);
+  assert.match(read("skills", "task-doc-delivery-loop", "SKILL.md"), /`unslop`/);
+  const { scanText } = await import("../skills/unslop/scripts/scan.mjs");
+  for (const file of ["SKILL.md", "references/surfaces.md"]) {
+    assert.deepEqual(scanText(read("skills", "unslop", file), { file }).hits, [], file);
+  }
+});
+
+test("skill frontmatter scalars that contain ': ' or ' #' are quoted", () => {
+  for (const name of skillNames) {
+    const frontmatter = read("skills", name, "SKILL.md").split("---")[1] ?? "";
+    for (const line of frontmatter.split("\n")) {
+      const match = line.match(/^(\w[\w-]*):\s+(.*)$/);
+      if (!match) continue;
+      const value = match[2];
+      if (/^["'>|]/.test(value)) continue;
+      assert.ok(!/: | #/.test(value), `${name} ${match[1]} needs quoting: ${value}`);
+    }
+  }
+});
