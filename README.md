@@ -36,6 +36,7 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
     ├── artifact-workbench/
     ├── repo-design-context/
     ├── publish-artifact/
+    ├── brainstorm/
     ├── task-doc/
     ├── task-doc-intake/
     ├── task-doc-delivery-loop/
@@ -72,9 +73,10 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 | `implementation-map`        | Produce a code-grounded Markdown map of an existing feature or module — entry points, runtime flow, ownership boundaries, tests, refactoring candidates, and HTML/image artifact decisions. Rejects work too small to justify a map                                                  |
 | `repo-skill-scan`           | Scan a repo for repeated patterns; recommend skills, commands, or no action, then scaffold approved candidates into correctly structured files with link-script and README wiring                                                                                                     |
 | `roadmap-todo`              | Create and maintain durable roadmap or todo files for feature-grade work across repos                                                                                                                                                                                                |
-| `task-doc`                  | Create durable task documents for feature-grade work and reject small work that should stay in normal plan mode                                                                                                                                                                      |
-| `task-doc-intake`           | Run a guided interview, map loose notes/screenshots, or derive codebase findings into an approved change inventory and task doc before code; classifies and downshifts small work, ends at an explicit implementation gate                                                            |
-| `task-doc-delivery-loop`    | Deliver one approved task doc or a coherent ordered set in one repository through calibrated implementation, validation, and review to a pushed branch and draft PR by default; marking the PR ready for review and merge are explicit                                                 |
+| `brainstorm` | Explore unsettled ideas through discussion and research; produce a recommendation, research brief, or optional design spec without automatic delivery handoff |
+| `task-doc`                  | Create durable task documents for bounded handoff work; return small immediate fixes to normal execution                                                                                                                                                                      |
+| `task-doc-intake`           | Run a guided interview, map loose notes/screenshots, or derive codebase findings into an approved change inventory and task doc before code; classifies and downshifts small work, preserves existing authorization through the delivery handoff                                                            |
+| `task-doc-delivery-loop`    | Deliver one approved task doc or a coherent ordered set in one repository through implementation, scoped validation, and review to a pushed branch and draft PR by default; marking the PR ready for review and merge are explicit                                                 |
 | `isolated-worktree`         | Ensure work happens in an isolated checkout: detect existing isolation, prefer native platform worktree tools, fall back to `git worktree` with lockfile-aware setup, identity-based verification, and cleanup hygiene                                                               |
 | `audit-logging-standard`    | Review or harden audit logging for APIs, admin workflows, sensitive mutations, compliance trails, and protected audit read surfaces                                                                                                                                                  |
 | `forms-rhf-zod-standard`    | Build or review React forms that use React Hook Form, Zod, typed payloads, resolver validation, API error mapping, or shared form contracts                                                                                                                                          |
@@ -87,9 +89,31 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 | `html-artifact`             | Convert any Markdown file into a self-contained, browser-ready HTML companion stored in `~/agent-artifacts/`. Supports task docs, roadmaps, QA handoffs, frontend handoffs, repo docs, and generic files                                                                             |
 | `markdown-artifact`         | Create polished Markdown artifact workspaces under `~/agent-artifacts/<slug>/` from ideas, notes, UI/backend designs, learning topics, tutorials, task plans, and other early-stage source docs                                                                                      |
 | `image-artifact`            | Create static visual companions from existing Markdown, including summary cards, UI variant boards, comparison boards, decision boards, concept posters, architecture diagrams, and API flow images. Repo Markdown defaults to `~/agent-artifacts/<repo-name>-<source-stem>/images/` |
-| `artifact-workbench`        | Serve an artifact workspace or single HTML artifact through a read-only localhost workbench for variant comparison, browser QA, and pre-publish inspection                                                                                                                           |
+| `artifact-workbench`        | Serve an artifact workspace or single HTML artifact through a localhost workbench (read-only by default, optional live refresh and selection capture) for variant comparison, browser QA, and pre-publish inspection                                                                                                                           |
 | `repo-design-context`       | Discover whether local repo styling, design tokens, brand assets, or architecture vocabulary can safely inform generated artifacts                                                                                                                                                   |
 | `publish-artifact`          | Publish a `~/agent-artifacts/<slug>/` workspace to S3, GitHub Wikis, ClickUp Docs, native Google Docs, or raw Google Drive folders with explicit destination flags. Explicit command only                                                                                            |
+
+## Workflow Ownership
+
+Use `brainstorm` for research and unsettled design, `task-doc-intake` for delivery scope, `task-doc` for the durable task, and `task-doc-delivery-loop` for authorized execution. `review-task-docs` and `review-implementation` report findings; `address-review-findings` owns their authorized remediation. `publish-branch` owns publication. `monitor-pr-review` is explicitly requested ongoing work.
+
+An approved task/spec satisfies discovery; one validation owner supplies reusable evidence to review and publication. Keep sequencing in the delivery ledger unless a separate durable plan is needed. Failure investigation uses the delivery skill's focused debugging reference. Core delivery has no Superpowers dependency. For skill authoring, use the host-provided `skill-creator` when available (it is not bundled in this pack), with focused checks and bounded scenario review when worthwhile.
+
+`brainstorm` saves substantial briefs/specs automatically: user path first, then existing repo spec convention, then `docs/specs/<topic>.md`; repo-independent research goes under `~/agent-artifacts/<topic>/markdown/`. Short exploration stays in chat. Saved specs are proposed until accepted; saving does not authorize commits or implementation.
+
+### Shared Pack Dependencies
+
+Install this workflow pack together using `bin/link-skills.sh`. Skills share sibling references such as validation and GitHub transport guidance; preserve the sibling directories and their resources when copying the pack. Copying a single skill folder without its linked dependencies is not a supported standalone install. The Gemini copies mentioned below are external Superpowers installations, not single-skill installs of this owned pack. Portability checks verify relative Markdown reference targets.
+
+### Cross-Agent Superpowers Selection
+
+The shared workflow applies across coding agents. Run `python3 bin/apply-workflow-preferences.py` to update existing Superpowers installations in `.agents`, Codex, Claude, Cursor, and Gemini skill directories. The script updates each resolved file once, including separate copied installations; it does not install missing skills. Claude's current links share `.agents`, while Gemini has separate copies.
+
+Portable `SKILL.md` descriptions and entry instructions keep `systematic-debugging` and `dispatching-parallel-agents` for explicit requests. Nine legacy workflows route to the owned equivalents: `brainstorming`, `writing-plans`, `executing-plans`, `subagent-driven-development`, `verification-before-completion`, `requesting-code-review`, `receiving-code-review`, `finishing-a-development-branch`, and `writing-skills`. Their original instructions are preserved beside each entry as `superpowers-original.md`, loaded only for an explicit request. Content-addressed backups are outside discovery directories at `~/agent-skills-backups/superpowers/`.
+
+These portable instructions express the selection preference; they are not a universal runtime disable switch. Codex additionally uses `policy.allow_implicit_invocation: false` for the two specialists and disables the nine redundant entries in its personal config. Other hosts may still list the legacy names. The default workflow remains defined in the shared owned skills, independent of Codex metadata or model identity.
+
+Rerun the update script after external upgrades or new installations. Pass `--force` to regenerate existing wrappers from updated routing text while preserving their original skill references. Then reload skills or start a fresh session in each host. The shared link script installs owned skills; this separate script applies the explicitly chosen external workflow preferences. Personal host configuration remains separate.
 
 ## Link Targets
 
@@ -178,17 +202,17 @@ The link script is idempotent — it skips symlinks that already point to the co
 
 ### Review-gated implementation
 
-1. `task-doc-intake` — classify the work (downshifting `small`/`fix`), run a guided interview or map notes into an approved change inventory, render the task doc via `task-doc`, and stop at the implementation gate
+1. `task-doc-intake` — classify the work (downshifting `small`/`fix`), run a guided interview or map notes into an approved change inventory, render the task doc via `task-doc`, and carry existing authorization through the handoff
 2. Optional companions: `image-artifact` for visual/API/architecture summaries, `html-artifact` for browsable or interactive review surfaces; `review-task-docs` for high-risk scope
-3. After explicit task-doc approval: `task-doc-delivery-loop` implements; then `review-implementation` and `address-review-findings` when valid gaps need remediation
+3. When implementation is authorized: `task-doc-delivery-loop` owns execution, review, and remediation without starting duplicate workflows
 
 ### Approved task-doc delivery
 
-1. `task-doc-delivery-loop` — run one approved task doc or a coherent ordered set in the current repository through calibrated implementation, deduplicated validation, review, a draft PR by default, and feedback closeout; marking the PR ready for review and merge are explicit
+1. `task-doc-delivery-loop` — run one approved task doc or a coherent ordered set in the current repository through scoped implementation, reusable validation evidence, review, and a draft PR by default; ready status, monitoring, and merge are separately explicit
 
 ### Ongoing PR review feedback
 
-1. `monitor-pr-review` — invoke explicitly with monitor, babysit, keep-watching, loop, or until-quiet wording for any open PR, including a draft. `task-doc-delivery-loop` delegates automatically only after an explicitly ready PR is published or updated.
+1. `monitor-pr-review` — invoke explicitly with monitor, babysit, keep-watching, loop, or until-quiet wording for any open PR, including a draft. `task-doc-delivery-loop` invokes monitoring only when the user separately requests ongoing PR review; a ready PR alone does not start it.
 
 ### Auditing a running UI feature
 
@@ -237,10 +261,10 @@ The link script is idempotent — it skips symlinks that already point to the co
 
 ### Previewing artifact workspaces locally
 
-1. `artifact-workbench` — serve a `~/agent-artifacts/<slug>/` workspace or single HTML artifact through a read-only localhost workbench. Use it to compare HTML variants, inspect Markdown/images/assets/metadata, and review the default publish upload set before running `publish-artifact`.
+1. `artifact-workbench` — serve a `~/agent-artifacts/<slug>/` workspace or single HTML artifact through a localhost workbench (read-only by default, optional live refresh and selection capture). Use it to compare HTML variants, inspect Markdown/images/assets/metadata, and review the default publish upload set before running `publish-artifact`.
 
 ```bash
-node skills/artifact-workbench/scripts/serve-artifact-workbench.js <workspace-or-html-file> [--open]
+node skills/artifact-workbench/scripts/serve-artifact-workbench.js <workspace-or-html-file> [--open] [--live] [--capture-selections]
 ```
 
 ### Applying repo design context to artifacts

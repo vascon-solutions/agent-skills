@@ -1,9 +1,11 @@
 ---
 name: tanstack-start-standard
-description: Use when building or reviewing TanStack Start apps with SSR, server functions, server routes, streaming, server/client env boundaries, route loaders, or full-stack React behavior.
+description: Guide TanStack Start SSR, server functions, and server/client boundaries. Use for those changes or requested standards review.
 ---
 
 # TanStack Start Standard
+
+Apply the rules relevant to the requested boundary. Full template requirements apply to template creation or an explicit standards audit, not every ordinary edit. Reuse existing validation evidence; choose affected checks using [validation guidance](../task-doc-delivery-loop/references/validation.md).
 
 ## Core Rules
 
@@ -43,7 +45,7 @@ Use TanStack Start only when the frontend app needs server-side execution: SSR, 
 
 ## Verification
 
-Cover at least server env validation, server-function input validation, auth rejection, root/auth/protected route behavior, and one SSR or server-backed browser smoke path.
+For a new Start template, cover server env/input validation, auth rejection, and SSR/server-backed behavior. For a scoped change, verify only affected behavior and repo-required gates; the commands below are options, not an automatic full suite.
 
 ```bash
 pnpm check

@@ -1,9 +1,11 @@
 ---
 name: nx-monorepo-standard
-description: Use when creating, reviewing, or hardening Nx monorepo templates with React/Vite apps, NestJS APIs, shared packages, workspace aliases, module boundaries, CI checks, or Docker-ready app layouts.
+description: Design or review Nx workspace topology, shared packages, and module boundaries. Not for routine task execution.
 ---
 
 # Nx Monorepo Standard
+
+Apply the rules relevant to the requested boundary. Full template requirements apply to template creation or an explicit standards audit, not every ordinary edit. Reuse existing validation evidence; choose affected checks using [validation guidance](../task-doc-delivery-loop/references/validation.md).
 
 ## Purpose
 
@@ -56,7 +58,7 @@ Remove product names, demo assets, provider defaults, registry/image names, stal
 
 ## Verification
 
-Expected gates, adjusted to the repo:
+For workspace/template changes, account for affected graph/build/contract behavior and repo-required gates. Select from the commands below; do not reinstall unchanged dependencies or run every suite for an unrelated leaf edit:
 
 ```bash
 pnpm install --frozen-lockfile

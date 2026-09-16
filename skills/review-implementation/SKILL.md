@@ -1,121 +1,35 @@
 ---
 name: review-implementation
-description: Use when reviewing a finished implementation, completed branch, or another agent's code against a referenced task doc, spec, plan, roadmap item, PRD, or acceptance criteria.
+description: Review finished code against a task doc, spec, or acceptance criteria. Report findings; use address-review-findings for fixes.
 ---
 
 # Review Implementation
 
-## Purpose
+Assess the work product against requirements and implementation risks. Report findings without editing product code, task docs, Git state, or GitHub. Reading a PR is permitted; posting, resolving threads, and publishing are not part of this skill.
 
-Verify whether finished code satisfies the referenced task, spec, plan, roadmap item, PRD, or acceptance criteria.
+## Context
 
-This is a report-only skill. Review the implementation as a work product, not the author's reasoning, and do not edit files while using it.
+- **Standalone review:** retrieve the referenced PR/diff, source requirements, relevant code, and existing check evidence using read-only tools. If necessary, run targeted local tests/typechecks/builds to substantiate a finding; use [validation guidance](../task-doc-delivery-loop/references/validation.md). Allow ordinary temporary test output, but do not alter tracked sources, install dependencies, or start costly/live diagnostics simply to fill a checklist. Report unavailable validation.
+- **Delivery review:** consume the supplied candidate diff and validation evidence. Inspect files, read-only Git state, and source material independently. Do not rerun suites, build, install, format, start servers, or mutate GitHub. Request a specific missing or invalidated check from the delivery owner, explaining the gap. Evidence reuse is not blind trust: verify its scope and candidate identity.
 
-## Mode
+Infer the context from the request; do not ask the user to choose a mode when it is evident. Find the referenced task from supplied context, PR links, or repo conventions before asking. If no authoritative source exists, label the result quality-only rather than inventing requirements.
 
-Use one mode per review:
+## Review
 
-- **Direct review:** read the referenced source, inspect the diff and relevant code, then report findings yourself.
-- **Delegated review:** only when the user explicitly asks for an agent, subagent, or delegated review and the environment supports it, dispatch a fresh review agent with the focused prompt below. The delegated reviewer also reports only.
+Read relevant repo instructions and review the full intended diff, including uncommitted changes when in scope. Evaluate both requirement compliance and implementation quality: preserved behavior, excluded scope, contracts, errors/recovery, authorization, state transitions, accessibility, and adequacy of validation. Scale inspection to risk; do not demand a full repository tour or additional tests for cosmetic details.
 
-If the user asks to review and fix in one request, use `address-review-findings` as the orchestration skill. It will run this review flow first, then evaluate and fix valid findings.
+Use direct review unless a fresh reviewer is explicitly requested or required by the calling workflow and delegation is available. When delegating, supply focused source paths, repo/base/head or diff, candidate evidence, prior decisions, and the review context. The reviewer does not inherit broad chat history or delegate again. One reviewer can assess both compliance and quality; separate agents per pass are not mandatory. The coordinating agent may delegate; the reviewer itself must not recursively delegate.
 
-## When To Use
+For each actionable finding include file:line or symbol, violated requirement or concrete risk, impact, supporting evidence, and the smallest credible fix. Classify severity:
 
-Use when the user asks to:
+- **Critical:** broken required behavior, data loss, security/permission regression, build blocker, or severe requirement mismatch.
+- **Important:** missed requirement, likely defect, meaningful validation gap, risky design, or accessibility failure.
+- **Minor:** low-risk maintainability or polish.
 
-- review an implementation against a plan/spec/task doc
-- check whether another agent's implementation matches requirements
-- run a pre-merge implementation review
-- inspect a git diff for scope creep, missed requirements, regressions, or test gaps
+Do not inflate uncertainty into a confirmed defect or invent findings to justify the review. Preserve prior product decisions; flag new conflicting evidence rather than silently adding requirements.
 
-## When Not To Use
+## Output
 
-Do not use when:
+Report `pass`, `pass-with-fixes`, or `fail`, findings ordered by severity, and missing validation. Distinguish inspected evidence from checks you ran and note whether review was local or independent. A pass applies to the stated scope and evidence, not to unverified runtime behavior.
 
-- reviewing the task doc itself before implementation - use `review-task-docs`
-- reviewing recent documentation edits - use `review-doc-changes`
-- fixing or remediating findings - use `address-review-findings`
-
-## Workflow
-
-1. Read the referenced plan/spec/task doc. If no source is referenced, ask once. If the user declines to provide one or none exists, run a quality-only review and label the verdict accordingly.
-2. Read applicable repo instructions such as `AGENTS.md` or `CLAUDE.md`.
-3. Inspect the implementation diff and relevant code. Use `git status`, `git diff`, and targeted file reads.
-4. In delegated review mode, dispatch the most capable review agent available with only the focused review context. If delegation is unavailable, perform the review locally and state that limitation.
-5. Review in two passes:
-   - spec compliance: requirements met, missed, or exceeded
-   - implementation quality: correctness, architecture, maintainability, tests, regressions
-6. Report findings first, ordered by severity. Do not edit files during the review.
-
-## Delegated Review Prompt
-
-When delegation is explicitly requested and supported, use a fresh review agent/subagent. Prefer the highest practical reasoning effort for review. Avoid passing broad session history unless the review needs it.
-
-```text
-Review the current implementation against:
-
-{PLAN_OR_SPEC_PATH}
-
-Read the plan/spec, applicable repo instructions, git status, git diff, and relevant files.
-
-Report only. Do not modify files.
-
-Check:
-- every requirement is implemented
-- no requirement is missed or contradicted
-- no unrequested scope was added
-- repo instructions are followed
-- user-visible behavior is correct
-- tests and validation are adequate
-- risks, regressions, and edge cases are identified
-
-Output:
-- verdict: pass, pass-with-fixes, or fail
-- critical findings
-- important findings
-- minor findings
-- missing validation
-- recommended fixes
-
-For each finding include file:line, the violated requirement or risk, why it matters, and the smallest credible fix.
-```
-
-## Severity
-
-- Critical: broken required behavior, data loss, security issue, auth/permission regression, build-blocking error, or severe mismatch with the plan.
-- Important: missed requirement, risky architecture, bad error handling, meaningful test gap, accessibility issue, or likely user-facing defect.
-- Minor: polish, naming, small maintainability issue, or low-risk cleanup.
-
-These categories are the finding vocabulary shared across this pack, so findings move cleanly into `address-review-findings`.
-
-Do not inflate severity. Do not bury blocking findings under summary text.
-
-## Acting On Findings
-
-To act on findings, use `address-review-findings`.
-
-## Example Flow
-
-1. User asks for a review of the current branch against `docs/tasks/payments.md`.
-2. Read the task doc, repo instructions, `git status`, `git diff`, and the touched files.
-3. Report `Verdict: pass-with-fixes` with findings ordered as Critical, Important, then Minor.
-4. Stop. Do not fix the findings in this skill.
-
-## Output Shape
-
-```md
-Verdict: pass-with-fixes
-
-Critical
-- None
-
-Important
-- [path/to/file.ts:42] Requirement X is not implemented. This matters because... Smallest fix: ...
-
-Minor
-- [path/to/file.ts:88] ...
-
-Missing Validation
-- `pnpm type-check` was not run, or no test covers...
-```
+For authorized remediation, return findings to `address-review-findings`. Report-only review does not independently trigger a fix, another review, or publication.

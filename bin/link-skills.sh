@@ -19,6 +19,7 @@ if [ ! -d "$SKILLS_DIR" ]; then
 fi
 
 SKILL_NAMES="
+brainstorm
 audit-api
 audit-ui
 prepare-frontend-handoff

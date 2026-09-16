@@ -63,13 +63,9 @@ Produce one or more of:
 - an updated roadmap or todo file
 - a recommendation that specific items should become task docs
 
-## HTML Companion
+## Optional Companion
 
-After writing the roadmap file, append this as a follow-up line:
-
-> "HTML companion available. Run `html-artifact` on this file for a browser-ready kanban board. (yes / skip)"
-
-If the user says yes, invoke `html-artifact` on the output path.
+Offer `html-artifact` only when a browser board would help the requested review or planning. Do not append an offer after routine status updates.
 
 ## Cautions
 

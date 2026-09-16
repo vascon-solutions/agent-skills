@@ -10,7 +10,7 @@ Use prompts like these to trigger the skill cleanly:
 - `Should this feature be one task or multiple sub tasks? Create the right task doc structure.`
 - `Write this task doc to .agent/tasks/042-sample-feature.md.`
 - `Output the task doc only. Do not write a file.`
-- `Review whether this change deserves a task doc or should stay in normal plan mode.`
+- `Review whether this change deserves a task doc or should stay in normal execution.`
 
 ## Example 1: Good Fit
 
@@ -81,11 +81,11 @@ User request:
 
 `Fix the spacing in the dashboard header and align the icon.`
 
-Why it should be rejected:
+Why it should downshift:
 
-- the work is too small
-- a durable task artifact adds no real value
-- normal plan mode is enough
+- a durable task artifact adds no value for this immediate fix
+- return to normal implementation and complete the authorized edit
+- do not stop the user's fix request merely because no task doc is needed
 
 ## Example 6: Populated Implementation-Oriented Task
 

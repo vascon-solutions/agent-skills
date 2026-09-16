@@ -120,7 +120,9 @@ test("ongoing PR review monitoring is distinct from one-shot remediation", () =>
 });
 
 test("PR review monitoring preserves lifecycle safety contracts", () => {
-  const monitor = read("skills", "monitor-pr-review", "SKILL.md");
+  const entry = read("skills", "monitor-pr-review", "SKILL.md");
+  assert.match(entry, /\]\(references\/state-and-timing\.md\)/);
+  const monitor = entry + "\n" + read("skills", "monitor-pr-review", "references", "state-and-timing.md");
   const loop = read("skills", "task-doc-delivery-loop", "SKILL.md");
   const publishSection = monitor.split("## Publish, Reply, Resolve")[1].split("## Quiet Window")[0];
 
@@ -186,4 +188,56 @@ test("GitHub issue intake preserves evidence, approval, and handoff contracts", 
   assert.match(template, /^## Acceptance criteria$/m);
   assert.match(template, /^## Excluded$/m);
   assert.match(metadata, /\$github-issue-intake/);
+});
+
+test('relative Markdown references resolve within the installed skill pack', () => {
+  function walk(dir) {
+    return fs.readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
+      const file = path.join(dir, entry.name);
+      return entry.isDirectory() ? walk(file) : entry.name.endsWith('.md') ? [file] : [];
+    });
+  }
+  // Entry points and maintained references, not example artifacts or fixtures.
+  for (const name of skillNames) {
+    const dir = path.join(root, 'skills', name);
+    const refs = path.join(dir, 'references');
+    const files = [path.join(dir, 'SKILL.md'), ...(fs.existsSync(refs) ? walk(refs) : [])];
+    for (const file of files) {
+      const content = fs.readFileSync(file, 'utf8').replace(/```[\s\S]*?```/g, '');
+      for (const match of content.matchAll(/\]\((\.{1,2}\/[^\s)]+)\)/g)) {
+        const target = decodeURIComponent(match[1].split('#')[0]);
+        assert.ok(fs.existsSync(path.resolve(path.dirname(file), target)), `${file}: missing ${target}`);
+      }
+    }
+  }
+});
+
+test('workflow wrapper refresh preserves originals and refuses missing provenance', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'workflow-refresh-'));
+  const dir = path.join(home, '.agents', 'skills', 'brainstorming');
+  const entry = path.join(dir, 'SKILL.md');
+  const original = '---\nname: brainstorming\ndescription: Original upstream\n---\nOriginal body\n';
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(entry, original);
+  const run = (...args) => spawnSync('python3', ['bin/apply-workflow-preferences.py', '--home', home, ...args], { cwd: root, encoding: 'utf8' });
+  try {
+    assert.equal(run().status, 0);
+    const wrapper = fs.readFileSync(entry, 'utf8');
+    fs.writeFileSync(entry, wrapper.replace('Default to', 'Stale routing to'));
+    assert.equal(run().status, 0);
+    assert.match(fs.readFileSync(entry, 'utf8'), /Stale routing/);
+    assert.equal(run('--force').status, 0);
+    assert.equal(fs.readFileSync(entry, 'utf8'), wrapper);
+    assert.equal(fs.readFileSync(path.join(dir, 'superpowers-original.md'), 'utf8'), original);
+    fs.writeFileSync(entry, wrapper.replace('routing:v1', 'routing:v0'));
+    assert.equal(run().status, 0);
+    assert.equal(fs.readFileSync(entry, 'utf8'), wrapper);
+    const upgraded = original + 'Upstream update\n';
+    fs.writeFileSync(entry, upgraded);
+    assert.equal(run().status, 0);
+    assert.equal(fs.readFileSync(path.join(dir, 'superpowers-original.md'), 'utf8'), upgraded);
+    fs.unlinkSync(path.join(dir, 'superpowers-original.md'));
+    assert.notEqual(run('--force').status, 0);
+    assert.match(fs.readFileSync(entry, 'utf8'), /owned-workflow-routing/);
+  } finally { fs.rmSync(home, { recursive: true, force: true }); }
 });

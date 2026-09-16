@@ -1,141 +1,50 @@
 ---
 name: task-doc-delivery-loop
-description: Use when one or more approved task docs in the current repository should share one delivery goal and be carried through implementation, validation, and review to a pushed branch and draft PR by default.
+description: Deliver approved task docs through implementation, validation, review, and a draft PR. Use for execution, not discovery or report-only review.
 ---
 
 # Task Doc Delivery Loop
 
-## Purpose
+Own delivery of one approved task doc or coherent ordered set in one repository. Preserve scope, exclusions, decisions, and existing authorization. An approved task doc satisfies discovery and design; do not start another planning or execution workflow.
 
-Run one approved task doc or coherent ordered set as a bounded, single-repository delivery loop. Task docs remain the source of truth; this skill orchestrates implementation through closeout without duplicating dependent skills.
+## Endpoint And Scope
 
-Default completion is one pushed branch with one draft PR and known check/comment state. Marking the PR ready for review, and any narrower endpoint (local-only, commit-only, or a pushed branch with no PR), each require explicit user wording. Never merge without explicit authorization.
+Default to a pushed branch and draft PR. A ready PR, narrower endpoint (local-only, commit-only, push-only), or merge requires explicit user wording; carry that wording forward without asking again. A ready PR does not authorize ongoing review monitoring. Never merge without explicit authorization.
 
-The PR-bound default assumes a GitHub remote with working PR tooling. When the repository has no remote, a non-GitHub remote (GitLab, Bitbucket, or other), or no usable PR tooling, do not attempt an equivalent mutation on another platform: complete at verified local completion — implemented, validated, reviewed, and committed on the working branch — and report why the publish step was narrowed. Pushing or platform-specific publishing beyond that requires explicit user wording.
+When there is no remote, a non-GitHub remote, or no usable GitHub PR tooling, narrow to verified local completion: implement, validate, review, and commit unless the user requested a narrower endpoint. Report the publication limitation. Other-platform publication requires explicit direction.
 
-## Preconditions
+Group docs only when they share one outcome, dependency order, release boundary, and reviewable PR. Separate independently shippable outcomes and primary repositories; coordinate already-authorized separate deliveries without inventing new scope. Consumer-owned generated or file-dependency refreshes belong to the consumer delivery.
 
-Use only when every proposed task doc is approved by the current request, explicit approval after a review gate, or a clear repo status convention.
+## 1. Establish The Delivery
 
-If any doc is missing, unapproved, stale, or blocked by unresolved decisions, ask once and stop. Use `task-doc-intake` (or `task-doc` directly for an already-bounded source) when no approved task doc exists.
+Read the task sources, relevant repo instructions, and Git state. Verify approval, prerequisites, target branch, existing PR/worktree identity, and intended dirty scope. Correct demonstrably stale mechanical references; ask only when missing approval or a material unresolved decision blocks safe work. Do not reopen settled decisions because a skill suggests another approval gate.
 
-Do not use for report-only review, task-doc creation/repair, or publishing existing commits without implementation.
+Use the current checkout when task-appropriate and safe. Use `isolated-worktree` for unrelated overlapping edits, protected-branch work without direct authorization, or concurrent mutators. Before installing in an isolated checkout, verify relative/file dependencies resolve to the intended sibling revision and build output; a lockfile alone does not prove freshness.
 
-## Delivery Set Rules
+Keep a compact session ledger: task paths/status, repo, loaded skill revision, branch/target, endpoint, decisions, validation evidence, review disposition, and blockers. Use an existing matching goal when present; create goal tooling only when explicitly requested. Do not require a new durable plan or intermediate commits for routine work.
 
-A delivery set uses one current repository, goal/ledger, checkout or worktree, branch, and at most one PR. A single task doc is a set of one.
+For migrations, auth/permissions, broad refactors, or dependent phases, record order, prerequisites, irreversible boundaries, and recovery/validation checkpoints. Write a separate plan only when the sequencing needs a durable handoff or the user requests it. Do not prewrite the implementation as a second code document.
 
-Group docs only when they share one outcome and dependency order, branch and PR, release/approval boundary, and a reasonably reviewable diff.
+## 2. Implement And Validate
 
-Split docs into separate goals when they are unrelated, independently shippable, need different reviewers or release timing, or make one PR materially harder to validate. Pressure to reduce prompts, tokens, or PR count does not override these split rules.
+Use one implementation owner by default. Delegate bounded independent work only when requested or justified and authorized by applicable instructions. Do not require a fresh implementer and two reviewers for every small step. Preserve explicit model and effort choices; otherwise inherit runtime defaults and scale review depth to risk.
 
-If an included task requires implementation in another primary repository, stop and require a separate task doc and goal there. Repo-standard generated, vendored, or file-dependency snapshot refreshes remain in scope when the current repo owns the resulting change.
+Read [validation](references/validation.md) when choosing checks or reusing evidence. Implement in dependency order with focused checks during development and one deduplicated required final gate. Capture failing behavior before a bug fix when practical; add durable tests for named behavioral or contract risks, not for incidental copy, CSS, or DOM shape. Runtime UI acceptance may require browser inspection without requiring a permanent browser test.
 
-## Delivery Calibration
+When a check fails, read [debugging](references/debugging.md), investigate, and fix related failures within the authorized scope. A recoverable failure is work to do, not automatically a user approval gate. Record unrelated/environmental failures and their effect on completion.
 
-Choose and record calibration during intake:
+## 3. Review And Remediate
 
-| Dimension  | Default                            | Calibration                                                                                                                                                                                                                                               |
-| ---------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Effort     | `medium`                           | `low` for docs/mechanical work; `high` for migrations, auth, permissions, security, finance, destructive data changes, unclear contracts, or broad refactors. Preserve explicit higher requests.                                                          |
-| Validation | `focused` per task + one group run | Use `affected`, `full`, and/or `repo-required` when risk or repo policy requires them; account for publish hooks that repeat checks.                                                                                                                      |
-| Review     | tight delegated review             | Use high-effort delegation for high risk/explicit deep review, or local review by explicit low-risk choice or as fallback. `none` requires agent-classified low risk, an explicit no-review/non-PR request, and repo permission. PR delivery gets review. |
-| Publish    | pushed branch + draft PR           | Ready-for-review is explicit. A narrower endpoint requires explicit wording unless GitHub remote or PR tooling is unavailable, which automatically narrows to verified local completion per Purpose.                                                     |
+Use `review-implementation` in delivery-review mode with the task sources, complete diff, candidate identity, prior decisions, and validation evidence. Use one independent reviewer when requested or required and available; otherwise perform a local review and identify its limits. Additional task-boundary reviews need an explicit gate or a material risk boundary. A PR-bound delivery receives review unless the user explicitly waives it and repo policy permits that.
 
-After docs, import, or formatting-only remediation, rerun targeted checks instead of an unchanged full suite unless risk changed. Retrospect on runs over about 30 minutes or with repeated validation/review cycles.
+Use `address-review-findings` to evaluate valid, invalid, unclear, and out-of-scope findings. Apply valid fixes as one coherent batch. Rerun invalidated checks; request one final focused review only after material behavioral remediation. Continue beyond this bound for new critical/blocking findings or explicit instruction, not endless polish. Keep independent work moving when one finding needs clarification.
 
-## Delivery Ledger
+## 4. Publish And Close
 
-Store the ledger in goal tooling when available; otherwise keep a compact session checklist and state the fallback.
+Use `publish-branch` for the agreed endpoint. Supply candidate identity and applicable evidence; publication must not invent another validation plan. If a validated commit is supplied, use exact-candidate mode. Otherwise commit the intended scope, account for hook changes, and verify the resulting candidate before pushing.
 
-Track ordered `task_docs` (path, status, validation, checkpoint), repo, branch, phase, calibration, validation evidence, findings, PR state, and blockers.
+Take one final PR snapshot: URL, base, draft/ready state, head, checks, reviews, and unresolved threads. Pending CI or reviewer approval is external state: report it accurately without calling the PR merge-ready. For a create-PR endpoint, report delivery complete with pending external checks clearly separated; keep any explicitly requested green-CI, approval, or merge gate open until satisfied. Do not wait for review or remediate newly arriving comments automatically. A separate current-findings request uses `address-review-findings`; explicit ongoing PR-review monitoring uses `monitor-pr-review`. Generic CI watching is read-only unless remediation is requested.
 
-## Dependency Routing
+When monitoring was requested, consume its result once: `quiet_complete` returns to the agreed closeout gates; `waiting_for_reviewer` and `waiting_for_user` identify dependencies; `blocked` follows runtime blocking policy; `externally_terminated` requires checking closed/merged state. A quiet window or spent budget is not proof of completion.
 
-Load these skills lazily; do not restate them.
-
-Local skills are the primary routes. External skills are optional enhancers; the core rule stated inline holds when they are not installed.
-
-| Need                                   | Use                                                                                                 |
-| -------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| Missing/unapproved task doc            | Ask once; then `task-doc-intake` or `task-doc`                                                       |
-| Separate plan for high-risk sequencing | Sequence dependent phases explicitly in the ledger (`executing-plans` if installed)                 |
-| Behavior change with test surface      | Write or adjust tests before the change (`test-driven-development` if installed)                     |
-| Failed or surprising validation        | Isolate the root cause before fixing, not symptoms (`systematic-debugging` if installed)            |
-| Implementation review                  | `review-implementation`                                                                             |
-| Finding remediation                    | `address-review-findings`                                                                            |
-| Commit, push, PR                       | `publish-branch`; a draft PR is the default endpoint, ready-for-review is explicit                  |
-| PR comments                            | `monitor-pr-review` for an explicitly ready PR; bounded GitHub review-comment tooling for a draft PR |
-| Final claim                            | Confirm with command evidence before claiming done (`verification-before-completion` if installed)  |
-
-Escalate to explicit dependent-phase sequencing (or `executing-plans` if installed) only for migrations, auth/security/permission work, broad refactors, unclear ordering, or delivery sets with several dependent phases.
-
-## Workflow
-
-1. **Intake**
-   Read each task doc once, repo instructions, and git state. Verify approval, prerequisites, grouping, base branch, dirty scope, protected-branch risk, and calibration. Extract one ordered brief: objective, scope/exclusions, preserved behavior, likely files, validation, and publish assumptions.
-
-2. **Ledger Start**
-   Create or continue one matching ledger; do not create a duplicate goal. Record ordered docs, branch intent, calibration, validation plan, and publish assumptions.
-
-3. **Ordered Implementation**
-   Implement included scope in dependency order, using tests first for behavior changes. Finish focused validation and record a commit or ledger checkpoint before advancing. Do not add excluded follow-ups.
-
-4. **Group Validation**
-   Run one deduplicated group plan plus repo-required checks. Debug related failures systematically; record unrelated/environmental failures.
-
-5. **Implementation Review**
-   Unless calibrated to `none`, use the selected local or delegated report-only review against every task doc and the complete diff. For delegation, wait at most five minutes total by default, checking progress at least once per minute; on timeout, interrupt the reviewer when supported, perform the review locally, and record the fallback. Set and record a longer maximum before dispatch only for explicit deep review or high-risk work. Add a task-boundary review only for an explicit gate or high-risk boundary.
-
-6. **Remediation**
-   Classify findings as valid, invalid, unclear, or out of scope. Fix valid, ask on behavior-changing ambiguity, reject invalid with evidence, and defer out-of-scope findings. Rerun affected checks and review again only after material remediation.
-
-7. **Publish**
-   Use `publish-branch` to reach the calibrated endpoint — by default a pushed branch with a draft PR. Stage only intended files, respect hooks, and never open or update a PR with known failing checks; remediate or report the blocker. Mark the PR ready for review only when the user asked and validation and review are accounted for. Stop at a narrower local endpoint (no PR, no push, or commit-only) when the user explicitly requested it — or automatically, with the reason reported, when the repository has no GitHub remote or usable PR tooling (see Purpose).
-
-8. **PR Review**
-   For an explicitly ready PR, invoke `monitor-pr-review` inline and let it own review-event monitoring through its configured quiet window. For a draft PR, keep the existing bounded inspection of checks, reviews, comments, and unresolved threads; do not start the monitor automatically. Treat non-review bot notices and usage limits as external state. Pending required checks/reviewer decisions keep the ledger open; after the configured wait, report and pause.
-
-9. **PR Remediation**
-   For an explicitly ready PR, accept the `monitor-pr-review` ledger and terminal result without starting a duplicate PR remediation cycle. For a draft PR, evaluate actionable comments, fix valid findings, push, rerun focused validation, and inspect updated PR state within the normal one-cycle bound. A user may invoke `monitor-pr-review` explicitly for a draft PR outside automatic delivery delegation. Use one final report-only review if fixes materially change behavior.
-
-10. **Closeout**
-    Verify git status, validation, task checkpoints, and applicable commit, upstream, PR, check, review, comment, and thread state. After monitoring, handle `quiet_complete` by continuing normal gates; report and pause on `waiting_for_reviewer`; ask and pause on `waiting_for_user`; record `blocked` under the runtime blocking policy; and verify closed/merged state before dispositioning `externally_terminated`. Close only when every task is accounted for, findings are dispositioned, required checks/reviewer decisions are settled, and applicable PR state is known. A spent budget or quiet window is not completion.
-
-## Loop Bounds
-
-Except in review mode `none`, default to one group review, one remediation pass, and one optional final review after material fixes. Draft PR delivery allows one PR-comment remediation cycle and one optional final review after material PR fixes. For an explicitly ready PR, the configured `monitor-pr-review` loop replaces that one-cycle bound; its repeated-blocker safeguard still applies.
-
-Continue only for new critical/blocking findings or explicit user instruction. Record a repeated blocker instead of spinning.
-
-## Worktree Policy
-
-Use the current checkout when clean, task-appropriate, and allowed by repo instructions. Prefer or require isolation for unrelated dirty changes, protected/default/integration branches without direct-work authorization, concurrent mutators, or flows escalated to explicit dependent-phase sequencing (`executing-plans` if installed). Follow explicit user checkout instructions when they are safe and authorized.
-
-When isolated, verify pushed branch and PR state directly rather than relying on the parent checkout.
-
-## Subagent Review Prompt
-
-```text
-Review this ordered delivery set:
-{TASK_DOC_PATHS}
-
-Repo: {REPO_PATH}
-Branch/diff: {BRANCH_OR_DIFF_SCOPE}
-Calibration: {CALIBRATION}
-
-Report only. Do not modify files.
-
-Check that the docs form one coherent delivery set, requirements are implemented in
-order, excluded scope and preserved behavior remain intact, contracts have not drifted,
-repo instructions are followed, validation is adequate without needless duplication,
-and actionable PR comments are addressed.
-
-Return: verdict; critical, important, and minor findings; missing validation; recommended
-fixes. For each finding include file:line or PR URL, requirement/risk, impact, and the
-smallest credible fix.
-```
-
-## Final Report
-
-Report ordered task-doc paths and checkpoints, calibration, branch and commits, implementation summary, review verdicts, findings fixed/rejected/deferred/blocked, validation run/skipped, excluded dirty files, notable time sinks, remaining risks, and PR URL/check/comment state when applicable. When `monitor-pr-review` ran, include its configured quiet duration, last activity, terminal result, reply/resolution state, and remaining reviewer or user dependency.
+Report what shipped, task checkpoints, branch/commit and PR when applicable, review/finding dispositions, verification evidence and gaps, preserved unrelated files, and remaining dependencies. Reuse valid evidence instead of rerunning commands merely to write the final answer. Retrospect briefly on repeated cycles or notable delays, distinguishing measured overhead from estimates.

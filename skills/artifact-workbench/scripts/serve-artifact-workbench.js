@@ -10,10 +10,11 @@ const publishWorkspace = require('../../publish-artifact/scripts/common/workspac
 
 const ARTIFACT_DIRS = ['html', 'markdown', 'images', 'assets'];
 const HOST = '127.0.0.1';
+const { createSession } = require('./preview-session.js');
 
 function usage(exitCode = 0) {
   const stream = exitCode === 0 ? process.stdout : process.stderr;
-  stream.write('Usage: serve-artifact-workbench.js <workspace-or-html-file> [--port <n>] [--open]\n');
+  stream.write('Usage: serve-artifact-workbench.js <workspace-or-html-file> [--port <n>] [--open] [--live] [--capture-selections]\n');
   process.exit(exitCode);
 }
 
@@ -22,7 +23,11 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === '--help' || arg === '-h') usage(0);
-    if (arg === '--open') {
+    if (arg === '--live') {
+      args.live = true;
+    } else if (arg === '--capture-selections') {
+      args.captureSelections = true;
+    } else if (arg === '--open') {
       args.open = true;
     } else if (arg === '--port') {
       const raw = argv[++i];
@@ -330,26 +335,30 @@ function send(res, statusCode, body, contentType = 'text/plain; charset=utf-8', 
   res.end(body);
 }
 
-function sendFile(res, filePath) {
-  send(res, 200, fs.readFileSync(filePath), contentTypeFor(filePath));
+function sendFile(res, filePath, session, page, resolve = () => filePath) {
+  const read = () => fs.readFileSync(resolve(), 'utf8');
+  const body = session && path.extname(filePath).toLowerCase() === '.html'
+    ? session.decorate(read(), read, page) : fs.readFileSync(filePath);
+  send(res, 200, body, contentTypeFor(filePath));
 }
 
 function notFound(res) {
   send(res, 404, 'Not found\n');
 }
 
-function routeWorkspaceRequest(target, req, res) {
+function routeWorkspaceRequest(target, req, res, session) {
   const requestUrl = new URL(req.url, 'http://127.0.0.1');
   const pathname = decodePathname(requestUrl.pathname);
   if (!pathname) return notFound(res);
   if (pathname === '/') {
-    const info = discoverWorkspace(target.workspacePath);
-    return send(res, 200, buildIndexHtml({ workspacePath: target.workspacePath, slug: target.slug, info }), 'text/html; charset=utf-8');
+    const read = () => buildIndexHtml({ workspacePath: target.workspacePath, slug: target.slug, info: discoverWorkspace(target.workspacePath) });
+    return send(res, 200, session ? session.decorate(read(), read, '/') : read(), 'text/html; charset=utf-8');
   }
   if (pathname.startsWith('/preview/html/')) {
     if (path.extname(pathname).toLowerCase() !== '.html') return notFound(res);
     try {
-      return sendFile(res, safeResolve(path.join(target.workspacePath, 'html'), pathname.replace(/^\/preview\/html\//, '')));
+      const resolve = () => safeResolve(path.join(target.workspacePath, 'html'), pathname.replace(/^\/preview\/html\//, ''));
+      return sendFile(res, resolve(), session, pathname, resolve);
     } catch {
       return notFound(res);
     }
@@ -381,7 +390,7 @@ function routeWorkspaceRequest(target, req, res) {
   return notFound(res);
 }
 
-function routeSingleHtmlRequest(target, req, res) {
+function routeSingleHtmlRequest(target, req, res, session) {
   const requestUrl = new URL(req.url, 'http://127.0.0.1');
   const pathname = decodePathname(requestUrl.pathname);
   if (!pathname) return notFound(res);
@@ -389,36 +398,41 @@ function routeSingleHtmlRequest(target, req, res) {
     return send(res, 302, '', 'text/plain; charset=utf-8', { Location: `/${encodeURI(target.fileName)}` });
   }
   try {
-    return sendFile(res, safeResolve(target.rootPath, pathname));
+    const resolve = () => safeResolve(target.rootPath, pathname);
+    return sendFile(res, resolve(), session, pathname, resolve);
   } catch {
     return notFound(res);
   }
 }
 
-function createServer(target) {
-  return http.createServer((req, res) => {
+function createServer(target, options = {}) {
+  const session = options.live || options.captureSelections ? createSession(options) : null;
+  const server = http.createServer(async (req, res) => {
     try {
+      if (session && await session.handle(req, res, send)) return;
       if (req.method !== 'GET') return send(res, 405, 'Method not allowed\n');
-      if (target.mode === 'workspace') return routeWorkspaceRequest(target, req, res);
-      return routeSingleHtmlRequest(target, req, res);
+      if (target.mode === 'workspace') return routeWorkspaceRequest(target, req, res, session);
+      return routeSingleHtmlRequest(target, req, res, session);
     } catch {
       return notFound(res);
     }
   });
+  server.eventsPath = session && session.eventsPath;
+  return server;
 }
 
 function warningCount(info) {
   return info.htmlChecks.reduce((count, check) => count + check.warnings.length, 0);
 }
 
-function startupReport(target, url) {
+function startupReport(target, url, options = {}) {
   if (target.mode === 'single-html') {
     return [
       'Artifact workbench',
       `File: ${target.filePath}`,
       `URL: ${url}`,
       `Asset root: ${target.rootPath} (any file under this directory is reachable while running)`,
-      'Mode: read-only single HTML preview',
+      options.captureSelections ? 'Mode: single HTML preview with temporary selection log' : 'Mode: read-only single HTML preview',
       '',
     ].join('\n');
   }
@@ -434,7 +448,7 @@ function startupReport(target, url) {
     `Assets: ${info.files.assets.length}`,
     `Metadata: ${info.metadata ? 'yes' : 'no'}`,
     `HTML checks: ${warnings} warning${warnings === 1 ? '' : 's'}`,
-    'Mode: read-only local preview',
+    options.captureSelections ? 'Mode: local preview with temporary selection log' : 'Mode: read-only local preview',
     '',
   ].join('\n');
 }
@@ -484,12 +498,14 @@ async function main() {
   try {
     const args = parseArgs(process.argv.slice(2));
     const target = resolveTarget(args.target);
-    const server = createServer(target);
+    const server = createServer(target, args);
     const port = await listen(server, args.port);
     const url = target.mode === 'single-html'
       ? `http://${HOST}:${port}/${encodeURI(target.fileName)}`
       : `http://${HOST}:${port}/`;
-    process.stdout.write(startupReport(target, url));
+    process.stdout.write(startupReport(target, url, args));
+    if (args.live) process.stdout.write('Live refresh: enabled (preview response only)\n');
+    if (server.eventsPath) process.stdout.write(`Selection capture: enabled\nEvents: ${server.eventsPath}\n`);
     if (args.open) await openUrl(url);
   } catch (error) {
     process.stderr.write(`${error.message}\n`);

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Brainstorm"
+  short_description: "Explore ideas, research questions, and design options"
+  default_prompt: "Use $brainstorm to explore this question, compare credible approaches, and save a developed spec or research brief when useful without requiring a delivery task doc."

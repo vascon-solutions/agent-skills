@@ -1,9 +1,11 @@
 ---
 name: audit-logging-standard
-description: Use when adding, reviewing, or hardening audit logging for APIs, templates, admin workflows, sensitive mutations, compliance trails, event listeners, or protected audit read surfaces.
+description: Implement or review audit event persistence, redaction, and protected reads. Use for audit behavior, not every business mutation.
 ---
 
 # Audit Logging Standard
+
+Apply the rules relevant to the requested boundary. Full template requirements apply to template creation or an explicit standards audit, not every ordinary edit. Reuse existing validation evidence; choose affected checks using [validation guidance](../task-doc-delivery-loop/references/validation.md).
 
 ## Purpose
 

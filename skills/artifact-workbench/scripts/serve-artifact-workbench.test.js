@@ -361,3 +361,103 @@ test('startupReport for single html mode discloses the asset root', () => {
   assert.match(report, new RegExp(`Asset root: ${root.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}`));
   assert.match(report, /any file under this directory is reachable/);
 });
+
+function previewConfig(html) {
+  return JSON.parse(html.match(/const c = (\{[^\n]+\});/)[1]);
+}
+
+test('live previews track file revisions while raw exports stay untouched', async () => {
+  const ws = tempDir();
+  const file = path.join(ws, 'html', 'a.html');
+  const original = '<!doctype html><body><button data-workbench-choice="a">A</button></body>';
+  write(file, original);
+  const server = workbench.createServer({ mode: 'workspace', workspacePath: ws, slug: 'demo' }, { live: true });
+  await withServer(server, async base => {
+    const html = await (await fetch(base + '/preview/html/a.html')).text();
+    const c = previewConfig(html);
+    const headers = { 'X-Workbench-Token': c.token };
+    const revisionUrl = base + '/__workbench/revision?page=' + encodeURIComponent(c.page);
+    assert.equal((await (await fetch(revisionUrl, { headers })).json()).revision, c.revision);
+    write(file, original.replace('>A<', '>B<'));
+    assert.notEqual((await (await fetch(revisionUrl, { headers })).json()).revision, c.revision);
+    assert.equal(await (await fetch(base + '/html/a.html')).text(), fs.readFileSync(file, 'utf8'));
+    assert.equal((await fetch(base + '/preview/html/style.css')).status, 404);
+    fs.unlinkSync(file);
+    assert.equal((await fetch(revisionUrl, { headers })).status, 404);
+  });
+  assert.equal(server.eventsPath, null);
+});
+
+test('capture stores bounded revision-specific choices outside the workspace', async () => {
+  const root = tempDir();
+  const file = path.join(root, 'demo.html');
+  const original = '<!doctype html><body><button data-workbench-choice="layout-a">A</button></body>';
+  write(file, original);
+  const server = workbench.createServer({ mode: 'single-html', rootPath: root, filePath: file, fileName: 'demo.html' }, { captureSelections: true });
+  try {
+    await withServer(server, async base => {
+      const c = previewConfig(await (await fetch(base + '/demo.html')).text());
+      const event = { page: c.page, revision: c.revision, choice: 'layout-a' };
+      const headers = { Origin: base, 'Content-Type': 'application/json', 'X-Workbench-Token': c.token };
+      const post = (data, extra = {}) => fetch(base + '/__workbench/selection', { method: 'POST', headers: { ...headers, ...extra }, body: JSON.stringify(data) });
+      assert.equal((await post(event, { Origin: 'https://example.com' })).status, 403);
+      assert.equal((await post(event, { 'X-Workbench-Token': 'wrong' })).status, 403);
+      assert.equal((await post({ ...event, choice: 'a'.repeat(5000) })).status, 413);
+      assert.equal((await post({ ...event, page: '/unknown' })).status, 400);
+      assert.equal((await post(event)).status, 201);
+      const events = fs.readFileSync(server.eventsPath, 'utf8').trim().split('\n').map(JSON.parse);
+      assert.equal(events.length, 1);
+      assert.equal(events[0].choice, 'layout-a');
+      assert.equal(events[0].revision, c.revision);
+      assert.equal(fs.readFileSync(file, 'utf8'), original);
+      assert.ok(!server.eventsPath.startsWith(root + path.sep));
+      write(file, original + '<p>Changed</p>');
+      assert.equal((await post(event)).status, 409);
+      assert.equal(fs.readFileSync(server.eventsPath, 'utf8').trim().split('\n').length, 1);
+    });
+  } finally { fs.rmSync(path.dirname(server.eventsPath), { recursive: true }); }
+});
+
+test('default preview does not inject helpers or accept selection writes', async () => {
+  const root = tempDir();
+  const file = path.join(root, 'demo.html');
+  write(file, '<h1>Plain</h1>');
+  const server = workbench.createServer({ mode: 'single-html', rootPath: root, filePath: file, fileName: 'demo.html' });
+  await withServer(server, async base => {
+    assert.equal(await (await fetch(base + '/demo.html')).text(), '<h1>Plain</h1>');
+    assert.equal((await fetch(base + '/__workbench/selection', { method: 'POST', body: '{}' })).status, 405);
+  });
+  assert.equal(server.eventsPath, null);
+});
+
+test('injected browser helper refreshes changed revisions and submits marked choices', async () => {
+  const vm = require('vm');
+  const { createSession } = require('./preview-session');
+  const session = createSession({ live: true, captureSelections: true });
+  try {
+    const html = session.decorate('<body></body>', () => '<body></body>', '/demo.html');
+    let poll, click, reloads = 0;
+    const status = {};
+    const requests = [];
+    vm.runInNewContext(html.match(/<script data-artifact-workbench>([\s\S]*)<\/script>/)[1], {
+      document: { createElement: () => ({ ...status, style: {}, setAttribute() {} }), body: { append() {} }, addEventListener: (_, cb) => { click = cb; } },
+      setInterval: cb => { poll = cb; }, location: { reload: () => { reloads++; } },
+      fetch: async (url, args) => { requests.push({ url, args }); return { ok: true, json: async () => ({ revision: 'changed' }) }; },
+    });
+    await poll();
+    assert.equal(reloads, 1);
+    await click({ target: { closest: () => null } });
+    assert.equal(requests.length, 1);
+    await click({ target: { closest: () => ({ dataset: { workbenchChoice: 'a' } }) } });
+    assert.equal(JSON.parse(requests[1].args.body).choice, 'a');
+  } finally { fs.rmSync(path.dirname(session.eventsPath), { recursive: true }); }
+});
+
+test('interactive CLI flags and startup report describe capture accurately', () => {
+  const args = workbench.parseArgs(['demo', '--live', '--capture-selections']);
+  assert.equal(args.live, true);
+  assert.equal(args.captureSelections, true);
+  const report = workbench.startupReport({ mode: 'single-html', filePath: '/tmp/a.html', rootPath: '/tmp' }, 'http://127.0.0.1:1/a.html', args);
+  assert.match(report, /temporary selection log/);
+  assert.doesNotMatch(report, /Mode: read-only/);
+});
