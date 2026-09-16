@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -78,6 +80,75 @@ test("long sentences and budgets are measured across wrapped lines", () => {
 test("tables are skipped for sentence length", () => {
   const row = `| ${"word ".repeat(40)} |`;
   assert.deepEqual(rules(`${row}\n${row}`, { maxWords: 10 }), []);
+});
+
+test("sentences start on their first content line, including staged additions", () => {
+  for (const ending of [".", "!", "?", ""]) {
+    const content = `Short.\n   This sentence has more than five words${ending}`;
+    const result = scanText(content, { maxWords: 5 });
+    assert.deepEqual(result.hits.map((hit) => [hit.line, hit.rule]), [[2, "one-idea"]]);
+    const diff = "+++ b/body.md\n@@ -1,0 +2 @@\n+   This sentence has more than five words\n";
+    const staged = scanStaged(diff, () => content, { maxWords: 5 });
+    assert.deepEqual(staged[0].hits.map((hit) => [hit.line, hit.rule]), [[2, "one-idea"]]);
+  }
+});
+
+const scanner = path.join(skillRoot, "scripts/scan.mjs");
+const temporaryDirectory = (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "unslop-scan-"));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  return directory;
+};
+const git = (cwd, ...args) => {
+  const result = spawnSync("git", args, { cwd, encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  return result.stdout;
+};
+
+test("staged CLI scans Git paths with spaces, Unicode, and escaped characters", (t) => {
+  const cwd = temporaryDirectory(t);
+  git(cwd, "init", "--quiet");
+  const names = ["a b.md", "café.md", 'a"b.md', "a\\b.md", "a\tb.md", "a\nb.md"];
+  for (const name of names) fs.writeFileSync(path.join(cwd, name), "We leverage it.\n");
+  git(cwd, "add", "--", ...names);
+  for (const quotePath of ["true", "false"]) {
+    git(cwd, "config", "core.quotePath", quotePath);
+    const result = spawnSync(process.execPath, [scanner, "--staged", "--json"], { cwd, encoding: "utf8" });
+    assert.equal(result.status, 1, result.stderr || result.stdout);
+    const scans = JSON.parse(result.stdout);
+    assert.deepEqual(scans.map((scan) => scan.file).sort(), [...names].sort());
+    for (const scan of scans) {
+      assert.deepEqual(scan.hits.map((hit) => [hit.line, hit.rule]), [[1, "no-ai-vocab"]]);
+    }
+  }
+});
+
+test("staged CLI reports Git failures as errors, not clean scans", (t) => {
+  const cwd = temporaryDirectory(t);
+  const checkFailure = () => {
+    const result = spawnSync(process.execPath, [scanner, "--staged"], { cwd, encoding: "utf8" });
+    assert.equal(result.status, 2, result.stdout);
+    assert.match(result.stderr, /git diff/i);
+    assert.equal(result.stdout, "");
+  };
+  checkFailure();
+  git(cwd, "init", "--quiet");
+  fs.writeFileSync(path.join(cwd, ".git/index"), "invalid index");
+  checkFailure();
+});
+
+test("staged CLI reports unreadable index content as an error", () => {
+  const errors = [];
+  const output = [];
+  const status = runCli(["--staged"], {
+    stdout: (text) => output.push(text),
+    stderr: (text) => errors.push(text),
+    readStagedDiff: () => "+++ b/body.md\n@@ -0,0 +1 @@\n+We leverage it.\n",
+    readStagedFile: () => { throw new Error("git show failed: index blob unavailable"); },
+  });
+  assert.equal(status, 2);
+  assert.match(errors[0], /index blob unavailable/);
+  assert.deepEqual(output, []);
 });
 
 test("parses staged diffs into added text lines with new-file numbers", () => {

@@ -55,7 +55,7 @@ Stable ids. Cite by id. `scripts/scan.mjs` checks the ids marked (scan). The res
 
 - `no-filler` (scan). "In order to" is "to". "It is important to note that", "it's worth noting", "as mentioned above", "at the end of the day", "please note" are deleted.
 - `no-hedge-stack` (scan). "Could potentially possibly" is "may". One hedge at most, and only when the uncertainty is real.
-- `no-ai-vocab` (scan). Delve, leverage, utilize, seamless, robust (of prose), crucial, pivotal, showcase, foster, garner, landscape (abstract), tapestry, testament, underscore (verb), vibrant, intricate, enhance, elevate, empower, harness (verb), holistic, cutting-edge, game-changer, unlock, journey (abstract), realm, myriad. Use the plain word.
+- `no-ai-vocab` (scan, partial). Delve, leverage, utilize, seamless, crucial, pivotal, showcase, foster, garner, tapestry, testament, vibrant, intricate, enhance, elevate, empower, holistic, cutting-edge, game-changer, realm, myriad. Use the plain word. Contextual review covers robust (of prose), landscape (abstract), underscore (verb), harness (verb), unlock (figurative), and journey (abstract). The scanner does not flag those contextual terms.
 - `no-metaphor-noun` (scan). Substrate, wedge, vector (non-math), nexus, bedrock, north star, flywheel, paradigm, scaffolding (metaphor), endgame, ratchet (metaphor), primitive (noun, outside its technical sense). Name the concrete thing.
 - `no-not-just` (scan). "Not just X, but Y" and "not only X but also Y". State the point.
 - `plain-is` (scan). "Serves as", "stands as", "boasts", "acts as", "features" mean "is" or "has".

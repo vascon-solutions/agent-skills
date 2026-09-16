@@ -129,15 +129,19 @@ function sentences(paragraph) {
     cursor += length + 1;
   }
   const lineAt = (offset) => offsets.reduce((line, item) => (offset >= item.from ? item.line : line), paragraph[0].line);
+  const append = (end) => {
+    const raw = joined.slice(start, end);
+    const leading = raw.search(/\S/);
+    if (leading !== -1) out.push({ text: raw.trim(), line: lineAt(start + leading) });
+  };
   const boundary = /[.!?](?=\s|$)/g;
   let match;
   while ((match = boundary.exec(joined)) !== null) {
-    out.push({ text: joined.slice(start, match.index + 1).trim(), line: lineAt(start) });
+    append(match.index + 1);
     start = match.index + 1;
   }
-  const tail = joined.slice(start).trim();
-  if (tail) out.push({ text: tail, line: lineAt(start) });
-  return out.filter((sentence) => sentence.text);
+  append(joined.length);
+  return out;
 }
 
 const countWords = (text) => (text.match(/[A-Za-z0-9][A-Za-z0-9'’-]*/g) ?? []).length;
@@ -189,13 +193,43 @@ export function scanText(text, options = {}) {
   return { file, words, hits };
 }
 
+function parsePatchPath(header) {
+  if (!header.startsWith('"')) return header.split("\t", 1)[0];
+  // Git quotes UTF-8 bytes with octal escapes, plus C escapes for control characters.
+  const escapes = { a: 7, b: 8, t: 9, n: 10, v: 11, f: 12, r: 13, '"': 34, "\\": 92 };
+  const bytes = [];
+  let index = 1;
+  while (index < header.length) {
+    const char = header[index];
+    if (char === '"') return Buffer.from(bytes).toString("utf8");
+    if (char !== "\\") {
+      const literal = String.fromCodePoint(header.codePointAt(index));
+      bytes.push(...Buffer.from(literal));
+      index += literal.length;
+      continue;
+    }
+    index += 1;
+    const octal = header.slice(index).match(/^[0-7]{3}/);
+    if (octal) {
+      bytes.push(parseInt(octal[0], 8));
+      index += 3;
+    } else if (Object.hasOwn(escapes, header[index])) {
+      bytes.push(escapes[header[index]]);
+      index += 1;
+    } else {
+      throw new Error("Invalid escape in Git patch path");
+    }
+  }
+  throw new Error("Unclosed Git patch path");
+}
+
 export function parseStagedDiff(diff) {
   const files = new Map();
   let current = null;
   let line = 0;
   for (const raw of diff.split("\n")) {
     if (raw.startsWith("+++ ")) {
-      const name = raw.slice(4).replace(/^b\//, "");
+      const name = parsePatchPath(raw.slice(4)).replace(/^b\//, "");
       current = name === "/dev/null" || !TEXT_EXTENSIONS.has(path.extname(name)) ? null : name;
       if (current) files.set(current, []);
       continue;
@@ -209,9 +243,17 @@ export function parseStagedDiff(diff) {
   return files;
 }
 
+function runGit(args) {
+  const result = spawnSync("git", args, { encoding: "utf8" });
+  if (result.error) throw new Error(`git ${args[0]} failed: ${result.error.message}`);
+  if (result.status !== 0) {
+    throw new Error(`git ${args[0]} failed: ${result.stderr?.trim() || `exit ${result.status}`}`);
+  }
+  return result.stdout;
+}
+
 function readIndexFile(file) {
-  const result = spawnSync("git", ["show", `:${file}`], { encoding: "utf8" });
-  return result.status === 0 ? result.stdout : "";
+  return runGit(["show", `:${file}`]);
 }
 
 export function scanStaged(diff, readFile, options) {
@@ -248,7 +290,7 @@ export function parseArgs(argv) {
 const USAGE = `usage: scan.mjs [--max-words N] [--budget N] [--json] (<file>... | --stdin | --staged)
 
 Flags mechanical unslop catalog hits with line numbers. Skips fenced code, inline code, and URLs.\nStaged mode scans each staged text file in full and reports only hits on added lines.
-Exit 1 when there are hits, 0 when clean, 2 on a usage error.`;
+Exit 1 when there are hits, 0 when clean, 2 on a usage or runtime error.`;
 
 function format(results) {
   const lines = [];
@@ -278,17 +320,22 @@ export function runCli(argv, io = {}) {
 
   const results = [];
   const scanOptions = { maxWords: options.maxWords, budget: options.budget };
-  for (const file of options.files) {
-    results.push(scanText(fs.readFileSync(file, "utf8"), { ...scanOptions, file }));
-  }
-  if (options.stdin) {
-    results.push(scanText(io.readStdin ? io.readStdin() : fs.readFileSync(0, "utf8"), { ...scanOptions, file: "<stdin>" }));
-  }
-  if (options.staged) {
-    const diff = io.readStagedDiff
-      ? io.readStagedDiff()
-      : spawnSync("git", ["diff", "--cached", "--no-color", "--unified=0"], { encoding: "utf8" }).stdout ?? "";
-    results.push(...scanStaged(diff, io.readStagedFile ?? readIndexFile, scanOptions));
+  try {
+    for (const file of options.files) {
+      results.push(scanText(fs.readFileSync(file, "utf8"), { ...scanOptions, file }));
+    }
+    if (options.stdin) {
+      results.push(scanText(io.readStdin ? io.readStdin() : fs.readFileSync(0, "utf8"), { ...scanOptions, file: "<stdin>" }));
+    }
+    if (options.staged) {
+      const diff = io.readStagedDiff
+        ? io.readStagedDiff()
+        : runGit(["diff", "--cached", "--no-color", "--unified=0", "--src-prefix=a/", "--dst-prefix=b/"]);
+      results.push(...scanStaged(diff, io.readStagedFile ?? readIndexFile, scanOptions));
+    }
+  } catch (error) {
+    stderr(error.message);
+    return 2;
   }
 
   stdout(options.json ? JSON.stringify(results, null, 2) : format(results));
