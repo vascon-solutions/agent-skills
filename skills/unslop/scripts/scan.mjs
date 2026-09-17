@@ -64,7 +64,7 @@ const LINE_RULES = [
     afterMarker: true,
   },
   { id: "bold-leadin-only", message: "bold label with colon; use a sentence or a bold lead-in ending in a period", pattern: /\*\*[^*\n]{1,60}:\*\*|\*\*[^*\n]{1,60}\*\*:/g },
-  { id: "active-voice", message: "passive with named actor; make the actor the subject", pattern: /\b(?:is|are|was|were|been|being)\s+\w+(?:ed|en)\s+by\b(?!\s+default\b)/gi },
+  { id: "active-voice", message: "passive with named actor; make the actor the subject", pattern: /\b(?:is|are|was|were|been|being)\s+\w+(?:ed|en)\s+by\b(?!\s+(?:default|design|definition|nature|necessity|accident|chance|mistake|hand)(?=\s*(?:[.!?,;:)\]"']|$)|\s+(?:and|or|but)\b))/gi },
   { id: "no-decorative-emoji", message: "emoji in a heading or bullet; remove", pattern: EMOJI, markerLinesOnly: true },
 ];
 
@@ -78,6 +78,11 @@ function stripInlineCode(line) {
   let out = "";
   let index = 0;
   while (index < line.length) {
+    if (line[index] === "\\" && /[\\`]/.test(line[index + 1] ?? "")) {
+      out += line.slice(index, index + 2);
+      index += 2;
+      continue;
+    }
     if (line[index] !== "`") { out += line[index]; index += 1; continue; }
     let length = 0;
     while (line[index + length] === "`") length += 1;
@@ -128,7 +133,21 @@ function stripLinkDestinations(line) {
 function stripUrls(line) {
   return stripLinkDestinations(line)
     .replace(/<\/?[A-Za-z][A-Za-z0-9:-]*(?:\s+(?:[^"'<>]|"[^"]*"|'[^']*')*)?\/?>/g, (match) => " ".repeat(match.length))
-    .replace(/\bhttps?:\/\/[^\s<>"']+/g, (match) => " ".repeat(match.length));
+    .replace(/<https?:\/\/[^\s<>]*>/g, (match) => " ".repeat(match.length))
+    .replace(/\bhttps?:\/\/[^\s<>"']+/g, (match) => {
+      let end = match.length;
+      const pairs = { ")": "(", "]": "[", "}": "{" };
+      while (end > 0) {
+        const char = match[end - 1];
+        if (/[.!?,;:]/.test(char)) { end -= 1; continue; }
+        if (!pairs[char]) break;
+        const url = match.slice(0, end);
+        const count = (symbol) => [...url].filter((value) => value === symbol).length;
+        if (count(char) <= count(pairs[char])) break;
+        end -= 1;
+      }
+      return " ".repeat(end) + match.slice(end);
+    });
 }
 
 function quoteContent(raw, limit = Infinity) {
@@ -203,7 +222,8 @@ function maskMultilineCode(lines, index, masks, htmlComment) {
   if (FENCE.test(content.text.replace(MARKER, ""))) return text;
   const probe = stripHtmlComments(text, { ...htmlComment });
   const unmatched = stripInlineCode(probe);
-  for (const opening of unmatched.matchAll(/`+/g)) {
+  for (const opening of unmatched.matchAll(/\\[\\`]|`+/g)) {
+    if (opening[0][0] !== "`") continue;
     let closing = null;
     for (let next = index + 1; next < lines.length; next += 1) {
       const candidate = quoteContent(lines[next]);
@@ -365,7 +385,8 @@ export function scanText(text, options = {}) {
     paragraph = [];
   };
   for (const entry of lines) {
-    if (paragraph.length > 0 && entry.line !== paragraph.at(-1).line + 1) flush();
+    if (paragraph.length > 0 && (entry.line !== paragraph.at(-1).line + 1
+      || entry.quoteDepth > paragraph.at(-1).quoteDepth)) flush();
     if (entry.table) { flush(); words += countWords(entry.text); continue; }
     if (entry.text.trim() === "") {
       if ((entry.commentContinuation || entry.codeContinuation) && paragraph.length) paragraph.push(entry);

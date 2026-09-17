@@ -160,6 +160,43 @@ test("code delimiters follow CommonMark lengths", () => {
   assert.deepEqual(rules("`unclosed leverage"), ["no-ai-vocab"]);
 });
 
+test("escaped backticks remain prose while code-span closers ignore escapes", () => {
+  for (const text of ["\\`leverage\\`", "\\`\nleverage\n\\`", "\\\\\\`leverage\\\\\\`"]) {
+    const result = scanText(text);
+    assert.equal(result.words, 1, text);
+    assert.deepEqual(result.hits.map((hit) => hit.rule), ["no-ai-vocab"], text);
+    assert.equal(runCli(["--stdin"], { stdout: () => {}, readStdin: () => text }), 1);
+  }
+  for (const text of ["\\\\`leverage`", "\\``leverage`", "`leverage\\`", "Run `\nleverage\\` today."]) {
+    assert.deepEqual(rules(text), [], text);
+  }
+});
+
+test("raw URLs retain surrounding sentence punctuation", () => {
+  for (const ending of [".", "!", "?", ").", "].", "}. "]) {
+    const text = `Read four words at https://example.com${ending} These four words are separate.`;
+    const result = scanText(text, { maxWords: 5 });
+    assert.equal(result.words, 9);
+    assert.deepEqual(result.hits, [], text);
+  }
+  assert.deepEqual(rules("Read https://example.com/a_(b). These four words are separate.", { maxWords: 5 }), []);
+  // Punctuation within a URL must not create a sentence boundary.
+  for (const url of ["https://example.com/a.b?q=x!y", "<https://example.com/path.>"]) {
+    assert.deepEqual(rules(`These four words begin ${url} these four words end.`, { maxWords: 5 }), ["one-idea"]);
+  }
+});
+
+test("entering a block quote starts a separate paragraph", () => {
+  for (const text of ["Plain words here\n> quoted words here", "> Plain words here\n> > quoted words here"]) {
+    const result = scanText(text, { maxWords: 5 });
+    assert.equal(result.words, 6);
+    assert.deepEqual(result.hits, []);
+  }
+  for (const text of ["> These four words begin\n> these four words end", "> These four words begin\nthese four words end"]) {
+    assert.deepEqual(scanText(text, { maxWords: 5 }).hits.map((hit) => [hit.line, hit.endLine, hit.rule]), [[1, 2, "one-idea"]]);
+  }
+});
+
 test("nested fences exclude code while preserving prose after the container", () => {
   const cases = [
     "> ```js\n> leverage\n> ```\nWe leverage prose.",
@@ -218,6 +255,17 @@ test("by default descriptions are not named-actor passive constructions", () => 
     assert.equal(runCli(["--stdin"], { stdout: () => {}, readStdin: () => text }), 0);
   }
   assert.deepEqual(rules("The input was validated by the parser."), ["active-voice"]);
+});
+
+test("non-agent by-phrases do not trigger named-actor passive checks", () => {
+  for (const phrase of ["design", "definition", "nature", "necessity", "accident", "chance", "mistake", "hand"]) {
+    const text = `The setting is open by ${phrase}.`;
+    assert.deepEqual(rules(text), [], text);
+    assert.equal(runCli(["--stdin"], { stdout: () => {}, readStdin: () => text }), 0);
+  }
+  for (const actor of ["the parser", "users", "Design Services", "default administrators"]) {
+    assert.deepEqual(rules(`The input was validated by ${actor}.`), ["active-voice"]);
+  }
 });
 
 test("wrapped list sentences include continuation lines without joining adjacent items", () => {
