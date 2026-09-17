@@ -52,7 +52,7 @@ Ask one focused question at a time only when the answer changes scope, ownership
 
 ### 6. Draft and preview
 
-Always read `references/issue-template.md` as the required-content contract. Map every applicable contract field into a useful repository template; use the reference's literal fallback structure only when the repository has no useful template.
+Always read [`references/issue-template.md`](references/issue-template.md) as the required-content contract. Map every applicable contract field into a useful repository template; use the reference's literal fallback structure only when the repository has no useful template.
 
 Show the repository, exact title, exact body, duplicate-search result, split set, and proposed existing metadata. Suggest only labels that already exist. Propose assignees, milestones, or project placement only when the user requests them or provides explicit direction. Do not invent or apply any metadata without explicit approval.
 
