@@ -59,6 +59,53 @@ test("inline link destinations do not count as prose", () => {
   assert.deepEqual(rules("Read [leverage](catalog.md)."), ["no-ai-vocab"]);
 });
 
+test("reference link definitions and their titles are excluded from prose", () => {
+  for (const definition of [
+    "[guide]: leverage--guide.md",
+    '[guide]: <leverage--guide.md> "We leverage details"',
+    "[guide]:\n  leverage--guide.md\n  'We leverage details'",
+    '[guide]: leverage--guide.md\n  "We leverage\n  more details"',
+    "> [guide]: leverage--guide.md",
+  ]) {
+    const result = scanText(`Read the guide.\n\n${definition}`, { budget: 3, maxWords: 5 });
+    assert.equal(result.words, 3, definition);
+    assert.deepEqual(result.hits, [], definition);
+  }
+  const text = "[guide]: leverage--guide.md\n\nWe leverage visible prose.";
+  assert.deepEqual(scanText(text).hits.map((hit) => [hit.line, hit.rule]), [[3, "no-ai-vocab"]]);
+  assert.deepEqual(rules("[guide]: This is visible prose we leverage."), ["no-ai-vocab"]);
+});
+
+test("HTML comments are hidden without consuming visible prose or code delimiters", () => {
+  for (const comment of ["<!-- leverage--guide -->", "<!-- leverage\n```\n--guide -->"]) {
+    const result = scanText(`Read ${comment} the guide.`, { budget: 3 });
+    assert.equal(result.words, 3, comment);
+    assert.deepEqual(result.hits, [], comment);
+  }
+  const text = "<!-- leverage\n--> We leverage visible prose. <!-- hidden -->";
+  assert.deepEqual(scanText(text).hits.map((hit) => [hit.line, hit.rule]), [[2, "no-ai-vocab"]]);
+  assert.deepEqual(rules("`<!--` We leverage visible prose."), ["no-ai-vocab"]);
+  assert.deepEqual(rules("```\n<!--\n```\nWe leverage visible prose."), ["no-ai-vocab"]);
+  assert.deepEqual(rules("<!-- hidden until the end\nWe leverage hidden prose."), []);
+  assert.ok(rules("\\<!-- leverage -->").includes("no-ai-vocab"));
+  const continued = "These words begin a sentence <!--\nleverage hidden words\n--> and these words finish it.";
+  assert.deepEqual(scanText(continued, { maxWords: 8 }).hits.map((hit) => [hit.line, hit.endLine, hit.rule]), [[1, 3, "one-idea"]]);
+  assert.deepEqual(rules("These four words begin\n<!-- hidden block -->\nthese four words end", { maxWords: 5 }), []);
+  assert.equal(runCli(["--stdin"], { stdout: () => {}, readStdin: () => "<!-- keep this note -->\nClean prose." }), 0);
+});
+
+test("quoted Markdown keeps heading, list, and table semantics", () => {
+  for (const prefix of ["> ", "> > "]) {
+    assert.deepEqual(rules(`${prefix}# Results 🚀`), ["no-decorative-emoji"]);
+    assert.deepEqual(rules(`${prefix}- Choice 🇺🇸`), ["no-decorative-emoji"]);
+    assert.deepEqual(rules(`${prefix}- Four simple words here\n${prefix}- Four more words here`, { maxWords: 5 }), []);
+    const table = scanText(`${prefix}| Result | We leverage the cache. |`, { maxWords: 5, budget: 4 });
+    assert.equal(table.words, 5);
+    assert.deepEqual(table.hits.map((hit) => hit.rule), ["surface-budget", "no-ai-vocab"]);
+    assert.deepEqual(rules(`${prefix}---\n${prefix}Clean prose.`), []);
+  }
+});
+
 test("ignores fenced code, inline code, and URLs", () => {
   const text = [
     "Run `npm run build -- --watch` and see https://example.com/a—b/“docs” for details.",

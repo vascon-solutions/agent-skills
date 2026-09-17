@@ -140,16 +140,72 @@ function quoteContent(raw, limit = Infinity) {
   return { text, depth };
 }
 
+function stripHtmlComments(line, state) {
+  let cursor = 0;
+  let output = "";
+  while (cursor < line.length) {
+    if (!state.open) {
+      const shadow = stripInlineCode(line.slice(cursor));
+      let start = shadow.indexOf("<!--");
+      while (start !== -1) {
+        const escapes = shadow.slice(0, start).match(/\\+$/)?.[0].length ?? 0;
+        if (escapes % 2 === 0) break;
+        start = shadow.indexOf("<!--", start + 4);
+      }
+      if (start === -1) return output + line.slice(cursor);
+      output += line.slice(cursor, cursor + start);
+      cursor += start;
+      state.open = true;
+      state.inline = Boolean(quoteContent(output).text.trim());
+    }
+    const close = line.indexOf("-->", cursor);
+    const end = close === -1 ? line.length : close + 3;
+    output += " ".repeat(end - cursor);
+    cursor = end;
+    state.open = close === -1;
+  }
+  return output;
+}
+
+function referenceDefinitionEnd(lines, index, content) {
+  const definition = content.text.match(/^ {0,3}\[(?:\\.|[^\]\\])+\]:[ \t]*(.*)$/);
+  if (!definition) return -1;
+  const read = (line) => {
+    const next = quoteContent(lines[line] ?? "");
+    return next.depth === content.depth ? next.text.trim() : "";
+  };
+  let end = index;
+  let tail = definition[1];
+  if (!tail) tail = read(++end);
+  const destination = tail.match(/^(?:<(?:\\.|[^<>\\])*>|(?:\\.|[^\s\\<>])+)(.*)$/);
+  if (!destination) return -1;
+  let title = destination[1].trim();
+  const destinationEnd = end;
+  const inlineTitle = Boolean(title);
+  if (!title && /^["'(]/.test(read(end + 1))) title = read(++end);
+  if (!title) return destinationEnd;
+  if (!/^["'(]/.test(title)) return -1;
+  const completeTitle = /^(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\((?:\\.|[^)\\])*\))$/;
+  while (true) {
+    if (completeTitle.test(title)) return end;
+    const next = read(++end);
+    if (!next) return inlineTitle ? -1 : destinationEnd;
+    title += `\n${next}`;
+  }
+}
+
 function proseLines(lines) {
   const result = [];
   let fence = null;
+  const htmlComment = { open: false, inline: false };
+  let referenceEnd = -1;
   let listIndents = [];
   let listQuoteDepth = 0;
   const frontmatterEnd = lines[0]?.trim() === "---"
     ? lines.findIndex((line, index) => index > 0 && line.trim() === "---")
     : -1;
   for (const [index, raw] of lines.entries()) {
-    if (index <= frontmatterEnd) continue;
+    if (index <= frontmatterEnd || index <= referenceEnd) continue;
     if (fence) {
       const content = quoteContent(raw, fence.quoteDepth);
       const indent = content.text.match(/^[ \t]*/)[0].length;
@@ -161,7 +217,9 @@ function proseLines(lines) {
         continue;
       }
     }
-    const content = quoteContent(raw);
+    const commentContinuation = htmlComment.open && htmlComment.inline;
+    const visible = stripHtmlComments(raw, htmlComment);
+    const content = quoteContent(visible);
     const indent = content.text.match(/^[ \t]*/)[0].length;
     if (content.depth !== listQuoteDepth) listIndents = [];
     listQuoteDepth = content.depth;
@@ -179,9 +237,10 @@ function proseLines(lines) {
       };
       continue;
     }
-    if (THEMATIC_BREAK.test(raw)) continue;
-    const text = stripUrls(stripInlineCode(raw));
-    result.push({ line: index + 1, raw, text, heading: HEADING.test(raw), table: TABLE_ROW.test(raw), marker: MARKER.test(raw) });
+    referenceEnd = referenceDefinitionEnd(lines, index, content);
+    if (referenceEnd >= index || THEMATIC_BREAK.test(content.text)) continue;
+    const text = stripUrls(stripInlineCode(content.text));
+    result.push({ line: index + 1, raw, text, commentContinuation, heading: HEADING.test(content.text), table: TABLE_ROW.test(content.text), marker: MARKER.test(content.text) });
   }
   return result;
 }
@@ -263,7 +322,11 @@ export function scanText(text, options = {}) {
   for (const entry of lines) {
     if (paragraph.length > 0 && entry.line !== paragraph.at(-1).line + 1) flush();
     if (entry.table) { flush(); words += countWords(entry.text); continue; }
-    if (entry.text.trim() === "") { flush(); continue; }
+    if (entry.text.trim() === "") {
+      if (entry.commentContinuation && paragraph.length) paragraph.push(entry);
+      else flush();
+      continue;
+    }
     if (entry.heading) { flush(); paragraph.push(entry); flush(); continue; }
     if (entry.marker) flush();
     paragraph.push(entry);
