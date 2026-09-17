@@ -31,7 +31,7 @@ The upstream numbered ids are not preserved. Nothing in this pack cites them, an
 
 - An agent reading only `SKILL.md` produces a report that leads with the outcome, states unverified items first, and fits the surface budget.
 - `unslop <target>` rewrites without adding or dropping facts, flags unsupported claims instead of silently deleting them, and shows before and after.
-- The scanner has zero false positives on fenced code, inline code, and URLs, and its rule ids match the catalog. Staged mode scans each staged text file in full and reports only added lines, so an edit inside an existing fence is not scanned as prose.
+- The scanner has zero false positives on fenced code, inline code, and URLs, and its rule ids match the catalog. Staged mode scans each staged text file in full and reports violations whose line range overlaps added lines. Edits inside existing fences remain excluded. Sentence hits retain their start and end lines so additions that continue an existing sentence are included.
 - `publish-branch` and `task-doc-delivery-loop` cite the surfaces for PR bodies, commit messages, and final reports. Other cross-skill wiring is deferred.
 
 ## 4. Non-goals

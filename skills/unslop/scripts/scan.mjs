@@ -63,7 +63,7 @@ const LINE_RULES = [
     afterMarker: true,
   },
   { id: "bold-leadin-only", message: "bold label with colon; use a sentence or a bold lead-in ending in a period", pattern: /\*\*[^*\n]{1,60}:\*\*|\*\*[^*\n]{1,60}\*\*:/g },
-  { id: "active-voice", message: "passive with named actor; make the actor the subject", pattern: /\b(?:is|are|was|were|been|being)\s+\w+(?:ed|en)\s+by\b/gi },
+  { id: "active-voice", message: "passive with named actor; make the actor the subject", pattern: /\b(?:is|are|was|were|been|being)\s+\w+(?:ed|en)\s+by\b(?!\s+default\b)/gi },
   { id: "no-decorative-emoji", message: "emoji in a heading or bullet; remove", pattern: /\p{Extended_Pictographic}/gu, markerLinesOnly: true },
 ];
 
@@ -132,7 +132,9 @@ function sentences(paragraph) {
   const append = (end) => {
     const raw = joined.slice(start, end);
     const leading = raw.search(/\S/);
-    if (leading !== -1) out.push({ text: raw.trim(), line: lineAt(start + leading) });
+    if (leading !== -1) {
+      out.push({ text: raw.trim(), line: lineAt(start + leading), endLine: lineAt(start + raw.trimEnd().length - 1) });
+    }
   };
   const boundary = /[.!?](?=\s|$)/g;
   let match;
@@ -174,14 +176,16 @@ export function scanText(text, options = {}) {
       const count = countWords(sentence.text);
       words += count;
       if (count > maxWords) {
-        hits.push({ file, line: sentence.line, rule: "one-idea", message: `${count}-word sentence; split it (limit ${maxWords})`, snippet: `${sentence.text.slice(0, 60)}...` });
+        hits.push({ file, line: sentence.line, endLine: sentence.endLine, rule: "one-idea", message: `${count}-word sentence; split it (limit ${maxWords})`, snippet: `${sentence.text.slice(0, 60)}...` });
       }
     }
     paragraph = [];
   };
   for (const entry of lines) {
+    if (paragraph.length > 0 && entry.line !== paragraph.at(-1).line + 1) flush();
     if (entry.table || entry.text.trim() === "") { flush(); continue; }
-    if (entry.heading || entry.marker) { flush(); paragraph.push(entry); flush(); continue; }
+    if (entry.heading) { flush(); paragraph.push(entry); flush(); continue; }
+    if (entry.marker) flush();
     paragraph.push(entry);
   }
   flush();
@@ -260,9 +264,10 @@ export function scanStaged(diff, readFile, options) {
   const results = [];
   for (const [file, added] of parseStagedDiff(diff)) {
     if (added.length === 0) continue;
-    const changed = new Set(added.map((entry) => entry.line));
     const result = scanText(readFile(file), { ...options, file });
-    result.hits = result.hits.filter((hit) => hit.line === 0 || changed.has(hit.line));
+    result.hits = result.hits.filter((hit) => hit.line === 0 || added.some(
+      ({ line }) => line >= hit.line && line <= (hit.endLine ?? hit.line),
+    ));
     results.push(result);
   }
   return results;
@@ -289,7 +294,7 @@ export function parseArgs(argv) {
 
 const USAGE = `usage: scan.mjs [--max-words N] [--budget N] [--json] (<file>... | --stdin | --staged)
 
-Flags mechanical unslop catalog hits with line numbers. Skips fenced code, inline code, and URLs.\nStaged mode scans each staged text file in full and reports only hits on added lines.
+Flags mechanical unslop catalog hits with line numbers. Skips fenced code, inline code, and URLs.\nStaged mode scans each staged text file in full and reports hits whose line range overlaps added lines.
 Exit 1 when there are hits, 0 when clean, 2 on a usage or runtime error.`;
 
 function format(results) {

@@ -65,6 +65,53 @@ test("emoji is flagged only in headings and bullets", () => {
   assert.deepEqual(rules("The 🚀 icon is part of the product copy."), []);
 });
 
+test("by default descriptions are not named-actor passive constructions", () => {
+  for (const text of [
+    "The indicator is green by default.",
+    "The indicator is red by default.",
+    "The option is enabled by default.",
+    "The option is hidden BY DEFAULT.",
+  ]) {
+    assert.deepEqual(rules(text), [], text);
+    assert.equal(runCli(["--stdin"], { stdout: () => {}, readStdin: () => text }), 0);
+  }
+  assert.deepEqual(rules("The input was validated by the parser."), ["active-voice"]);
+});
+
+test("wrapped list sentences include continuation lines without joining adjacent items", () => {
+  for (const marker of ["-", "*", "+", "1.", "2)"]) {
+    for (const indent of ["  ", ""]) {
+      const text = `${marker} These words begin a sentence\n${indent}and these words finish it.\n${marker} A separate short item.`;
+      const result = scanText(text, { maxWords: 8 });
+      assert.deepEqual(result.hits.map((hit) => [hit.line, hit.endLine, hit.rule]), [[1, 2, "one-idea"]]);
+      assert.equal(result.words, 14);
+    }
+  }
+});
+
+test("sentence coverage stops at paragraph, heading, and code boundaries", () => {
+  for (const boundary of ["", "# Heading", "```\ncode\n```", "| table |", "- New item."]) {
+    const text = `These four words begin\n${boundary}\nthese four words end`;
+    assert.deepEqual(rules(text, { maxWords: 5 }), [], boundary);
+  }
+});
+
+test("staged continuations retain sentence hits but exclude untouched sentences", () => {
+  for (const prefix of ["", "- ", "1. "]) {
+    for (const ending of [".", ""]) {
+      const content = `${prefix}These words begin a sentence\n  and these words finish it${ending}\n\nThis untouched sentence is already longer than eight words.\n\nClean.`;
+      const addition = "+++ b/body.md\n@@ -1,0 +2 @@\n+  and these words finish it\n";
+      const result = scanStaged(addition, () => content, { maxWords: 8 });
+      assert.deepEqual(result[0].hits.map((hit) => [hit.line, hit.endLine, hit.rule]), [[1, 2, "one-idea"]]);
+      const unrelated = "+++ b/body.md\n@@ -5,0 +6 @@\n+Clean.\n";
+      assert.deepEqual(scanStaged(unrelated, () => content, { maxWords: 8 })[0].hits, []);
+      assert.equal(runCli(["--staged", "--max-words", "8"], {
+        stdout: () => {}, readStagedDiff: () => addition, readStagedFile: () => content,
+      }), 1);
+    }
+  }
+});
+
 test("long sentences and budgets are measured across wrapped lines", () => {
   const long = "This sentence keeps going across a wrapped commit body line so that the word count\nclimbs well past the configured limit for one idea per sentence in a report.";
   const result = scanText(long, { maxWords: 20 });
