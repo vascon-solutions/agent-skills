@@ -62,16 +62,16 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 | `prepare-qa-handoff`        | Prepare QA sign-off notes for features with lifecycle flows, endpoint touchpoints, expected behavior, negative coverage, and release validation scope                                                                                                                                |
 | `qa-triage-and-fix`         | Triage QA reports issue-by-issue, reproduce or contest findings with evidence, implement focused fixes, update authorized report fields, and record validation                                                                                                                       |
 | `publish-branch`            | Publish a branch or working tree safely by staging intentionally, handling push and PR flow, and avoiding accidental publication of unrelated work                                                                                                                                   |
-| `repo-docs-audit`           | Audit what docs should exist; produce verdicts before rewriting anything                                                                                                                                                                                                             |
-| `rewrite-docs-from-code`    | Write or repair project docs grounded in current code                                                                                                                                                                                                                                |
-| `repair-agent-files`        | Create or align `AGENTS.md` and `CLAUDE.md` as a matched pair                                                                                                                                                                                                                        |
-| `review-doc-changes`        | Second-pass review of recent doc changes; verify against code                                                                                                                                                                                                                        |
+| `repo-docs-audit`           | Report-only audit of the target doc set; hand authorized cleanup to the editing skills                                                                                                                                                                                                             |
+| `rewrite-docs-from-code`    | Write or repair project docs from implementation evidence while preserving sourced requirements and domain context                                                                                                                                                                                                                                |
+| `repair-agent-files`        | Choose instruction ownership from actual tool use; preserve scoped rules and avoid duplicate authority                                                                                                                                                                                                                        |
+| `review-doc-changes`        | Report-only review of a specified doc diff, including committed changes, deletions, renames, and relevant untracked docs                                                                                                                                                                                                                        |
 | `review-task-docs`          | Independently review task docs for executability, scope control, and whether they should be split                                                                                                                                                                                    |
 | `review-implementation`     | Report-only review of finished code against a task doc, plan, spec, roadmap item, PRD, or acceptance criteria                                                                                                                                                                        |
 | `address-review-findings`   | Evaluate and remediate code, PR, or spec-compliance review findings; push back on invalid feedback and validate fixes                                                                                                                                                                |
 | `monitor-pr-review`         | Monitor an open GitHub PR, repeatedly address review activity, publish scoped remediation batches, and stop after a configurable quiet window                                                                                                                                         |
 | `github-issue-intake`       | Turn bug reports, improvements, screenshots, or code findings into approved, code-grounded GitHub issues for teammate handoff before optional task-doc creation                                                                                                                       |
-| `implementation-map`        | Produce a code-grounded Markdown map of an existing feature or module — entry points, runtime flow, ownership boundaries, tests, refactoring candidates, and HTML/image artifact decisions. Rejects work too small to justify a map                                                  |
+| `implementation-map`        | Create requested implementation maps or deep review dossiers of existing code with file evidence; not for routine code explanations unless explicitly invoked                       |
 | `repo-skill-scan`           | Scan a repo for repeated patterns; recommend skills, commands, or no action, then scaffold approved candidates into correctly structured files with link-script and README wiring                                                                                                     |
 | `roadmap-todo`              | Create and maintain durable roadmap or todo files for feature-grade work across repos                                                                                                                                                                                                |
 | `brainstorm` | Explore unsettled ideas through discussion and research; produce a recommendation, research brief, or optional design spec without automatic delivery handoff |
@@ -167,17 +167,19 @@ The link script is idempotent — it skips symlinks that already point to the co
 
 ## Typical Usage
 
+Documentation audits and reviews report findings without editing. Existing cleanup authorization carries through to the editing skills; a report-only request stops at findings. These are optional routes, not mandatory passes for every doc edit.
+
 ### New repo with no docs
 
-1. `repo-docs-audit` — decide what should exist
-2. `rewrite-docs-from-code` — write it
-3. `repair-agent-files` — create `AGENTS.md` (and `CLAUDE.md` if needed)
+1. `repo-docs-audit`. decide what should exist
+2. `rewrite-docs-from-code`. write it
+3. `repair-agent-files`. create only the instruction files needed by the repository's tools
 
 ### Existing repo with stale docs
 
-1. `repo-docs-audit` — audit and plan the target set
-2. `repair-agent-files` — fix `AGENTS.md` and `CLAUDE.md`
-3. `rewrite-docs-from-code` — repair or replace project docs
+1. `repo-docs-audit`. audit and plan the target set
+2. `rewrite-docs-from-code`. apply authorized corrections and preserve sourced domain rules
+3. `repair-agent-files`. repair instruction ownership or references if needed
 
 ### Only `AGENTS.md` or `CLAUDE.md` needs fixing
 
@@ -186,7 +188,7 @@ The link script is idempotent — it skips symlinks that already point to the co
 ### Second-pass review after another agent changed docs
 
 1. `review-doc-changes`
-2. Targeted follow-up as needed: `repair-agent-files`, `rewrite-docs-from-code`
+2. For authorized fixes, `address-review-findings` handles the batch using `repair-agent-files` or `rewrite-docs-from-code` as needed
 
 ### Discovering and creating repo-specific skills or commands
 
@@ -280,7 +282,7 @@ node skills/artifact-workbench/scripts/serve-artifact-workbench.js <workspace-or
 
 ### Mapping an existing feature's implementation
 
-1. `implementation-map` — produce a code-grounded Markdown map of how an existing feature is wired (entry points, runtime flow, ownership boundaries, tests, refactoring candidates). The skill writes Markdown first, records whether `html-artifact`, `image-artifact`, both, or neither will improve understanding, then invokes the selected companion skill when useful. Use after implementation or before maintenance work; reject for one-file changes or pure styling edits.
+Use `implementation-map` for a requested implementation map or deep review dossier. Explicit narrow requests get a focused chat answer. Saved maps default to `~/agent-artifacts/` unless the user names a path or requests repository documentation. HTML and image companions follow the requested format and are generated after the Markdown source. Topic words such as "review" do not select a mode.
 
 ### Creating Markdown artifact workspaces
 
