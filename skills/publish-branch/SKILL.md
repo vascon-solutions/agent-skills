@@ -37,7 +37,7 @@ Use the available GitHub integration or `gh`. Reuse working authentication evide
 
 Delegate only when explicitly requested or authorized and materially useful. For that case read [worker handoff](references/worker-handoff.md); one worker owns mutations. Inline work does not require worker reports or duplicated preflights.
 
-Before writing a PR body, comment, or reply, read [GitHub transport](references/github-transport.md). PR bodies describe the final problem, behavior change, relevant validation, and limitations; omit conversational history and abandoned plans.
+Before writing a PR body, comment, or reply, read [GitHub transport](references/github-transport.md). Write PR bodies and commit messages to the [unslop surface shapes](../unslop/references/surfaces.md): problem, change, validation, limitations, inside the budget, with no conversational history, abandoned plans, or tooling attribution. Run the unslop scanner on the body file before posting and fix or justify its hits.
 
 ## Closeout
 

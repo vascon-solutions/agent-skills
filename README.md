@@ -37,6 +37,7 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
     ├── repo-design-context/
     ├── publish-artifact/
     ├── brainstorm/
+    ├── unslop/
     ├── task-doc/
     ├── task-doc-intake/
     ├── task-doc-delivery-loop/
@@ -74,6 +75,7 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 | `repo-skill-scan`           | Scan a repo for repeated patterns; recommend skills, commands, or no action, then scaffold approved candidates into correctly structured files with link-script and README wiring                                                                                                     |
 | `roadmap-todo`              | Create and maintain durable roadmap or todo files for feature-grade work across repos                                                                                                                                                                                                |
 | `brainstorm` | Explore unsettled ideas through discussion and research; produce a recommendation, research brief, or optional design spec without automatic delivery handoff |
+| `unslop` | Make agent output readable on the first read: outcome first, gaps stated, no narration, evidence not adjectives, per-surface shapes for replies, findings, PR bodies, commits, and docs, plus a scanner for mechanical tells |
 | `task-doc`                  | Create durable task documents for bounded handoff work; return small immediate fixes to normal execution                                                                                                                                                                      |
 | `task-doc-intake`           | Run a guided interview, map loose notes/screenshots, or derive codebase findings into an approved change inventory and task doc before code; classifies and downshifts small work, preserves existing authorization through the delivery handoff                                                            |
 | `task-doc-delivery-loop`    | Deliver one approved task doc or a coherent ordered set in one repository through implementation, scoped validation, and review to a pushed branch and draft PR by default; marking the PR ready for review and merge are explicit                                                 |
@@ -95,7 +97,7 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 
 ## Workflow Ownership
 
-Use `brainstorm` for research and unsettled design, `task-doc-intake` for delivery scope, `task-doc` for the durable task, and `task-doc-delivery-loop` for authorized execution. `review-task-docs` and `review-implementation` report findings; `address-review-findings` owns their authorized remediation. `publish-branch` owns publication. `monitor-pr-review` is explicitly requested ongoing work.
+Use `brainstorm` for research and unsettled design, `task-doc-intake` for delivery scope, `task-doc` for the durable task, and `task-doc-delivery-loop` for authorized execution. `review-task-docs` and `review-implementation` report findings; `address-review-findings` owns their authorized remediation. `publish-branch` owns publication. `monitor-pr-review` is explicitly requested ongoing work. `unslop` owns output readability: final reports, findings, PR bodies, and commit messages follow its surface shapes, and `unslop <target>` rewrites existing text.
 
 An approved task/spec satisfies discovery; one validation owner supplies reusable evidence to review and publication. Keep sequencing in the delivery ledger unless a separate durable plan is needed. Failure investigation uses the delivery skill's focused debugging reference. Core delivery has no Superpowers dependency. For skill authoring, use the host-provided `skill-creator` when available (it is not bundled in this pack), with focused checks and bounded scenario review when worthwhile.
 

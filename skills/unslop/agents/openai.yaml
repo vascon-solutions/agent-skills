@@ -1,0 +1,4 @@
+interface:
+  display_name: "Unslop"
+  short_description: "Make agent output readable on the first read"
+  default_prompt: "Use $unslop to rewrite the named target, or to shape the current reply, so a reader who did not watch the session understands it: outcome first, gaps stated, no narration, evidence not adjectives, inside the surface budget."

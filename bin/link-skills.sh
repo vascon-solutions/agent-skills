@@ -20,6 +20,7 @@ fi
 
 SKILL_NAMES="
 brainstorm
+unslop
 audit-api
 audit-ui
 prepare-frontend-handoff
