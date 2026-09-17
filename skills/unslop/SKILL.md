@@ -41,11 +41,13 @@ Rule ids come from the [catalog](references/catalog.md). Cite them by id when an
 
 `scripts/scan.mjs` flags the mechanical subset of the catalog with line numbers. It skips fenced code, inline code, and URLs.
 
+Resolve `<skill-dir>` to the absolute directory containing this `SKILL.md`. Run from the target repository so file arguments and `--staged` use that repository.
+
 ```sh
-node scripts/scan.mjs pr-body.md
-git log -1 --format=%B | node scripts/scan.mjs --stdin
-node scripts/scan.mjs --staged
-node scripts/scan.mjs --budget 200 --max-words 25 report.md
+node "<skill-dir>/scripts/scan.mjs" pr-body.md
+git log -1 --format=%B | node "<skill-dir>/scripts/scan.mjs" --stdin
+node "<skill-dir>/scripts/scan.mjs" --staged
+node "<skill-dir>/scripts/scan.mjs" --budget 200 --max-words 25 report.md
 ```
 
 Exit code 1 means hits. Fix them or state why a hit stays. The scanner cannot judge structure, evidence, or omission; those rules are yours to check by reading the draft as the recipient.

@@ -94,6 +94,40 @@ test("HTML comments are hidden without consuming visible prose or code delimiter
   assert.equal(runCli(["--stdin"], { stdout: () => {}, readStdin: () => "<!-- keep this note -->\nClean prose." }), 0);
 });
 
+test("HTML link attributes cannot hide visible prose or add words", () => {
+  for (const attribute of ['"https://example.com"', "'https://example.com'", "https://example.com"]) {
+    const result = scanText(`<a href=${attribute}>leverage</a>`, { budget: 1 });
+    assert.equal(result.words, 1);
+    assert.deepEqual(result.hits.map((hit) => hit.rule), ["no-ai-vocab"]);
+  }
+  assert.deepEqual(rules('<a href="https://example.com">Clean prose.</a>', { budget: 2 }), []);
+});
+
+test("multiline code spans are excluded while unclosed spans remain prose", () => {
+  for (const ticks of ["`", "``"]) {
+    const text = `Run ${ticks}\nleverage --flag\n${ticks} today.\nWe leverage visible prose.`;
+    const result = scanText(text);
+    assert.equal(result.words, 6);
+    assert.deepEqual(result.hits.map((hit) => [hit.line, hit.rule]), [[4, "no-ai-vocab"]]);
+  }
+  assert.deepEqual(rules("Run `\nleverage --flag"), ["no-ai-vocab", "no-em-dash"]);
+  assert.deepEqual(rules("Run `\n\nleverage\n`"), ["no-ai-vocab"]);
+  assert.deepEqual(rules("Run `\n<!-- leverage -->\n` today.\nWe leverage visible prose."), ["no-ai-vocab"]);
+  const diff = "+++ b/body.md\n@@ -1,0 +2 @@\n+leverage --flag\n";
+  assert.deepEqual(scanStaged(diff, () => "Run `\nleverage --flag\n` today.", {})[0].hits, []);
+});
+
+test("setext headings receive heading rules without treating list dividers as headings", () => {
+  for (const underline of ["=======", "-------"]) {
+    for (const prefix of ["", "> "]) {
+      assert.deepEqual(rules(`${prefix}Results 🚀\n${prefix}${underline}`), ["no-decorative-emoji"]);
+    }
+  }
+  assert.deepEqual(rules("Plain words\nResults 🚀\n======="), ["no-decorative-emoji"]);
+  assert.deepEqual(rules("The 🚀 icon.\n\n-------"), []);
+  assert.deepEqual(rules("```\nResults 🚀\n=======\n```"), []);
+});
+
 test("quoted Markdown keeps heading, list, and table semantics", () => {
   for (const prefix of ["> ", "> > "]) {
     assert.deepEqual(rules(`${prefix}# Results 🚀`), ["no-decorative-emoji"]);
@@ -162,6 +196,15 @@ test("flag and keycap emoji are detected without flagging ordinary digits", () =
     assert.deepEqual(rules(`The ${emoji} icon is product copy.`), []);
   }
   assert.deepEqual(rules("# Region 1\n- Choice 2\n# Code `🇺🇸`"), []);
+});
+
+test("text-presented symbols are distinct from decorative emoji", () => {
+  for (const symbol of ["©", "™", "®", "☀", "🚀\uFE0E"]) {
+    assert.deepEqual(rules(`# Label ${symbol}`), [], symbol);
+  }
+  for (const emoji of ["©️", "™️", "®️", "🚀", "🇳🇬", "1️⃣", "👩‍💻", "❤️‍🔥"]) {
+    assert.deepEqual(rules(`# Label ${emoji}`), ["no-decorative-emoji"], emoji);
+  }
 });
 
 test("by default descriptions are not named-actor passive constructions", () => {

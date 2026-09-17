@@ -9,6 +9,7 @@ const TEXT_EXTENSIONS = new Set([".md", ".mdx", ".markdown", ".txt", ".rst"]);
 const DEFAULT_MAX_WORDS = 30;
 
 const word = (list) => new RegExp(`\\b(?:${list.join("|")})\\b`, "gi");
+const EMOJI = /\p{Regional_Indicator}{2}|[#*0-9]\uFE0F?\u20E3|\p{Extended_Pictographic}\uFE0F?\p{Emoji_Modifier}?(?:\u200D\p{Extended_Pictographic}\uFE0F?\p{Emoji_Modifier}?)+|(?:(?!\p{Regional_Indicator})\p{Emoji_Presentation}(?!\uFE0E)|\p{Extended_Pictographic}\uFE0F)\p{Emoji_Modifier}?/gu;
 
 const LINE_RULES = [
   { id: "no-em-dash", message: "em dash, en dash, or double hyphen; end the sentence or use a comma", pattern: /—|–|(?<!-)--(?!-)/g },
@@ -64,7 +65,7 @@ const LINE_RULES = [
   },
   { id: "bold-leadin-only", message: "bold label with colon; use a sentence or a bold lead-in ending in a period", pattern: /\*\*[^*\n]{1,60}:\*\*|\*\*[^*\n]{1,60}\*\*:/g },
   { id: "active-voice", message: "passive with named actor; make the actor the subject", pattern: /\b(?:is|are|was|were|been|being)\s+\w+(?:ed|en)\s+by\b(?!\s+default\b)/gi },
-  { id: "no-decorative-emoji", message: "emoji in a heading or bullet; remove", pattern: /\p{Extended_Pictographic}|\p{Regional_Indicator}{2}|[#*0-9]\uFE0F?\u20E3/gu, markerLinesOnly: true },
+  { id: "no-decorative-emoji", message: "emoji in a heading or bullet; remove", pattern: EMOJI, markerLinesOnly: true },
 ];
 
 const FENCE = /^[ \t]*(`{3,}|~{3,})(.*)$/;
@@ -125,7 +126,9 @@ function stripLinkDestinations(line) {
 }
 
 function stripUrls(line) {
-  return stripLinkDestinations(line).replace(/\bhttps?:\/\/\S+/g, (match) => " ".repeat(match.length));
+  return stripLinkDestinations(line)
+    .replace(/<\/?[A-Za-z][A-Za-z0-9:-]*(?:\s+(?:[^"'<>]|"[^"]*"|'[^']*')*)?\/?>/g, (match) => " ".repeat(match.length))
+    .replace(/\bhttps?:\/\/[^\s<>"']+/g, (match) => " ".repeat(match.length));
 }
 
 function quoteContent(raw, limit = Infinity) {
@@ -194,10 +197,39 @@ function referenceDefinitionEnd(lines, index, content) {
   }
 }
 
+function maskMultilineCode(lines, index, masks, htmlComment) {
+  let text = masks.get(index) ?? lines[index];
+  const content = quoteContent(text);
+  if (FENCE.test(content.text.replace(MARKER, ""))) return text;
+  const probe = stripHtmlComments(text, { ...htmlComment });
+  const unmatched = stripInlineCode(probe);
+  for (const opening of unmatched.matchAll(/`+/g)) {
+    let closing = null;
+    for (let next = index + 1; next < lines.length; next += 1) {
+      const candidate = quoteContent(lines[next]);
+      if (candidate.depth !== content.depth || !candidate.text.trim() || HEADING.test(candidate.text)
+        || MARKER.test(candidate.text) || FENCE.test(candidate.text) || THEMATIC_BREAK.test(candidate.text)) break;
+      const close = [...lines[next].matchAll(/`+/g)].find((run) => run[0].length === opening[0].length);
+      if (close) { closing = { line: next, offset: close.index + close[0].length }; break; }
+    }
+    if (!closing) continue;
+    text = text.slice(0, opening.index) + " ".repeat(text.length - opening.index);
+    for (let next = index + 1; next <= closing.line; next += 1) {
+      const raw = masks.get(next) ?? lines[next];
+      const prefix = raw.length - quoteContent(raw).text.length;
+      const end = next === closing.line ? closing.offset : raw.length;
+      masks.set(next, raw.slice(0, prefix) + " ".repeat(end - prefix) + raw.slice(end));
+    }
+    break;
+  }
+  return text;
+}
+
 function proseLines(lines) {
   const result = [];
   let fence = null;
   const htmlComment = { open: false, inline: false };
+  const codeMasks = new Map();
   let referenceEnd = -1;
   let listIndents = [];
   let listQuoteDepth = 0;
@@ -218,7 +250,8 @@ function proseLines(lines) {
       }
     }
     const commentContinuation = htmlComment.open && htmlComment.inline;
-    const visible = stripHtmlComments(raw, htmlComment);
+    const codeContinuation = codeMasks.has(index);
+    const visible = stripHtmlComments(maskMultilineCode(lines, index, codeMasks, htmlComment), htmlComment);
     const content = quoteContent(visible);
     const indent = content.text.match(/^[ \t]*/)[0].length;
     if (content.depth !== listQuoteDepth) listIndents = [];
@@ -238,9 +271,21 @@ function proseLines(lines) {
       continue;
     }
     referenceEnd = referenceDefinitionEnd(lines, index, content);
+    if (/^ {0,3}(?:=+|-+)[ \t]*$/.test(content.text)) {
+      const previous = result.at(-1);
+      if (previous?.line === index && previous.text.trim() && !previous.heading && !previous.marker && !previous.table) {
+        for (let cursor = result.length - 1; cursor >= 0; cursor -= 1) {
+          const entry = result[cursor];
+          if (entry.line !== index - (result.length - 1 - cursor) || !entry.text.trim()
+            || entry.heading || entry.marker || entry.table || entry.quoteDepth !== content.depth) break;
+          entry.heading = true;
+        }
+        continue;
+      }
+    }
     if (referenceEnd >= index || THEMATIC_BREAK.test(content.text)) continue;
     const text = stripUrls(stripInlineCode(content.text));
-    result.push({ line: index + 1, raw, text, commentContinuation, heading: HEADING.test(content.text), table: TABLE_ROW.test(content.text), marker: MARKER.test(content.text) });
+    result.push({ line: index + 1, raw, text, commentContinuation, codeContinuation, quoteDepth: content.depth, heading: HEADING.test(content.text), table: TABLE_ROW.test(content.text), marker: MARKER.test(content.text) });
   }
   return result;
 }
@@ -323,7 +368,7 @@ export function scanText(text, options = {}) {
     if (paragraph.length > 0 && entry.line !== paragraph.at(-1).line + 1) flush();
     if (entry.table) { flush(); words += countWords(entry.text); continue; }
     if (entry.text.trim() === "") {
-      if (entry.commentContinuation && paragraph.length) paragraph.push(entry);
+      if ((entry.commentContinuation || entry.codeContinuation) && paragraph.length) paragraph.push(entry);
       else flush();
       continue;
     }
