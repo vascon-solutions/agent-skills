@@ -1,119 +1,36 @@
-# Artifact Decision Rules
+# Implementation Map Artifact Rules
 
-The Markdown implementation map is the source of truth. Decide on companions only after the Markdown map is complete, then invoke the chosen artifact skill(s) and record the decision in the map's `Artifact Decision` section.
+Choose formats from the requested deliverable. Do not treat topic words or code complexity as authorization for extra artifacts.
 
-The four possible decisions are: `html-artifact`, `image-artifact`, `both`, or `neither`.
+| Requested output | Result |
+| --- | --- |
+| Focused explanation | Chat with file evidence; no files by default |
+| Durable implementation map or review dossier | Markdown; embedded tables or Mermaid when useful |
+| Browser/HTML companion | Markdown source followed by `html-artifact` |
+| Static image companion or generated illustration | Markdown source followed by `image-artifact` |
+| Both HTML and image | Markdown source followed by both requested companions |
 
-## Choose `neither`
+"Map the PR review queue" names a target. "Create an HTML review dossier for this queue" specifies a deliverable. A visual flow request can use an embedded diagram without a separate raster image.
 
-Use neither companion when:
+## Source And Destination
 
-- the feature is small and the Markdown map is short
-- the runtime flow is single-step or already obvious from the Start Here table
-- there are few files and no meaningful boundary diagram
-- a companion would add ceremony without improving understanding
+The Markdown map is the source for companions; code remains the authority for implementation claims. Complete the map before generating a companion. Record the requested formats and destinations in the map; after generation, record actual paths or a blocked status. Do not add an artifact-decision section to a plain map merely for ceremony.
 
-This is the default for small but legitimate features that cleared the rejection gate.
+Honor explicit output paths. Otherwise follow the companion skill's workspace defaults, reusing an existing artifact workspace when appropriate. Do not silently place generated files inside the repository merely because the source map lives there.
 
-## Choose `html-artifact`
+An unqualified request to write the source map also defaults to an artifact workspace. Use a repository destination only when the request or authorized workflow calls for repository documentation.
 
-Use HTML when the reader needs:
-
-- faithful readable text
-- exact file paths, symbols, tables, and links
-- compact code snippets that explain a pattern
-- navigable sections
-- side-by-side user-flow and runtime-flow views
-- architecture boundary cards
-- refactoring opportunity cards
-
-HTML companions may include compact code snippets. Never paste full source files.
-
-Good snippet:
-
-```ts
-// Entry point: validates search and preloads server state.
-loader: async ({ context }) => {
-  await context.queryClient.ensureQueryData(activeCycleQueryOptions())
-}
-```
-
-Bad snippet:
-
-```text
-<entire source file pasted into the artifact>
-```
-
-## Choose `image-artifact`
-
-Use image when the reader needs:
-
-- low-text architecture diagram
-- API or event flow
-- lifecycle or sequence flow
-- frontend/backend boundary visual
-- state ownership map
-- persistence and side-effect map
-- refactoring hotspot map
-
-Image companions stay low-text. Prefer labels, boxes, arrows, ownership groups, and callouts over paragraphs or code.
-
-Suggested image kinds when invoking `image-artifact`:
-
-- `architecture-diagram` — module, service, or package boundaries
-- `api-flow` — request/response, event, queue, or job flows
-- `summary-card` — only for compact visual summaries
-
-## Choose `both`
-
-Use both when:
-
-- the feature is complex or full-stack
-- the map is intended for refactoring or improvement planning
-- developers need exact details and a quick visual overview
-- architecture boundaries or runtime flows are hard to grasp from prose alone
-
-## Decision Section Format
-
-Every Markdown map must include this section:
-
-```markdown
-## Artifact Decision
-
-Decision: `<html-artifact | image-artifact | both | neither>`
-
-Reason:
-- <evidence-based reason tied to the map's content>
-
-Suggested companion:
-- <exact follow-up invocation, or `None`>
-```
-
-## Invocation Guidance
-
-Invoke companion skills only after the Markdown map exists and the decision is recorded.
-
-When the decision includes HTML, invoke:
+Invoke the installed skills with their supported arguments:
 
 ```text
 html-artifact <map-path> --out <html-path>
+image-artifact <map-path> --workspace <workspace> --kind <kind>
 ```
 
-If the map lives in a `~/agent-artifacts/<slug>/` workspace, write the HTML under `<slug>/html/implementation-map.html`. For repo-local maps, choose a sibling path or follow the repo's existing `docs/artifacts/` convention.
+Useful image kinds include `architecture-diagram`, `api-flow`, and `summary-card`. Select only the kind that fits the requested visual. Check that the chosen skill is available; report unavailable generation without claiming a file was produced or expanding into unrelated setup.
 
-When the decision includes image, invoke:
+## Fidelity
 
-```text
-image-artifact <map-path> --workspace <workspace> [--kind architecture-diagram | api-flow | summary-card]
-```
+HTML can preserve exact paths, links, tables, and compact source excerpts. For a browser review dossier, use the applicable guidance in [review-dossier.md](review-dossier.md).
 
-Pick `--kind` when the needed visual is clear from the map; omit it when the artifact skill should choose.
-
-## Anti-Patterns
-
-- Invoking a companion before the Markdown map is complete.
-- Generating both companions for a small or single-flow map.
-- Pasting full source files into HTML.
-- Using image companions to render dense file inventories or code blocks.
-- Skipping the `Artifact Decision` section when the decision is `neither`.
-- Recording a decision but failing to invoke the chosen companion.
+Images should contain low-text boundaries, flows, or ownership diagrams. Do not put full source files or dense inventories in images, invent components to improve the layout, or create a decorative cover without a request. Verify the derived output against the map and report created paths. Publication requires separate authorization.

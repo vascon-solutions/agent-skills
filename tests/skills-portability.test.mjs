@@ -181,7 +181,7 @@ test("GitHub issue intake preserves evidence, approval, and handoff contracts", 
   assert.match(skill, /does not exist[\s\S]*exclude it[\s\S]*Do not preserve it as `planned`, `intended`/i);
   assert.match(skill, /Do not combine independent outcomes because the user requested one issue/i);
   assert.match(skill, /Do not invent acceptance criteria or implementation requirements/i);
-  assert.match(skill, /Always read `references\/issue-template\.md` as the required-content contract/i);
+  assert.match(skill, /Always read \[`references\/issue-template\.md`\]\(references\/issue-template\.md\) as the required-content contract/i);
   assert.match(skill, /Propose assignees, milestones, or project placement only when the user requests them or provides explicit direction/i);
   assert.match(template, /^## Problem$/m);
   assert.match(template, /^## Current code evidence$/m);
@@ -190,24 +190,60 @@ test("GitHub issue intake preserves evidence, approval, and handoff contracts", 
   assert.match(metadata, /\$github-issue-intake/);
 });
 
-test('relative Markdown references resolve within the installed skill pack', () => {
-  function walk(dir) {
-    return fs.readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
-      const file = path.join(dir, entry.name);
-      return entry.isDirectory() ? walk(file) : entry.name.endsWith('.md') ? [file] : [];
-    });
-  }
-  // Entry points and maintained references, not example artifacts or fixtures.
+function walkMarkdown(dir) {
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
+    const file = path.join(dir, entry.name);
+    return entry.isDirectory() ? walkMarkdown(file) : entry.name.endsWith('.md') ? [file] : [];
+  });
+}
+
+// Code examples are not links.
+function relativeLinks(file) {
+  const content = fs.readFileSync(file, 'utf8')
+    .replace(/```[\s\S]*?```/g, '')
+    .replace(/(`+)[^`]*?\1/g, '');
+  return [...content.matchAll(/\]\(([^\s)]+)\)/g)]
+    .map(match => match[1])
+    .filter(href => !/^(?:[a-z][a-z\d+.-]*:|\/|#)/i.test(href))
+    .map(href => ({ href, target: path.resolve(path.dirname(file), decodeURIComponent(href.split('#')[0])) }));
+}
+
+test('skill Markdown references resolve, including bare relative paths', () => {
   for (const name of skillNames) {
     const dir = path.join(root, 'skills', name);
     const refs = path.join(dir, 'references');
-    const files = [path.join(dir, 'SKILL.md'), ...(fs.existsSync(refs) ? walk(refs) : [])];
+    const files = [path.join(dir, 'SKILL.md'), ...(fs.existsSync(refs) ? walkMarkdown(refs) : [])];
     for (const file of files) {
-      const content = fs.readFileSync(file, 'utf8').replace(/```[\s\S]*?```/g, '');
-      for (const match of content.matchAll(/\]\((\.{1,2}\/[^\s)]+)\)/g)) {
-        const target = decodeURIComponent(match[1].split('#')[0]);
-        assert.ok(fs.existsSync(path.resolve(path.dirname(file), target)), `${file}: missing ${target}`);
+      for (const { href, target } of relativeLinks(file)) {
+        assert.ok(fs.existsSync(target), `${file}: missing ${href}`);
       }
+    }
+  }
+});
+
+test('every skill reference is reachable from a SKILL.md through Markdown links', () => {
+  const reached = new Set();
+  const visit = file => {
+    if (reached.has(file) || !fs.existsSync(file)) return;
+    reached.add(file);
+    for (const { target } of relativeLinks(file)) {
+      if (target.endsWith('.md')) visit(target);
+    }
+  };
+  for (const name of skillNames) visit(path.join(root, 'skills', name, 'SKILL.md'));
+  for (const name of skillNames) {
+    const refs = path.join(root, 'skills', name, 'references');
+    if (!fs.existsSync(refs)) continue;
+    for (const file of walkMarkdown(refs)) {
+      assert.ok(reached.has(file), `${path.relative(root, file)}: no SKILL.md links to this reference`);
+    }
+  }
+});
+
+test('installed skill directories exclude draft specs and plans', () => {
+  for (const name of skillNames) {
+    for (const draftDir of ['specs', 'plans']) {
+      assert.ok(!fs.existsSync(path.join(root, 'skills', name, draftDir)), `${name}: ${draftDir} would ship through whole-directory linking`);
     }
   }
 });

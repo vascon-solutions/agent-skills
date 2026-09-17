@@ -4,7 +4,7 @@ Use this checklist after stack-profile detection. Skip categories that don't app
 
 ## All Profiles — Bootstrap
 
-- Read `AGENTS.md` and `CLAUDE.md` if present.
+- Read applicable repository instructions, including parent and nested rules, and any `AGENTS.md` or `CLAUDE.md` imports relevant to the target.
 - Read `README.md` and any `docs/architecture*`, `docs/contributing*`, or `docs/conventions*` files.
 - Check for a feature-specific task doc, design doc, or PR description if supplied.
 
@@ -91,7 +91,7 @@ Group collected files by **workflow**, not folder. Workflow groups commonly incl
 
 Stop discovery when:
 
-- you can fill all 9 mandatory sections from evidence
+- you can explain the requested flow, ownership, and important uncertainty from evidence
 - additional file reading is producing diminishing returns
 - you can defensibly explain what *isn't* covered and why
 

@@ -1,175 +1,64 @@
 ---
 name: repair-agent-files
-description: Create or repair AGENTS.md and CLAUDE.md so one file is the clear agent authority with no duplication or conflict between them.
+description: Create or repair repository agent instructions, choosing AGENTS.md or CLAUDE.md ownership from actual tool use and preserving scoped rules without duplication.
 ---
 
 # Repair Agent Files
 
-## Purpose
+Keep agent instructions concise, consistent, and appropriate for the tools the repository uses. Establish one owner for shared rules at each scope while preserving legitimate tool-specific and nested guidance.
 
-Produce a single clear source of truth for coding-agent behavior in the repository.
+Use this skill for instruction-file creation, cleanup, or conflicting authority. Project documentation belongs to `rewrite-docs-from-code`; an unclear repository-wide doc set belongs to `repo-docs-audit`; a report-only assessment of recent edits belongs to `review-doc-changes`.
 
-This skill handles all agent instruction file states:
+## Discover Ownership
 
-- no `AGENTS.md` — create it
-- `AGENTS.md` bloated or mixing project docs — trim it
-- both `AGENTS.md` and `CLAUDE.md` exist — align them
-- only `CLAUDE.md` exists — introduce `AGENTS.md`, reduce `CLAUDE.md`
+Read existing repository instructions, their imports or symlink targets, applicable parent and nested rules, and relevant project docs. Infer tool use and established authority from the user's request and repository evidence. The current host establishes a need for a usable entry point, but does not prove which other tools the team uses.
 
-## When To Use
+Explicit user choices take precedence. Otherwise use these defaults:
 
-Use when:
+| Repository evidence | Ownership and files |
+| --- | --- |
+| AGENTS-based tools; no Claude Code requirement | Create or repair `AGENTS.md`; do not create `CLAUDE.md` merely for symmetry |
+| Claude Code only | Keep or create `CLAUDE.md` as the authority; do not introduce `AGENTS.md` without a cross-tool need |
+| Both Claude Code and AGENTS-based tools | Use `AGENTS.md` for shared rules and a small `CLAUDE.md` import; preserve necessary Claude-specific additions |
+| Tool use uncertain | Preserve existing coherent ownership and make it readable by the current host. With no files, use the known host's native entry point, such as `CLAUDE.md` for Claude Code. If the host is also unknown, default to `AGENTS.md` and state the assumption |
 
-- the repo has no `AGENTS.md` and needs one
-- `AGENTS.md` is too long, duplicative, or mixes docs with agent instructions
-- `AGENTS.md` and `CLAUDE.md` conflict or overlap
-- `CLAUDE.md` contains rules that should live in `AGENTS.md`
-- the user asks for a clean source of truth for coding-agent behavior
+If both files conflict, preserve unique rules and resolve ownership from the evidence above. Ask only when an unresolved tool or policy choice materially changes the result. Do not delete an existing tool entry point just because its current use is uncertain.
 
-## When Not To Use
+If existing shared rules live in `AGENTS.md` and the current host is Claude Code, add the applicable imports as part of the authorized repair. If the user explicitly limits output to `AGENTS.md`, honor that limit and disclose that Claude Code needs a `CLAUDE.md` import to load it automatically.
 
-Do not use when:
+A root authority declaration does not erase directory-specific rules. Keep local constraints scoped to the packages they govern and preserve applicable parent or managed rules. Do not flatten nested instructions into a root file merely to achieve "one file."
 
-- the main problem is missing or stale project docs
-  Use `rewrite-docs-from-code`
-- the correct target doc set is still unclear
-  Use `repo-docs-audit` first
-- the task is a second-pass audit of recent doc changes
-  Use `review-doc-changes`
+## Edit The Instructions
 
-## Tool-Specific File Semantics
+Use [documentation policy](../repo-docs-audit/references/documentation-policy.md) when moving project knowledge, handling uncommitted content, or validating links and commands.
 
-Know the distinction before deciding what each file should own:
+Include only guidance that changes an agent's decisions in this repo. Depending on need, this can include:
 
-- `AGENTS.md` — OpenAI Codex-native; the multi-tool convention across Codex, Claude Code, and agents.sh-style workflows
-- `CLAUDE.md` — Claude Code-specific; auto-loaded at session start by Claude Code
+- Applicable instruction ownership and links to project context.
+- Non-obvious constraints, protected boundaries, and common change locations.
+- Verified setup and validation commands with required prerequisites.
+- Repository-specific operating or documentation update rules.
 
-**Default behavior:**
-- `AGENTS.md` owns agent operating behavior, constraints, and doc hierarchy
-- `CLAUDE.md` is a short pointer to `AGENTS.md`
+Use headings that earn their place. There is no minimum section count or target line count. Do not add a boilerplate completion report, session ritual, or doc hierarchy table when the repository does not need one.
 
-**Exception:** if the repo uses only Claude Code and `CLAUDE.md` needs to carry more, it should still defer to `AGENTS.md` rather than duplicate it.
+Keep operational commands and compact examples that clarify a real constraint. Remove duplicated project narratives, transient task details, generic advice, and patterns already enforced by formatting tools. Point to maintained project docs for substantial context instead of copying them. Do not erase accepted requirements just because current code fails to enforce them.
 
-Never expand both files into parallel instruction systems.
+## Claude Code Import
 
-## Required Inputs
-
-You need:
-
-- repo structure
-- current `AGENTS.md` and `CLAUDE.md` if they exist
-- enough code inspection to identify critical paths and constraints
-- current project docs if they exist, so `AGENTS.md` can point outward rather than duplicate them
-
-## Step-By-Step Instructions
-
-### 1. Assess the current state
-
-Read `AGENTS.md` and `CLAUDE.md` if they exist. Classify:
-
-- neither exists → create both from scratch
-- only `CLAUDE.md` → create `AGENTS.md`, reduce `CLAUDE.md` to pointer
-- only `AGENTS.md` → repair if needed, skip CLAUDE.md work
-- both exist → align; `AGENTS.md` wins by default
-
-### 2. For a new AGENTS.md — scan the repo
-
-Identify:
-- validation commands (lint, build, test — whatever applies)
-- critical paths and constraints that agents must not break
-- repo navigation shortcuts (key files, common change locations)
-- what project docs exist and what they each own
-- compliance, safety, or governance constraints if the domain has them
-
-Do not add project knowledge here. Project docs hold project knowledge.
-
-### 3. Build or repair AGENTS.md
-
-Use this section structure as the minimum viable frame:
-
-1. **Source-of-truth declaration** — one or two lines at the top
-2. **Doc hierarchy** — table pointing outward to project docs
-3. **Session bootstrap** — what to read before writing code (3–5 lines)
-4. **Critical constraints** — what must never break; key file paths
-5. **Agent operating rules** — minimal-change rules, import/API conventions
-6. **Repo navigation** — key files + common change locations
-7. **Validation** — commands to run before claiming done
-8. **Doc update rules** — when to update docs vs when not to
-9. **Completion report** — standard handoff block
-
-Remove anything that:
-- narrates the project for a human reader
-- duplicates content in project docs
-- belongs in a contributor guide
-- is likely to change frequently and is not required every session
-
-**Code block rules:**
-- **Keep** a code block only when it enforces a critical constraint where prose alone is ambiguous — e.g., a prohibited API paired with the correct alternative that isn't obvious.
-- **Remove** code blocks for patterns that are consistently followed in the codebase — agents discover them by reading existing files.
-- **Remove** code blocks for anything a linter or formatter auto-corrects (import order, formatting style). Documenting what the tool fixes for you is redundant.
-- **Keep** operational command blocks (validation, test flags, setup commands) — these are instructions to execute, not patterns to infer.
-
-**Size guidance:** target 120–180 lines. Under 200 for most repos. Over 300 is almost certainly bloated.
-
-### 4. Repair CLAUDE.md
-
-Standard minimal form when AGENTS.md is the authority:
+When `AGENTS.md` owns shared rules and Claude Code is used, the root `CLAUDE.md` can contain:
 
 ```markdown
-# CLAUDE.md
-
-**AGENTS.md is the single source of truth for agent behavior in this repository.**
-
-In every new session:
-1. Read `AGENTS.md` in full before writing any code.
-2. Follow the doc hierarchy and operating rules defined there.
-3. Do not treat this file as a second source of truth.
+@AGENTS.md
 ```
 
-If the repo is Claude Code-only and CLAUDE.md needs to carry more, keep it as the authority but apply the same discipline: no project narrative, no duplicated rules, point outward.
+Write the import as literal file content outside a code fence in the generated `CLAUDE.md`. Relative imports resolve from the containing file, so adjust the path for a `.claude/CLAUDE.md` or other established location. Add only necessary Claude-specific instructions after it and avoid circular imports. Preserve a working symlink when no separate tool-specific content is needed.
 
-### 5. Confirm the file pair
+Within the requested repair scope, each nested `AGENTS.md` whose rules Claude Code must honor needs a corresponding scoped Claude entry point. For example, `packages/api/CLAUDE.md` can contain `@AGENTS.md` to import `packages/api/AGENTS.md`. Preserve an equivalent working scoped import or symlink. A root import alone does not load nested `AGENTS.md` files. Do not import every package's rules at the root; keep them scoped so Claude Code can load the nested entry points on demand.
 
-Verify:
-- one file owns agent behavior; the other defers or covers only tool-specific behavior
-- no operating rules, checklists, or repo context are duplicated
-- an agent reading both files sees one unambiguous precedence model
+This import behavior is documented in [Claude Code memory guidance](https://code.claude.com/docs/en/memory#agents-md). It is a Claude Code mechanism, not a claim that every agent discovers every instruction filename. Do not replace an intentional import or symlink setup with a prose-only pointer.
 
-## Decision Rules
+## Verify And Report
 
-- `AGENTS.md` should own agent behavior by default
-- `CLAUDE.md` should almost always be a 5–10 line pointer
-- Do not split operating rules across both files
-- If both files have unique high-value content, migrate it to the correct owner — do not keep both copies
-- If a section helps human readers more than agents, it belongs in project docs, not in `AGENTS.md`
-- Temporary implementation detail does not belong in `AGENTS.md`
-- A code block earns its place only if an agent would plausibly get the constraint wrong without it and the correct approach is not discoverable by reading existing files. When in doubt, remove it and point the agent to the relevant files instead.
+Verify that the selected tools have the required entry points at the root and each relevant nested scope. Trace Claude imports to the intended local rules, check resolution and cycles, and confirm unique rules survive with a clear owner at each scope. Check referenced docs, paths, and commands; distinguish inspecting a loader configuration from testing it in the actual host.
 
-## Expected Outputs
-
-Produce:
-
-- a compact `AGENTS.md` with the standard section structure
-- a `CLAUDE.md` that defers clearly to `AGENTS.md`
-- a short summary of what moved, what was deleted, and why
-
-## Cautions / Common Failure Modes
-
-- Turning `AGENTS.md` into a project wiki
-- Letting `CLAUDE.md` become a second operating manual
-- Including architecture detail that belongs in `/docs`
-- Making the file so long agents stop reading it
-- Treating the section list as a rigid required template rather than a minimum frame
-- Adding code blocks for patterns the agent can find in existing files — point to the files instead
-- Documenting what the linter already enforces and auto-fixes
-
-## Example Usage
-
-Use this skill when a user says:
-
-- "Rewrite AGENTS.md to be lean and agent-focused."
-- "Create AGENTS.md for this repo."
-- "Our AGENTS.md is too big and duplicates the docs."
-- "Make CLAUDE.md point to AGENTS.md."
-- "We have both AGENTS.md and CLAUDE.md. Make them consistent."
-- "Remove overlap between our instruction files."
+Report the ownership choice, files changed or deliberately retained, material content moved or removed, and validation limits. The output may be one file or several scoped files; a matched root pair is not required. Publication is outside this skill unless separately authorized.

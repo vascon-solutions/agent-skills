@@ -1,7 +1,7 @@
 # Implementation Map Prompt Mode Router Design
 
 Date: 2026-05-21
-Status: Draft for user review
+Status: Archived, unapproved proposal; superseded by intent-based deliverable selection in the maintained implementation-map skill
 Owner: implementation-map skill
 
 ## Purpose
