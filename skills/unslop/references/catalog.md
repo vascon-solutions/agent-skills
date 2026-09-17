@@ -47,7 +47,7 @@ Stable ids. Cite by id. `scripts/scan.mjs` checks the ids marked (scan). The res
 - `no-em-dash` (scan). No em dashes, en dashes as dashes, or double hyphens. End the sentence or use a comma.
 - `no-arrow-speak` (scan). No `->` or `→` in prose. Spell out "becomes", "then", "returns".
 - `no-colon-connector`. A colon introduces a list or an example. It does not join two clauses.
-- `no-slash-or` (scan). "a, b, or both", not "a/b" or "and/or". No "(s)" plurals.
+- `no-slash-or` (scan, partial). "a, b, or both", not "a/b" or "and/or". No "(s)" plurals. The scanner flags literal "and/or" and "(s)". Other slash-separated alternatives, such as "yes/no" or "JSON/YAML", need contextual review to distinguish them from paths and units.
 - `straight-quotes` (scan). Straight quotes and apostrophes.
 - `no-semicolon`. Use a period.
 
@@ -58,7 +58,7 @@ Stable ids. Cite by id. `scripts/scan.mjs` checks the ids marked (scan). The res
 - `no-ai-vocab` (scan, partial). Delve, leverage, utilize, seamless, crucial, pivotal, showcase, foster, garner, tapestry, testament, vibrant, intricate, enhance, elevate, empower, holistic, cutting-edge, game-changer, realm, myriad. Use the plain word. Contextual review covers robust (of prose), landscape (abstract), underscore (verb), harness (verb), unlock (figurative), and journey (abstract). The scanner does not flag those contextual terms.
 - `no-metaphor-noun` (scan, partial). Substrate, nexus, bedrock, north star, flywheel, paradigm, endgame. Name the concrete thing. Contextual review covers wedge (metaphor), vector (non-math), scaffolding (metaphor), ratchet (metaphor), and primitive (noun, outside its technical sense). The scanner does not flag those contextual terms.
 - `no-not-just` (scan). "Not just X, but Y" and "not only X but also Y". State the point.
-- `plain-is` (scan). "Serves as", "stands as", "boasts", "acts as", "features" mean "is" or "has".
+- `plain-is` (scan, partial). "Serves as", "stands as", "boasts", and "acts as" mean "is" or "has" and are scanned. Contextual review covers "features" used as a verb meaning "has". The scanner leaves that term unflagged because it can also be a noun.
 - `no-rule-of-three`. Do not force ideas into groups of three. Use the real number.
 - `no-false-range`. "From X to Y" only when X and Y sit on a real scale.
 - `no-superficial-ing`. Trailing "highlighting", "ensuring", "showcasing", "reflecting" phrases add nothing. Delete or replace with the mechanism.

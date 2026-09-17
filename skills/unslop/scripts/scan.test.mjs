@@ -34,6 +34,13 @@ test("reports the line of each hit", () => {
   assert.deepEqual(result.hits.map((hit) => [hit.line, hit.rule, hit.snippet]), [[3, "no-ai-vocab", "utilize"]]);
 });
 
+test("plain-is detects acts as with or without an article", () => {
+  for (const predicate of ["acts as middleware", "acts as a cache", "acts as an adapter"]) {
+    assert.deepEqual(rules(`The service ${predicate}.`), ["plain-is"]);
+  }
+  assert.deepEqual(rules("The service has two features."), []);
+});
+
 test("ignores fenced code, inline code, and URLs", () => {
   const text = [
     "Run `npm run build -- --watch` and see https://example.com/a—b/“docs” for details.",
@@ -129,6 +136,32 @@ test("tables are skipped for sentence length", () => {
   assert.deepEqual(rules(`${row}\n${row}`, { maxWords: 10 }), []);
 });
 
+test("table prose receives mechanical and budget checks", () => {
+  const text = "| Result | Details |\n| --- | --- |\n| Cache | We leverage the cache — feel free to ask. |";
+  const result = scanText(text, { budget: 5, maxWords: 5 });
+  assert.equal(result.words, 11);
+  assert.deepEqual(result.hits.map((hit) => [hit.line, hit.rule]), [
+    [0, "surface-budget"], [3, "no-ai-vocab"], [3, "no-chatbot"], [3, "no-em-dash"],
+  ]);
+  assert.deepEqual(rules("| Code | `leverage` | https://example.com/leverage |"), []);
+  assert.deepEqual(rules("| Result | Let me check it. |"), ["no-narration"]);
+});
+
+test("common abbreviations do not split a continued technical sentence", () => {
+  for (const abbreviation of ["e.g.", "i.e.", "etc."]) {
+    for (const separator of [" ", "\n"]) {
+      const text = `These examples include caches ${abbreviation}${separator}and several other useful storage systems.`;
+      const result = scanText(text, { maxWords: 8 });
+      assert.deepEqual(result.hits.map((hit) => [hit.line, hit.endLine, hit.rule]), [
+        [1, separator === "\n" ? 2 : 1, "one-idea"],
+      ]);
+    }
+  }
+  assert.deepEqual(rules("Use caches etc. Next use queues.", { maxWords: 5 }), []);
+  assert.deepEqual(rules("Use caches etc.", { maxWords: 5 }), []);
+  assert.deepEqual(rules("Examples include formats e.g. JSON and YAML files.", { maxWords: 8 }), ["one-idea"]);
+});
+
 test("sentences start on their first content line, including staged additions", () => {
   for (const ending of [".", "!", "?", ""]) {
     const content = `Short.\n   This sentence has more than five words${ending}`;
@@ -168,6 +201,20 @@ test("staged CLI scans Git paths with spaces, Unicode, and escaped characters", 
       assert.deepEqual(scan.hits.map((hit) => [hit.line, hit.rule]), [[1, "no-ai-vocab"]]);
     }
   }
+});
+
+test("staged CLI keeps header-looking additions inside their actual files", (t) => {
+  const cwd = temporaryDirectory(t);
+  git(cwd, "init", "--quiet");
+  fs.writeFileSync(path.join(cwd, "a.md"), "++ heading\n++ b/ghost.md\nWe leverage it.");
+  fs.writeFileSync(path.join(cwd, "b.md"), "Feel free to ask.\n");
+  fs.writeFileSync(path.join(cwd, "c.ts"), "++ b/ghost2.md\nWe leverage it.\n");
+  git(cwd, "add", "--", "a.md", "b.md", "c.ts");
+  const result = spawnSync(process.execPath, [scanner, "--staged", "--json"], { cwd, encoding: "utf8" });
+  assert.equal(result.status, 1, result.stderr || result.stdout);
+  assert.deepEqual(JSON.parse(result.stdout).map((scan) => [scan.file, scan.hits.map((hit) => [hit.line, hit.rule])]), [
+    ["a.md", [[3, "no-ai-vocab"]]], ["b.md", [[1, "no-chatbot"]]],
+  ]);
 });
 
 test("staged CLI reports Git failures as errors, not clean scans", (t) => {
@@ -248,6 +295,16 @@ test("parseArgs validates numeric options", () => {
 
 test("frontmatter is skipped", () => {
   assert.deepEqual(rules("---\nname: x\ndescription: we leverage things\n---\n\nClean body."), []);
+});
+
+test("an opening thematic break does not discard the rest of a document", () => {
+  for (const newline of ["\n", "\r\n"]) {
+    const text = `---${newline}We leverage the cache.`;
+    const result = scanText(text);
+    assert.equal(result.words, 4);
+    assert.deepEqual(result.hits.map((hit) => [hit.line, hit.rule]), [[2, "no-ai-vocab"]]);
+    assert.equal(runCli(["--stdin"], { stdout: () => {}, readStdin: () => text }), 1);
+  }
 });
 
 test("the skill's own prose is clean", () => {

@@ -45,7 +45,7 @@ const LINE_RULES = [
     pattern: word(["substrate", "north star", "flywheel", "bedrock", "nexus", "paradigm", "endgame"]),
   },
   { id: "no-not-just", message: "'not just X but Y'; state the point", pattern: /\bnot (?:just|only|merely)\b[^.!?\n]{1,80}?\bbut(?: also)?\b/gi },
-  { id: "plain-is", message: "fancy 'is'; say is or has", pattern: /\b(?:serves as|stands as|boasts|acts as an?)\b/gi },
+  { id: "plain-is", message: "fancy 'is'; say is or has", pattern: /\b(?:serves as|stands as|boasts|acts as)\b/gi },
   {
     id: "no-chatbot",
     message: "chatbot phrase; delete",
@@ -71,6 +71,7 @@ const FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
 const MARKER = /^\s*(?:[-*+]|\d+[.)])\s+/;
 const HEADING = /^\s*#{1,6}\s+/;
 const TABLE_ROW = /^\s*\|/;
+const THEMATIC_BREAK = /^ {0,3}(?:(?:-\s*){3,}|(?:_\s*){3,}|(?:\*\s*){3,})$/;
 
 function stripInlineCode(line) {
   let out = "";
@@ -102,15 +103,18 @@ function stripUrls(line) {
 function proseLines(lines) {
   const result = [];
   let fence = null;
-  let frontmatter = lines[0]?.trim() === "---";
+  const frontmatterEnd = lines[0]?.trim() === "---"
+    ? lines.findIndex((line, index) => index > 0 && line.trim() === "---")
+    : -1;
   for (const [index, raw] of lines.entries()) {
-    if (frontmatter) { if (index > 0 && raw.trim() === "---") frontmatter = false; continue; }
+    if (index <= frontmatterEnd) continue;
     const match = raw.match(FENCE);
     if (fence) {
       if (match && match[1][0] === fence.char && match[1].length >= fence.length && match[2].trim() === "") fence = null;
       continue;
     }
     if (match && !(match[1][0] === "`" && match[2].includes("`"))) { fence = { char: match[1][0], length: match[1].length }; continue; }
+    if (THEMATIC_BREAK.test(raw)) continue;
     const text = stripUrls(stripInlineCode(raw));
     result.push({ line: index + 1, raw, text, heading: HEADING.test(raw), table: TABLE_ROW.test(raw), marker: MARKER.test(raw) });
   }
@@ -139,6 +143,13 @@ function sentences(paragraph) {
   const boundary = /[.!?](?=\s|$)/g;
   let match;
   while ((match = boundary.exec(joined)) !== null) {
+    if (match[0] === ".") {
+      const before = joined.slice(0, match.index + 1);
+      const after = joined.slice(match.index + 1).trimStart();
+      if (after && /\b(?:e\.g|i\.e|vs|cf|approx)\.$/i.test(before)) continue;
+      // "etc." can end a sentence; lowercase or numeric text signals a continuation.
+      if (/\betc\.$/i.test(before) && /^[a-z0-9]/.test(after)) continue;
+    }
     append(match.index + 1);
     start = match.index + 1;
   }
@@ -155,15 +166,17 @@ export function scanText(text, options = {}) {
   const lines = proseLines(text.split(/\r?\n/));
 
   for (const entry of lines) {
-    if (entry.table) continue;
-    for (const rule of LINE_RULES) {
-      if (rule.markerLinesOnly && !(entry.marker || entry.heading)) continue;
-      const subject = rule.afterMarker ? entry.text.replace(MARKER, "").replace(HEADING, "").trimStart() : entry.text;
-      rule.pattern.lastIndex = 0;
-      let match;
-      while ((match = rule.pattern.exec(subject)) !== null) {
-        hits.push({ file, line: entry.line, rule: rule.id, message: rule.message, snippet: match[0].trim() });
-        if (!rule.pattern.global) break;
+    const subjects = entry.table ? entry.text.split(/(?<!\\)\|/).map((cell) => cell.trim()) : [entry.text];
+    for (const text of subjects) {
+      for (const rule of LINE_RULES) {
+        if (rule.markerLinesOnly && !(entry.marker || entry.heading)) continue;
+        const subject = rule.afterMarker ? text.replace(MARKER, "").replace(HEADING, "").trimStart() : text;
+        rule.pattern.lastIndex = 0;
+        let match;
+        while ((match = rule.pattern.exec(subject)) !== null) {
+          hits.push({ file, line: entry.line, rule: rule.id, message: rule.message, snippet: match[0].trim() });
+          if (!rule.pattern.global) break;
+        }
       }
     }
   }
@@ -183,7 +196,8 @@ export function scanText(text, options = {}) {
   };
   for (const entry of lines) {
     if (paragraph.length > 0 && entry.line !== paragraph.at(-1).line + 1) flush();
-    if (entry.table || entry.text.trim() === "") { flush(); continue; }
+    if (entry.table) { flush(); words += countWords(entry.text); continue; }
+    if (entry.text.trim() === "") { flush(); continue; }
     if (entry.heading) { flush(); paragraph.push(entry); flush(); continue; }
     if (entry.marker) flush();
     paragraph.push(entry);
@@ -231,18 +245,40 @@ export function parseStagedDiff(diff) {
   const files = new Map();
   let current = null;
   let line = 0;
+  let oldRemaining = 0;
+  let newRemaining = 0;
   for (const raw of diff.split("\n")) {
-    if (raw.startsWith("+++ ")) {
+    if (raw.startsWith("diff --git ")) {
+      current = null;
+      oldRemaining = 0;
+      newRemaining = 0;
+      continue;
+    }
+    if (oldRemaining === 0 && newRemaining === 0 && raw.startsWith("+++ ")) {
       const name = parsePatchPath(raw.slice(4)).replace(/^b\//, "");
       current = name === "/dev/null" || !TEXT_EXTENSIONS.has(path.extname(name)) ? null : name;
       if (current) files.set(current, []);
       continue;
     }
-    if (!current) continue;
-    const hunk = raw.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
-    if (hunk) { line = Number(hunk[1]); continue; }
-    if (raw.startsWith("+")) { files.get(current).push({ line, text: raw.slice(1) }); line += 1; continue; }
-    if (!raw.startsWith("-")) line += 1;
+    const hunk = raw.match(/^@@ -\d+(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
+    if (hunk) {
+      oldRemaining = Number(hunk[1] ?? 1);
+      line = Number(hunk[2]);
+      newRemaining = Number(hunk[3] ?? 1);
+      continue;
+    }
+    if (oldRemaining === 0 && newRemaining === 0) continue;
+    if (raw.startsWith("+")) {
+      if (current) files.get(current).push({ line, text: raw.slice(1) });
+      line += 1;
+      newRemaining -= 1;
+    } else if (raw.startsWith("-")) {
+      oldRemaining -= 1;
+    } else if (raw.startsWith(" ")) {
+      line += 1;
+      oldRemaining -= 1;
+      newRemaining -= 1;
+    }
   }
   return files;
 }
