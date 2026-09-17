@@ -1,251 +1,54 @@
 ---
 name: implementation-map
-description: Use when an existing or in-progress feature, module, package capability, backend workflow, or full-stack vertical needs a code-grounded implementation map that orients reviewers, maintainers, or future agents to flow, architecture, and refactoring candidates.
+description: Create requested implementation maps or deep review dossiers of existing features, modules, or cross-file flows. Not for routine code explanations unless explicitly invoked.
 ---
 
 # Implementation Map
 
-## Purpose
+Explain existing implementation: entry points, runtime flow, ownership, tests, and evidence-backed maintenance candidates. Do not implement changes or turn the map into a future delivery plan. Formal acceptance review belongs to `review-implementation`; future work definition belongs to `task-doc`.
 
-Produce a code-grounded Markdown map of how a feature is actually wired: entry points, runtime flow, architecture boundaries, tests, and visible refactoring candidates.
+## Choose The Deliverable
 
-This skill describes existing code. It does not plan future work, design changes, or implement anything.
+Infer the deliverable from what the user wants to receive, the target, and its complexity. Words inside a feature name are not mode switches: "map the PR review queue" names a feature, not a request for a review dossier.
 
-## When To Use
+- **Focused explanation.** Answer a narrow question in chat with the relevant files, flow, and caveats. A one-file target or small fix is not grounds for refusing. Do not create a map file merely to satisfy a template; honor an explicit file request with a compact document.
+- **Durable map.** Write a Markdown reference when the user asks for one or the ongoing authorized workflow calls for it. Use [map template](references/map-template.md) as a flexible content guide, combining or omitting sections that add no value.
+- **Review dossier.** When the user requests a deep implementation review artifact, use [dossier guidance](references/review-dossier.md). Adapt it to frontend, backend, full-stack, or package boundaries; do not automatically expand an ordinary wiring question into a dossier.
 
-Use when a feature spans multiple files, packages, routes, services, state layers, jobs, or API boundaries and the reader needs the implementation graph before changing or reviewing code.
+Choose companions from the requested output format using [artifact rules](references/artifact-decision-rules.md). Complexity alone does not authorize extra HTML or generated imagery. Markdown is the default for a durable map. A request for a visual flow can be satisfied by an embedded Mermaid diagram when appropriate.
 
-Useful for:
+If the target is unclear, inspect supplied paths, routes, modules, tasks, or PR context before asking a focused question. Do not ask for a mode when the requested deliverable is evident.
 
-- post-implementation acceptance review of a feature slice
-- onboarding a new agent or developer to a feature before continuing work
-- preparing review notes before a PR or follow-up task doc
-- identifying coupling, missing tests, duplicated logic, or extraction candidates
-- preserving implementation context after a long-running session
+## Discover And Trace
 
-## When Not To Use
+1. Read applicable repo instructions, including nested rules, and relevant README, architecture, domain, or task context. Absence of an instruction file is not a blocker; do not invent a convention.
+2. Identify the profile: frontend, backend, full-stack, library/package, or mixed. Use the matching portions of [discovery checklist](references/discovery-checklist.md).
+3. Locate entry points and follow the meaningful lifecycle: loading, composition, request/response, state changes, persistence, jobs/events, external calls, cache invalidation, and errors as applicable.
+4. Group evidence by workflow and responsibility, not folder alone. Identify shared contracts and ownership at boundaries.
+5. Inspect relevant test assertions and search for indirect/integration coverage before claiming a gap. Use [gap heuristics](references/gap-heuristics.md) for concrete candidates. Naming a test file does not establish what it checks.
+6. Stop when the requested flow and important boundaries are explained, remaining uncertainty is explicit, and further reading adds little. Do not exhaust the repository to complete a template.
 
-Reject and recommend a lighter response when the target is:
+## Evidence
 
-- a one-file change
-- a small bug fix
-- pure copy, styling, or config edits
-- a feature with no meaningful lifecycle, API, state, persistence, architecture boundary, or test surface
+- Cite files and useful symbols for implementation claims. Add line numbers for narrow details and compact source excerpts; do not dump full source files.
+- Label inference and distinguish implemented behavior from requirements or rationale supplied by authoritative docs. Record conflicts rather than claiming the code satisfies an unmet rule.
+- Use `high` confidence for direct evidence with a clear signal and `review` for uncertain candidates. A signal alone does not establish a defect; explain its consequence before using defect language.
+- Record tests inspected, behavior their assertions cover, and tests actually executed separately. Do not imply runtime verification, passing tests, or measured coverage from source inspection alone.
+- Preserve cited `TODO` or `FIXME` comments as evidence when relevant. Remove unfinished author placeholders, not quoted source material.
+- Keep the result usable without chat history and exclude secrets and raw private payloads.
 
-Also do not use this skill for:
+The code remains the implementation authority. A Markdown map is the source for its derived companions, not a replacement for code or formal review.
 
-- forward-looking task definition — use `task-doc`
-- frontend developer migration guidance — use `prepare-frontend-handoff`
-- QA sign-off notes — use `prepare-qa-handoff`
-- repo-wide documentation audits — use `repo-docs-audit`
-- rough ideas or designs that need a polished Markdown workspace — use `markdown-artifact`
+## Location And Artifacts
 
-The line: `task-doc` describes *future* work; `implementation-map` describes *existing* code.
+For a file deliverable, honor the user path first. When the user or authorized workflow requests repository documentation, follow the repo's convention, falling back to `docs/` with a descriptive lowercase filename. Otherwise, including an unqualified request to write a map, default to `~/agent-artifacts/<repo-name>-<feature-slug>/markdown/implementation-map.md`. Use `markdown-artifact` workspace conventions there. An existing `docs/` directory alone does not imply a request for repository output. Ask only if the target repository or another material intent remains ambiguous.
 
-## Constraints
+A focused chat answer needs no output path. Do not create task queues or delivery documents as a side effect of mapping code.
 
-- **Do not implement product changes.** The Markdown map is the source of truth. Companion artifacts may be generated only after the map is complete and the recorded artifact decision calls for them.
-- **Reject small work.** If the rejection gate above applies, refuse with one sentence and recommend the lighter alternative. Do not produce an undersized map to satisfy the request.
-- **Evidence required.** Every architecture, flow, behavior, or gap claim must point to a file (and symbol when useful). Inference must be labeled as inference, not fact.
-- **No full source dumps.** Code snippets in the map or its companions must be compact and illustrative. Never paste whole files.
-- **Read repo instructions first.** Open `AGENTS.md`, `CLAUDE.md`, README, and architecture docs before claiming any convention violation. Gap analysis without this step is speculation.
-- **No chat-context dependence.** A reader with no prior conversation must be able to use the map.
-- **No `.agent/` folder creation.** Do not silently create `.agent/queues`, `.agent/tasks`, or similar unless the user explicitly asks.
-- **No secrets.** Exclude tokens, credentials, raw private payloads.
+When companions are requested, complete the Markdown source, record the requested formats and destinations, then invoke `html-artifact`, `image-artifact`, or both as requested. Report any unavailable generation separately; a missing companion does not invalidate a completed source map. Never publish a companion without publication authorization.
 
-## Required Inputs
+## Verify And Report
 
-You need one of:
+Check that the requested flow is answered, file references resolve, claims have evidence, inference and test-execution limits are explicit, and no unfinished author placeholders remain. For companions, verify that formats, paths, and contents match the request and the completed Markdown source.
 
-- feature name (`needs assessment`)
-- route path (`/needs-assessment`)
-- file path or feature folder
-- backend module, controller, service, job, or package path
-- task doc, PR summary, or implementation brief that names a feature
-
-If the input is too vague to locate entry points, ask one focused question before proceeding.
-
-## Stack Profile Detection
-
-Detect one profile and activate matching evidence sections. Do not split into separate skills.
-
-- `frontend` — routes/pages/loaders, components, hooks, client state, request clients, cache invalidation, UI tests
-- `backend` — routes/controllers/resolvers, services/use cases, repositories/models, DTOs/schemas, guards/policies, transactions, jobs, integration tests
-- `full-stack` — frontend entry points, backend endpoints, contracts, shared types, request/response lifecycle, cross-boundary failures
-- `library/package` — public exports, factories, domain helpers, consumers, test contract, compatibility boundaries
-- `mixed/unknown` — orient the reader and mark uncertain boundaries as inference
-
-## Map Structure
-
-Use [references/map-template.md](references/map-template.md). The template separates **mandatory** sections from **conditional** sections.
-
-Mandatory sections (always present, even if short):
-
-1. Title and metadata
-2. 30-second summary
-3. Stack profile and scope
-4. Start here — first files to open, in order
-5. Runtime flow
-6. Ownership boundaries
-7. Tests to read and test gaps
-8. File inventory
-9. Artifact decision — `html-artifact`, `image-artifact`, both, or neither, with reason
-
-Conditional sections (include only when evidence supports them):
-
-- User or business flow mapped to code
-- Implementation architecture
-- State, data, persistence, and side effects
-- API, request, contract, or messaging layer
-- Error handling, guards, and permissions
-- Current behavior to preserve
-- Coupling, complexity, and refactoring opportunities
-- Visuals — Mermaid, ASCII, or table-driven flow steps
-- Review notes
-
-Omit conditional sections cleanly rather than padding them with `None found` for every absent topic. Use `None found` only inside a mandatory section when the answer is genuinely empty (e.g., no tests).
-
-## Route Review Dossier Mode
-
-Use this mode by default when all are true:
-
-- stack profile is `frontend` or `full-stack` with meaningful frontend routes
-- the user wants to understand implementation quality, route/component wiring, refactor options, performance, tests, or code discoveries
-- the feature spans routes, components, hooks/state, API helpers, shared packages, jobs, or test coverage
-
-This mode still satisfies the 9 mandatory map sections, but it should be organized for code review scanning rather than generic prose. Default title pattern:
-
-```text
-<Feature Name> Route Review Dossier
-```
-
-Required dossier sections:
-
-1. Mental model and 30-second read
-2. Refactor priority index
-3. Route review map
-4. One section per route, ordered by user workflow
-5. Component trace atlas
-6. Hooks, stores, jobs, cache, and side effects map
-7. API and shared package contracts
-8. Test coverage map
-9. Refactor decision matrix
-10. Artifact decision
-
-Each route section must use the same review shape:
-
-```text
-Route Snapshot
-Code Scan
-Runtime Flow
-Component Wiring
-Hook / Store / API Wiring
-Review Cards
-Tests / Gaps
-```
-
-Code snippets must be compact excerpts from actual files with path and line range. HTML companions must render snippets with syntax coloring or a dark editor treatment when the user asked for a browser artifact, review artifact, or easy scanning. Do not paste full files.
-
-Review cards use this taxonomy:
-
-```text
-Decision
-Boundary
-Refactor
-Performance
-Testing
-Risk
-```
-
-Each card should include a confidence label (`High`, `Medium`, `Low`) and a concrete code signal. Test coverage is not optional in this mode: list existing test files, what behavior they prove, and visible gaps.
-
-## Discovery Workflow
-
-1. Confirm the target feature. If the rejection gate applies, refuse and recommend the lighter alternative.
-2. Read repo instructions: `AGENTS.md`, `CLAUDE.md`, README, architecture docs.
-3. Determine the stack profile.
-4. Locate entry points using [references/discovery-checklist.md](references/discovery-checklist.md).
-5. Collect evidence by profile: components, hooks, stores, API helpers, controllers, services, repositories, DTOs, schemas, guards, jobs, tests, shared package imports, task docs.
-6. Group files by workflow, not by folder alone.
-7. Trace primary lifecycle flows: route load, render composition, request handling, service execution, repository/external dependency, user action, mutation, transaction/event/queue/job, cache invalidation or navigation, error handling.
-8. Identify gaps using [references/gap-heuristics.md](references/gap-heuristics.md). Tie every gap to a convention from repo instructions or a concrete code pattern.
-9. Write the Markdown map using [references/map-template.md](references/map-template.md), or Route Review Dossier Mode when its trigger conditions apply.
-10. Validate against the checks below.
-11. Decide companion artifacts using [references/artifact-decision-rules.md](references/artifact-decision-rules.md). Record the decision in the map's `Artifact Decision` section.
-12. Invoke `html-artifact`, `image-artifact`, both, or neither according to the recorded decision. Companion generation happens only after the Markdown map is complete.
-
-## Output Location
-
-Decide the destination before writing.
-
-- If the user named a path, write there.
-- If the user asked for a portable artifact, write under `~/agent-artifacts/<repo-name>-<feature-slug>/markdown/implementation-map.md` and follow `markdown-artifact` workspace conventions.
-- If the user asked for a durable repo doc and an existing `docs/` or `docs/artifacts/` convention is present, follow it.
-- If no destination is clear, ask one focused question before writing.
-
-Do not silently create new repo folders. Do not write to `docs/superpowers/` unless explicitly requested.
-
-## Companion Artifacts
-
-After the Markdown map is written, decide whether `html-artifact`, `image-artifact`, both, or neither will materially improve understanding. Use [references/artifact-decision-rules.md](references/artifact-decision-rules.md) to make the call, then record it in the map's `Artifact Decision` section and invoke the chosen artifact skill(s).
-
-Decision summary:
-
-- `html-artifact` — readable text with file paths, tables, links, compact snippets, navigable sections.
-- `image-artifact` — low-text architecture diagram, API flow, lifecycle diagram, refactoring hotspot map.
-- `both` — complex or full-stack maps where readers benefit from readable detail *and* a quick visual.
-- `neither` — small features or single-flow maps where Markdown is already sufficient.
-
-For Route Review Dossier Mode, default to `html-artifact` when the user wants easy review, scanning, colored snippets, diagrams, or shareable output. The HTML should be a dossier, not a slide deck: sticky navigation, route sections, syntax-colored snippets, flow diagrams, component trees, review cards, test coverage, and a refactor matrix. If the user explicitly asks for generated imagery, use one generated orientation image only; keep code-grounded SVG/Mermaid/table visuals as the evidence layer.
-
-Companion generation happens only after the Markdown map is complete. HTML companions may include compact illustrative snippets, never full source files. Image companions stay low-text.
-
-## Evidence Rules
-
-- Use file paths in tables. Name symbols when useful.
-- Include line numbers only when a claim depends on a narrow implementation detail.
-- Distinguish code evidence from inference. Inference must be labeled.
-- Refactoring candidates require a concrete signal: file responsibility density, duplicated logic, cross-boundary imports, missing tests, stale docs, TODOs, or inconsistent guard/error handling.
-- Repo-convention violations require first having read the repo's instruction files.
-- Do not claim coverage, behavior, or intent unless code or supplied docs support it.
-
-## Validation
-
-Before reporting complete, verify:
-
-- the rejection gate was checked
-- all 9 mandatory sections exist, including `Artifact Decision`
-- every architectural, flow, behavior, or gap claim cites a file
-- inference is labeled
-- no full source files were pasted
-- no `TBD`, `TODO`, `FIXME`, `??` placeholders remain
-- the map is usable without chat context
-- the output path was honored or asked for when ambiguous
-- repo instruction files were read before any convention-violation claim
-- the recorded artifact decision was acted on — companions invoked when the decision was not `neither`
-
-## Output
-
-Report:
-
-```text
-Written: <resolved-map-path>
-Stack profile: <profile>
-Entry points: <count>
-Mandatory sections: 9/9
-Conditional sections included: <list>
-Artifact decision: <html-artifact | image-artifact | both | neither>
-Companion paths: <paths, or None>
-```
-
-## Cautions
-
-- Producing an oversized map for a small feature instead of refusing.
-- Inventing architecture intent, coverage claims, or convention violations.
-- Pasting full source files into the map or its HTML companion.
-- Invoking a companion artifact before the Markdown map is complete.
-- Generating both companions for a small or single-flow map.
-- Omitting the `Artifact Decision` section, even when the decision is `neither`.
-- Writing to `docs/superpowers/` or `.agent/` folders without explicit request.
-- Crossing into `task-doc` territory by recommending future implementation steps.
-- Treating the map as a substitute for code review.
+For chat, deliver the explanation directly. For saved output, link the files and summarize the scope, material discoveries, and verification limits. Report requested companions created or blocked. Do not use section counts or file counts as a substitute for explaining what the reader can learn.

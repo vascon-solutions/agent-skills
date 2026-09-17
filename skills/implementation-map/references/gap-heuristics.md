@@ -1,25 +1,25 @@
 # Gap And Refactoring Heuristics
 
-Surface gaps conservatively. Every gap must be tied to either a concrete code signal *or* a repo-convention violation. Repo-convention claims require having read `AGENTS.md`, `CLAUDE.md`, README, and any architecture/contributing docs first — without that step, do not file convention-violation gaps.
+Surface gaps conservatively. Every gap must be tied to either a concrete code signal *or* a repo-convention violation. Repo-convention claims require reading the applicable instruction and architecture/contributing docs that exist; do not invent conventions when those sources are absent.
 
 Label confidence:
 
-- **High** — direct code evidence and a clear signal.
-- **Review** — pattern smells, ambiguity, or low-confidence signals that deserve a second look.
+- **high.** Direct code evidence and a clear signal.
+- **review.** Pattern smells, ambiguity, or low-confidence signals that deserve a second look.
 
-Use review-candidate wording for low-confidence signals. Never use defect language without high-confidence evidence.
+Use review-candidate wording for uncertain signals. A direct signal is not automatically a defect: explain its consequence before using defect language. Distinguish source inspection from runtime verification.
 
 ## High-Confidence Signals
 
 ### TODOs Tied To Shipped Behavior
 
 - `TODO`, `FIXME`, or `XXX` comments next to behavior the feature relies on.
-- Cite file and line. Include the comment text in the map.
+- Cite file and line. Include relevant comment text in the map as quoted source evidence, including `TODO` or `FIXME`. Verify whether the comment still describes the implementation; it is not an unfinished author placeholder or proof of a defect.
 
 ### Untested Behavior In A Tested Area
 
-- Hooks, reducers, workflow helpers, or API helpers with no test file, in a feature area where other surfaces are tested.
-- Cite the untested file and at least one nearby tested file to show the area is otherwise covered.
+- Inspect test assertions and search indirect, integration, and consumer coverage for the specific behavior. A missing adjacent test file alone does not establish a gap.
+- Cite the behavior, tests searched, and the missing scenario. State whether tests were inspected or executed; source inspection does not prove they pass.
 
 ### Dense Responsibility In A Single File
 
