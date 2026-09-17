@@ -1,169 +1,53 @@
 ---
 name: repo-docs-audit
-description: Audit a repository's documentation and instruction files, decide what should exist, what should be merged or removed, and produce the smallest useful doc set. Use before rewriting docs or when a repo has missing, stale, bloated, or conflicting docs.
+description: Audit repository documentation and instruction files, report what to keep, trim, merge, remove, or create, and recommend a target doc set without editing files.
 ---
 
 # Repo Docs Audit
 
-## Purpose
+Define the smallest useful documentation set from repository evidence. This skill reports findings; it does not write, move, or delete repository files.
 
-Define the right documentation set for the repository before rewriting or preserving anything.
+Use it for unclear doc scope, missing context, stale docs, or consolidation. When the target is already clear, use `rewrite-docs-from-code`. Instruction-file repair belongs to `repair-agent-files`; review of a particular doc diff belongs to `review-doc-changes`.
 
-This skill decides:
+## Scope And Evidence
 
-- what docs should exist
-- what should be merged
-- what should be removed
-- what the minimum trustworthy doc set looks like
+Read [documentation policy](references/documentation-policy.md) for placement, source authority, and preservation rules shared with the editing skills.
 
-It is an audit and planning skill, not a writing skill.
+Read applicable repository instructions, including nested instructions for the area under review. Inventory documentation in the requested scope, including package-local docs and relevant untracked files. Identify generated documentation, its source, and its consumers before recommending removal.
 
-## When To Use
+Inspect representative code, configuration, scripts, and tests to check implementation claims. Record sourced domain rules, accepted requirements, and design rationale separately from implementation facts. A mismatch can be an implementation gap; code does not automatically invalidate the requirement.
 
-Use when:
+## Audit
 
-- the repo already has docs that may be stale, bloated, or overlapping
-- the repo has both agent instruction files and general project docs
-- the repo has no docs and you need to define the target set before creating anything
-- the user asks for a documentation audit, cleanup, consolidation, or reduction
-- you need a target doc set before running `rewrite-docs-from-code`
+For each file, identify its reader and purpose: agent instructions, setup/contribution, domain context, architecture, feature orientation, operational guidance, decision history, or generated reference.
 
-## When Not To Use
+Assess accuracy, overlap, useful context, and maintenance cost. Prefer explanations of non-obvious behavior over exhaustive folder listings. A generated reference or compact navigation table can still earn its place for its consumers; derivability from code alone is not grounds for deletion.
 
-Do not use when:
+Assign a verdict with evidence:
 
-- the task is only to create or repair `AGENTS.md` / `CLAUDE.md`
-  Use `repair-agent-files`
-- the target doc set is already clear and the task is to write the docs
-  Use `rewrite-docs-from-code`
-- the task is a second-pass review of recent doc changes
-  Use `review-doc-changes`
+| Verdict | Meaning |
+| --- | --- |
+| keep | Useful and sufficiently accurate |
+| trim | Retain the purpose, remove specific excess or stale claims |
+| merge | Identify the destination and unique content to preserve |
+| remove | Explain why no useful content or required consumer is lost |
+| create | Name the missing reader need and sources available to support it |
 
-## Required Inputs
+For proposed moves, merges, and removals, identify incoming links, tooling references, and whether the latest content is recoverable. Mark unresolved provenance or user-owned material for investigation rather than assuming it is disposable.
 
-You need:
+Choose docs by need:
 
-- access to the repository tree
-- current docs and instruction files (if any exist)
-- ability to inspect representative code paths
+- A README may be enough for a small library or utility.
+- Add architecture context when auth, state, request flow, jobs, or integration boundaries require explanation across files.
+- Preserve sourced domain and decision records that explain rules or tradeoffs code cannot convey.
+- Keep setup/contribution guidance for non-obvious prerequisites and repository-specific commands.
+- In monorepos, keep shared guidance at the root and distinct package guidance near its consumers.
+- Recommend agent instruction files only for actual tool needs and non-obvious operating constraints; `repair-agent-files` determines ownership.
 
-Useful sources:
+Do not require every category, a particular number of files, or a full repository scan for a focused request.
 
-- `AGENTS.md`, `CLAUDE.md`, `README.md`
-- `docs/` or equivalent doc directories
-- contributor, deploy, and setup guides
-- feature folders, routes, config, scripts
+## Output And Handoff
 
-Do not assume existing docs are correct. Do not assume every current file should survive.
+Report scope and evidence limits, a per-file verdict table, the target doc set, and prioritized corrections. Cite the docs and code or other sources behind actionable findings. Include preservation and link-update requirements in the handoff.
 
-## Step-By-Step Instructions
-
-1. Inventory current doc and instruction files. If there are none, skip to step 4.
-2. Classify each file by role:
-   - agent instructions (`AGENTS.md`, `CLAUDE.md`)
-   - product / domain context
-   - architecture / integration reference
-   - feature or module map
-   - contribution / process guide
-   - generated inventory or folder listing
-   - low-value duplication
-3. Scan enough code to verify whether the docs match implementation reality.
-4. Identify:
-   - stale or incorrect claims
-   - speculative claims without code backing
-   - overlap between files
-   - low-value files (folder listings, generic framework advice, snapshot inventories)
-   - missing high-value context that code cannot convey on its own
-5. Assign one verdict per file:
-   - **keep** — accurate, earns its place, adds value code inspection cannot provide
-   - **trim** — mostly good but over-specified or too long
-   - **merge** — overlaps with another file; combine them
-   - **remove** — low value or easily derivable from code inspection
-   - **create** — important context is missing and should be written
-6. Produce the audit output — a doc-by-doc verdict table with rationale and the proposed target doc set.
-7. **Gate on approval before any edits.** Present the full output and explicitly state: "No files will be modified until you approve." Do not create, edit, delete, or merge any file until the user confirms. If the user approves only part of the plan, apply only the approved subset.
-8. Recommend the next skill to run (e.g. `rewrite-docs-from-code`, `repair-agent-files`).
-
-## Decision Rules
-
-- **File placement and naming**: only `README.md`, `AGENTS.md`, and `CLAUDE.md` belong at the repo root. All other docs go in `docs/` with lowercase filenames (e.g., `docs/architecture.md`, `docs/context.md`, `docs/contributing.md`). Uppercase names are reserved for root-level repo meta-files. Flag violations during audits.
-- Keep a doc only if it adds durable value beyond what is quickly discoverable from code.
-- **Default to remove** for files that are primarily folder listings, generated inventory, or generic framework advice. Do not trim what should be deleted.
-- Prefer one strong doc over two overlapping docs.
-- Keep domain docs when code alone cannot explain business meaning, compliance constraints, or regulated behavior.
-- Keep architecture docs when behavior spans multiple files or subsystems in ways that are not obvious.
-- Keep contributor docs only for repo-specific rules — not generic Git or framework advice.
-- Keep `AGENTS.md` separate from project docs.
-- If `CLAUDE.md` exists alongside `AGENTS.md`, it should not be a second instruction system.
-- If a claim is not code-backed and is not domain knowledge, mark it trim or remove.
-- A doc that would take more effort to keep accurate than to discover from code inspection is a candidate for removal.
-
-## Minimum Viable Doc Set by Repo Type
-
-The right set differs by repo shape. These are starting points, not templates.
-
-**Single-package frontend app (SPA, Next.js, TanStack Start)**
-- `AGENTS.md`
-- Architecture doc if auth, layout guards, or data flow is non-trivial
-- Context doc if the domain has compliance or business constraints not inferable from code
-- Contributing doc if the repo has non-obvious setup or enforced standards
-
-**API / backend service (NestJS, Express, Fastify)**
-- `AGENTS.md`
-- Architecture doc for module structure, request flow, DB layer, middleware chain
-- Context doc if the domain is compliance-critical
-- Contributing doc for setup, migration, test commands
-
-**Monorepo**
-- Root `AGENTS.md` for cross-package conventions
-- Per-package `AGENTS.md` only when a package has distinct agent-relevant constraints
-- Root architecture doc for workspace topology and tooling
-- Per-package docs for packages with complex behavior
-
-**Simple utility or library**
-- `AGENTS.md`
-- `README.md` often already covers what a dedicated architecture doc would
-- Contributing doc only if contribution is non-trivial
-
-## Repo Shape Guidance for Scanning
-
-**Next.js** — distinguish pages router vs app router early; they produce different doc needs. Auth middleware, global layout guards, and server components add complexity worth documenting.
-
-**Vite / SPA** — focus on router type, state management pattern, API integration shape, and env vars. Docs here are often simpler.
-
-**TanStack Router / Start** — the route tree and loader pattern are frequently non-obvious. Worth a short orientation doc.
-
-**NestJS** — module topology, controller/service/guard chain, and DI patterns matter more than a feature map. Module-level docs are often more useful.
-
-**Express / Fastify** — middleware chain order and auth middleware placement are the high-risk areas. These are hard to reconstruct quickly from code.
-
-**Monorepos** — the workspace shape and cross-package dependency graph are rarely obvious from the filesystem. A topology doc is often high-value.
-
-## Expected Outputs
-
-Produce:
-
-- a doc-by-doc audit with verdicts and rationale
-- the recommended target doc set
-- rationale for consolidations and deletions
-- recommended next skill
-- an explicit approval prompt before any file is touched
-
-## Cautions / Common Failure Modes
-
-- Preserving files because they already exist
-- Mistaking folder structure dumps for valuable documentation
-- Letting `AGENTS.md` absorb general project documentation
-- Keeping multiple weak docs instead of one strong doc
-- Recommending speculative docs because they sound complete
-- Trimming when the right call is to delete entirely
-- Applying changes before waiting for explicit user approval
-
-## Example Usage
-
-Use this skill when a user says:
-
-- "Audit the docs and tell me what should stay."
-- "This repo has too many docs. Reduce them."
-- "Decide what docs should exist before rewriting anything."
-- "We have no docs. Where do we start?"
+For an audit-only request, finish with the report. For a request that already authorizes cleanup or rewriting, pass the findings and existing authorization to `rewrite-docs-from-code` or `repair-agent-files` and continue the authorized work in that workflow. Do not make the user approve the same scope again. Partial authorization applies only to that subset; unresolved decisions pause only the affected changes.

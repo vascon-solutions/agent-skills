@@ -1,114 +1,43 @@
 ---
 name: review-doc-changes
-description: Independently review recent documentation and instruction-file changes, rescan the codebase, and recommend or apply corrections. Use for second-pass audits where recent doc edits should not be accepted at face value.
+description: Review a specified documentation or instruction-file diff against code and authoritative sources. Report findings without editing the candidate or applying corrections.
 ---
 
 # Review Doc Changes
 
-## Purpose
+Review documentation changes without mutating repository files, Git state, or external services. An independent assessment means checking evidence rather than accepting the author's conclusions; it does not automatically require another agent.
 
-Perform an independent review of recently changed documentation.
+For an initial documentation inventory, use `repo-docs-audit`. For already-authorized corrections, return findings to `address-review-findings`, which can use `rewrite-docs-from-code` or `repair-agent-files`. Keep the review candidate unchanged while assessing it, even in a combined review-and-fix request.
 
-This skill is deliberately skeptical:
+## Establish The Candidate
 
-- it does not trust recent edits by default
-- it rescans code independently to verify claims
-- it evaluates whether revised docs are accurate, lean, non-duplicative, and worth keeping
-- it accepts "all changes are correct" as a valid outcome
+Resolve the requested scope from the conversation, PR, commit range, or worktree. Record the repository, baseline, candidate revision or worktree state, and included files. Never assume an empty unstaged diff means there is nothing to review.
 
-## When To Use
+- **Uncommitted work.** Inspect `git status --short`, `git diff --name-status --find-renames`, `git diff --cached --name-status --find-renames`, and `git ls-files --others --exclude-standard`. Read the staged and unstaged patches separately when both affect a path. Inspect relevant untracked docs directly; do not sweep unrelated files into scope.
+- **Commit or branch review.** Resolve base and head commits and inspect `git diff --name-status --find-renames <base> <head>`. For a PR or branch contribution, use the verified merge-base with the intended target branch unless the user requested a different comparison. Inspect the corresponding patch and candidate files at that revision, not unrelated working-tree versions.
+- **Deletions and renames.** Read old content from the baseline (for example `git show <base>:<old-path>`) and compare its preserved content, incoming links, and replacement destination. For staged-versus-worktree review, use the index as the old side where appropriate. A deleted file cannot be reviewed by opening its current path.
+- **Ambiguous history.** Inspect likely recent doc commits for a request such as "last session." If the intended baseline remains material and unresolved, ask one focused question. State any limited scope you can review meanwhile. With no Git history, use supplied before/after artifacts and disclose the limitation.
 
-Use when:
+Keep code changes visible as context and verify doc claims against the code belonging to the selected candidate. Avoid checkout/reset operations to obtain that evidence.
 
-- an agent or human recently changed docs and they need independent vetting
-- the repo was already "cleaned up" once and now needs a quality check
-- the user asks for validation, challenge, or second-pass review of doc edits
+## Evaluate
 
-## When Not To Use
+Read applicable repository instructions and [documentation policy](../repo-docs-audit/references/documentation-policy.md). It defines placement, source authority, preservation, and verification; existing location alone is not a defect.
 
-Do not use when:
+Check:
 
-- there are no recent doc changes to review
-- the task is initial doc creation or an audit of what should exist
-  Use `repo-docs-audit` or `rewrite-docs-from-code`
-- the task is only to align `CLAUDE.md` and `AGENTS.md`
-  Use `repair-agent-files`
+- Accuracy of implementation claims, paths, commands, and integration descriptions.
+- Preservation and attribution of domain rules, accepted requirements, and decision rationale. Identify implementation discrepancies without rewriting policy to fit code.
+- Lost unique content, broken links, or tooling consumers after deletions, renames, or merges.
+- Reader value and responsibility: duplication, generic filler, misleading inventories, or useful orientation removed merely because it is derivable from code.
+- Instruction-file authority and nested scope, using `repair-agent-files` guidance when needed. Operational command blocks can be useful; remove redundant style examples only when they add no guidance beyond enforced tooling.
 
-## Required Inputs
+Inspect relevant code and test assertions. Reuse supplied validation evidence when it matches the candidate. Run read-only or ordinary temporary-output doc checks only when needed to substantiate a finding; do not install dependencies, apply formatter fixes, or execute live operations during review.
 
-You need:
+## Findings And Output
 
-- access to recently changed doc and instruction files (via `git diff` or direct inspection)
-- access to the current codebase for independent verification
+For each actionable finding, give severity, file and line/symbol (old path for deletions), concrete impact, supporting evidence, and the smallest credible correction. Label uncertainty. A preference without a reader problem, requirement, or concrete risk is not a defect.
 
-Do not assume recent edits are correct because they are recent.
-Do not assume recent edits are wrong because they are recent.
+Give per-file verdicts where useful: `accept`, `trim`, `replace/revert`, or `remove`. These are recommendations, not edits. Accepting every change is a valid result.
 
-## Step-By-Step Instructions
-
-1. Identify changed doc and instruction files. Use `git diff --name-only` or inspect the worktree.
-2. Separately identify any code changes in the same worktree — do not conflate them with doc changes.
-3. Read each changed doc as it currently exists.
-4. Independently scan the codebase to verify specific claims in the changed docs.
-5. For each changed file, audit:
-   - **Accuracy** — do claims match current code?
-   - **Scope discipline** — does the file stay in its lane, or does it drift into another doc's territory?
-   - **Overlap** — does it now duplicate content from another file?
-   - **Durable value** — will this be useful in six months, or is it a current-state snapshot?
-   - **Lean structure** — could it be shorter without losing meaning? For `AGENTS.md` specifically: does each code block enforce a critical constraint that prose alone cannot express, or is the pattern discoverable by reading existing files? Does the block document something the linter auto-fixes?
-6. Assign a verdict to each file:
-   - **accept** — changes are correct and improve the doc
-   - **trim** — broadly correct but over-specified or too long
-   - **revert / replace** — changes introduced errors, bloat, or scope drift
-   - **remove** — the file or section should not exist
-7. Apply clear, low-risk improvements directly. For larger structural changes, report and recommend instead of acting.
-8. Produce the final review with verdicts and rationale.
-
-## When to Apply vs When to Report
-
-**Apply directly when:**
-- the fix is clearly correct and contained (stale reference, wrong path, inaccurate claim)
-- the change is a deletion or reduction with no ambiguity about intent
-
-**Report and recommend when:**
-- the change requires structural judgment (merging files, reassigning scope)
-- the change might conflict with user intent or ongoing work
-- you are uncertain whether a claim is wrong vs merely imprecise
-
-## Decision Rules
-
-- Recent edits get no presumption of correctness or incorrectness
-- Verify against code, not against the author's apparent intent
-- Prefer deletion over light polish when a doc still does not earn its place after the edits
-- Challenge generated inventories and folder listings regardless of how clean they look
-- Keep `AGENTS.md` lean and agent-focused — code blocks belong only when a constraint is non-obvious AND the correct approach isn't discoverable from existing files. Patterns the codebase already demonstrates consistently, and anything a linter auto-corrects, should be removed.
-- Do not preserve structure just because it was recently introduced
-- If all recent changes are correct, say so explicitly — accept all is a valid outcome
-
-## Expected Outputs
-
-Produce:
-
-- a per-file verdict (accept / trim / revert / remove)
-- concrete mismatches against current code
-- applied fixes where appropriate
-- recommendations for further changes where applicable
-- explicit "accept all" if the changes are correct
-
-## Cautions / Common Failure Modes
-
-- Rubber-stamping recent edits
-- Reviewing only the diff without rescanning the code
-- Focusing on wording polish instead of accuracy
-- Being too deferential to recently added structure
-- Conflating code changes with doc changes in a mixed worktree
-- Declaring everything wrong out of contrarianism
-
-## Example Usage
-
-Use this skill when a user says:
-
-- "Claude already updated the docs. Independently audit them."
-- "Review the uncommitted documentation changes and challenge them."
-- "Do a second-pass review of the docs another agent just wrote."
-- "Check if the doc changes from the last session are actually correct."
+Report the exact reviewed scope, findings ordered by severity, and validation evidence and limits. Distinguish tests read from tests run. If the candidate changes during review, identify invalidated evidence and reassess only the affected scope. For a combined review-and-fix request, hand the completed findings and existing authorization back to remediation without a new blanket approval step.
