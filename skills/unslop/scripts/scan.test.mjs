@@ -41,6 +41,24 @@ test("plain-is detects acts as with or without an article", () => {
   assert.deepEqual(rules("The service has two features."), []);
 });
 
+test("double-hyphen dashes are detected with or without spaces", () => {
+  for (const dash of ["--", " -- ", "-- ", " --"]) {
+    assert.deepEqual(rules(`Use the old behavior${dash}not the new one.`), ["no-em-dash"]);
+  }
+  assert.deepEqual(rules("Run `tool --flag`.\n\n---\n\n| --- | --- |"), []);
+});
+
+test("inline link destinations do not count as prose", () => {
+  for (const destination of ["catalog.md", "./catalog.md", "#catalog", "<catalog.md>", 'catalog.md "Title"', "catalog(v2).md"]) {
+    const result = scanText(`Read [the catalog](${destination}).`, { budget: 3 });
+    assert.equal(result.words, 3, destination);
+    assert.deepEqual(result.hits, [], destination);
+  }
+  assert.deepEqual(rules("Read [the catalog](leverage--guide.md)."), []);
+  assert.deepEqual(rules("Read (and/or write) the catalog."), ["no-slash-or"]);
+  assert.deepEqual(rules("Read [leverage](catalog.md)."), ["no-ai-vocab"]);
+});
+
 test("ignores fenced code, inline code, and URLs", () => {
   const text = [
     "Run `npm run build -- --watch` and see https://example.com/a—b/“docs” for details.",
@@ -61,6 +79,24 @@ test("code delimiters follow CommonMark lengths", () => {
   assert.deepEqual(rules("`unclosed leverage"), ["no-ai-vocab"]);
 });
 
+test("nested fences exclude code while preserving prose after the container", () => {
+  const cases = [
+    "> ```js\n> leverage\n> ```\nWe leverage prose.",
+    "> > ~~~\n> > leverage\n> > ~~~\nWe leverage prose.",
+    "1. Item\n\n    ```js\n    leverage\n    ```\nWe leverage prose.",
+    "- ```js\n  leverage\n  ```\nWe leverage prose.",
+    "- Item\n  ```\n  leverage\n  ```\nWe leverage prose.",
+    "> 1. Item\n>\n>    ```js\n>    leverage\n>    ```\nWe leverage prose.",
+    "> ```\n> leverage\nWe leverage prose.",
+    "- ```\n  leverage\nWe leverage prose.",
+  ];
+  for (const text of cases) {
+    const result = scanText(text);
+    assert.deepEqual(result.hits.map((hit) => [hit.line, hit.rule]), [[text.split("\n").length, "no-ai-vocab"]], text);
+  }
+  assert.deepEqual(rules("```\n> ```\nleverage\n```"), []);
+});
+
 test("narration fires at the start of a line, bullet, or sentence", () => {
   assert.deepEqual(rules("- Let me check the cache."), ["no-narration"]);
   assert.deepEqual(rules("Done. Now I'll run the tests."), ["no-narration"]);
@@ -70,6 +106,15 @@ test("narration fires at the start of a line, bullet, or sentence", () => {
 test("emoji is flagged only in headings and bullets", () => {
   assert.deepEqual(rules("## Results 🚀"), ["no-decorative-emoji"]);
   assert.deepEqual(rules("The 🚀 icon is part of the product copy."), []);
+});
+
+test("flag and keycap emoji are detected without flagging ordinary digits", () => {
+  for (const emoji of ["🇺🇸", "🇳🇬", "1️⃣", "#️⃣", "*⃣"]) {
+    assert.deepEqual(rules(`# Region ${emoji}`), ["no-decorative-emoji"]);
+    assert.deepEqual(rules(`- Choice ${emoji}`), ["no-decorative-emoji"]);
+    assert.deepEqual(rules(`The ${emoji} icon is product copy.`), []);
+  }
+  assert.deepEqual(rules("# Region 1\n- Choice 2\n# Code `🇺🇸`"), []);
 });
 
 test("by default descriptions are not named-actor passive constructions", () => {
@@ -162,6 +207,15 @@ test("common abbreviations do not split a continued technical sentence", () => {
   assert.deepEqual(rules("Examples include formats e.g. JSON and YAML files.", { maxWords: 8 }), ["one-idea"]);
 });
 
+test("sentence punctuation can be followed by closing delimiters", () => {
+  for (const [open, close] of [['"', '"'], ["(", ")"], ["[", "]"], ["**", "**"], ["_", "_"], ['("', '")']]) {
+    const text = `He said, ${open}Alpha beta gamma delta.${close}\nShe answered, ${open}Echo foxtrot golf hotel.${close}`;
+    assert.deepEqual(rules(text, { maxWords: 8 }), [], text);
+  }
+  const long = 'He said, "Alpha beta gamma delta."\nShe answered, "Echo foxtrot golf hotel and many additional words."';
+  assert.deepEqual(scanText(long, { maxWords: 8 }).hits.map((hit) => [hit.line, hit.endLine, hit.rule]), [[2, 2, "one-idea"]]);
+});
+
 test("sentences start on their first content line, including staged additions", () => {
   for (const ending of [".", "!", "?", ""]) {
     const content = `Short.\n   This sentence has more than five words${ending}`;
@@ -188,7 +242,7 @@ const git = (cwd, ...args) => {
 test("staged CLI scans Git paths with spaces, Unicode, and escaped characters", (t) => {
   const cwd = temporaryDirectory(t);
   git(cwd, "init", "--quiet");
-  const names = ["a b.md", "café.md", 'a"b.md', "a\\b.md", "a\tb.md", "a\nb.md"];
+  const names = ["a b.md", "café.md", 'a"b.md', "a\\b.md", "a\tb.md", "a\nb.md", "NOTES.MD", "README.MDX", "COPY.TXT", "Guide.Markdown", "doc.RST"];
   for (const name of names) fs.writeFileSync(path.join(cwd, name), "We leverage it.\n");
   git(cwd, "add", "--", ...names);
   for (const quotePath of ["true", "false"]) {

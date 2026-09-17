@@ -11,7 +11,7 @@ const DEFAULT_MAX_WORDS = 30;
 const word = (list) => new RegExp(`\\b(?:${list.join("|")})\\b`, "gi");
 
 const LINE_RULES = [
-  { id: "no-em-dash", message: "em dash, en dash, or spaced double hyphen; end the sentence or use a comma", pattern: /—|–| -- /g },
+  { id: "no-em-dash", message: "em dash, en dash, or double hyphen; end the sentence or use a comma", pattern: /—|–|(?<!-)--(?!-)/g },
   { id: "no-arrow-speak", message: "arrow in prose; write the verb", pattern: /->|→|=>/g },
   { id: "straight-quotes", message: "curly quote; use straight quotes", pattern: /[“”‘’]/g },
   { id: "no-slash-or", message: "and/or or (s) plural; write the alternatives out", pattern: /\band\/or\b|\(s\)/gi },
@@ -64,10 +64,10 @@ const LINE_RULES = [
   },
   { id: "bold-leadin-only", message: "bold label with colon; use a sentence or a bold lead-in ending in a period", pattern: /\*\*[^*\n]{1,60}:\*\*|\*\*[^*\n]{1,60}\*\*:/g },
   { id: "active-voice", message: "passive with named actor; make the actor the subject", pattern: /\b(?:is|are|was|were|been|being)\s+\w+(?:ed|en)\s+by\b(?!\s+default\b)/gi },
-  { id: "no-decorative-emoji", message: "emoji in a heading or bullet; remove", pattern: /\p{Extended_Pictographic}/gu, markerLinesOnly: true },
+  { id: "no-decorative-emoji", message: "emoji in a heading or bullet; remove", pattern: /\p{Extended_Pictographic}|\p{Regional_Indicator}{2}|[#*0-9]\uFE0F?\u20E3/gu, markerLinesOnly: true },
 ];
 
-const FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
+const FENCE = /^[ \t]*(`{3,}|~{3,})(.*)$/;
 const MARKER = /^\s*(?:[-*+]|\d+[.)])\s+/;
 const HEADING = /^\s*#{1,6}\s+/;
 const TABLE_ROW = /^\s*\|/;
@@ -96,24 +96,89 @@ function stripInlineCode(line) {
   return out;
 }
 
+function stripLinkDestinations(line) {
+  let brackets = 0;
+  for (let index = 0; index < line.length; index += 1) {
+    if (line[index] === "\\") { index += 1; continue; }
+    if (line[index] === "[") brackets += 1;
+    if (line[index] !== "]" || brackets === 0) continue;
+    brackets -= 1;
+    if (line[index + 1] !== "(") continue;
+    let depth = 1;
+    let quote = null;
+    let angle = false;
+    for (let cursor = index + 2; cursor < line.length; cursor += 1) {
+      const char = line[cursor];
+      if (char === "\\") { cursor += 1; continue; }
+      if (quote) { if (char === quote) quote = null; continue; }
+      if (angle) { if (char === ">") angle = false; continue; }
+      if (char === "<") { angle = true; continue; }
+      if ((char === '"' || char === "'") && /\s/.test(line[cursor - 1])) { quote = char; continue; }
+      if (char === "(") depth += 1;
+      if (char !== ")" || --depth !== 0) continue;
+      line = line.slice(0, index + 1) + " ".repeat(cursor - index) + line.slice(cursor + 1);
+      index = cursor;
+      break;
+    }
+  }
+  return line;
+}
+
 function stripUrls(line) {
-  return line.replace(/\bhttps?:\/\/\S+|\([^\s()]*\/[^\s()]*\)/g, (match) => " ".repeat(match.length));
+  return stripLinkDestinations(line).replace(/\bhttps?:\/\/\S+/g, (match) => " ".repeat(match.length));
+}
+
+function quoteContent(raw, limit = Infinity) {
+  let text = raw;
+  let depth = 0;
+  while (depth < limit) {
+    const marker = text.match(/^ {0,3}>[ \t]?/);
+    if (!marker) break;
+    text = text.slice(marker[0].length);
+    depth += 1;
+  }
+  return { text, depth };
 }
 
 function proseLines(lines) {
   const result = [];
   let fence = null;
+  let listIndents = [];
+  let listQuoteDepth = 0;
   const frontmatterEnd = lines[0]?.trim() === "---"
     ? lines.findIndex((line, index) => index > 0 && line.trim() === "---")
     : -1;
   for (const [index, raw] of lines.entries()) {
     if (index <= frontmatterEnd) continue;
-    const match = raw.match(FENCE);
     if (fence) {
-      if (match && match[1][0] === fence.char && match[1].length >= fence.length && match[2].trim() === "") fence = null;
+      const content = quoteContent(raw, fence.quoteDepth);
+      const indent = content.text.match(/^[ \t]*/)[0].length;
+      if (content.depth < fence.quoteDepth || (content.text.trim() && indent < fence.indent)) {
+        fence = null;
+      } else {
+        const close = content.text.slice(fence.indent).match(FENCE);
+        if (close && close[1][0] === fence.char && close[1].length >= fence.length && close[2].trim() === "") fence = null;
+        continue;
+      }
+    }
+    const content = quoteContent(raw);
+    const indent = content.text.match(/^[ \t]*/)[0].length;
+    if (content.depth !== listQuoteDepth) listIndents = [];
+    listQuoteDepth = content.depth;
+    if (content.text.trim()) {
+      while (listIndents.length && indent < listIndents.at(-1)) listIndents.pop();
+    }
+    const listMarker = content.text.match(MARKER);
+    if (listMarker) listIndents.push(listMarker[0].length);
+    const fenceText = listMarker ? content.text.slice(listMarker[0].length) : content.text;
+    const match = fenceText.match(FENCE);
+    if (match && !(match[1][0] === "`" && match[2].includes("`"))) {
+      fence = {
+        char: match[1][0], length: match[1].length, quoteDepth: content.depth,
+        indent: listIndents.at(-1) ?? (indent > 3 ? indent : 0),
+      };
       continue;
     }
-    if (match && !(match[1][0] === "`" && match[2].includes("`"))) { fence = { char: match[1][0], length: match[1].length }; continue; }
     if (THEMATIC_BREAK.test(raw)) continue;
     const text = stripUrls(stripInlineCode(raw));
     result.push({ line: index + 1, raw, text, heading: HEADING.test(raw), table: TABLE_ROW.test(raw), marker: MARKER.test(raw) });
@@ -140,18 +205,19 @@ function sentences(paragraph) {
       out.push({ text: raw.trim(), line: lineAt(start + leading), endLine: lineAt(start + raw.trimEnd().length - 1) });
     }
   };
-  const boundary = /[.!?](?=\s|$)/g;
+  const boundary = /[.!?]["'’”)\]}*_]*(?=\s|$)/g;
   let match;
   while ((match = boundary.exec(joined)) !== null) {
-    if (match[0] === ".") {
+    const end = match.index + match[0].length;
+    if (match[0][0] === ".") {
       const before = joined.slice(0, match.index + 1);
-      const after = joined.slice(match.index + 1).trimStart();
+      const after = joined.slice(end).trimStart();
       if (after && /\b(?:e\.g|i\.e|vs|cf|approx)\.$/i.test(before)) continue;
       // "etc." can end a sentence; lowercase or numeric text signals a continuation.
       if (/\betc\.$/i.test(before) && /^[a-z0-9]/.test(after)) continue;
     }
-    append(match.index + 1);
-    start = match.index + 1;
+    append(end);
+    start = end;
   }
   append(joined.length);
   return out;
@@ -256,7 +322,7 @@ export function parseStagedDiff(diff) {
     }
     if (oldRemaining === 0 && newRemaining === 0 && raw.startsWith("+++ ")) {
       const name = parsePatchPath(raw.slice(4)).replace(/^b\//, "");
-      current = name === "/dev/null" || !TEXT_EXTENSIONS.has(path.extname(name)) ? null : name;
+      current = name === "/dev/null" || !TEXT_EXTENSIONS.has(path.extname(name).toLowerCase()) ? null : name;
       if (current) files.set(current, []);
       continue;
     }
