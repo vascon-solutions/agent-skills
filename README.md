@@ -105,6 +105,12 @@ An approved task/spec satisfies discovery; one validation owner supplies reusabl
 
 `brainstorm` saves substantial briefs/specs automatically: user path first, then existing repo spec convention, then `docs/specs/<topic>.md`; repo-independent research goes under `~/agent-artifacts/<topic>/markdown/`. Short exploration stays in chat. Saved specs are proposed until accepted; saving does not authorize commits or implementation.
 
+### CI Monitoring Authorization
+
+Generic `monitor CI`, `watch CI`, `check CI`, and `track CI` requests authorize read-only observation and reporting. They do not authorize applying fixes, rerunning workflows, changing code, committing, or pushing. A separate repair request authorizes work within its stated scope.
+
+Use the externally installed `monitor-ci` self-healing workflow only when the user explicitly invokes `$monitor-ci` or requests `Nx Cloud self-healing`. Preserve any narrower user limits. Broader triggers in external skills must not expand that authorization. External skill changes belong to their owning distribution; this repository documents the selection policy without modifying those installations.
+
 ### Shared Pack Dependencies
 
 Install this workflow pack together using `bin/link-skills.sh`. Skills share sibling references such as validation and GitHub transport guidance; preserve the sibling directories and their resources when copying the pack. Copying a single skill folder without its linked dependencies is not a supported standalone install. The Gemini copies mentioned below are external Superpowers installations, not single-skill installs of this owned pack. Portability checks verify relative Markdown reference targets.
