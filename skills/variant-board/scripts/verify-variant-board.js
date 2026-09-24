@@ -83,9 +83,22 @@ function runChecks(inputs, flags) {
   return report;
 }
 
+function highestIssuedVersion(paths, entry) {
+  const versions = entry ? entry.versions.map((v) => v.version) : [];
+  if (fs.existsSync(paths.versionsDir)) {
+    fs.readdirSync(paths.versionsDir).forEach((file) => {
+      if (!file.startsWith(`${paths.stem}.v`)) return;
+      const match = /^(\d+)\.html$/.exec(file.slice(`${paths.stem}.v`.length));
+      if (match) versions.push(Number(match[1]));
+    });
+  }
+  return Math.max(0, ...versions);
+}
+
 /* Changed bytes after issuance need a new number; identical bytes are fine. */
 function issuanceConsistency({ paths, html, board }, issuing) {
   const failures = [];
+  if (board.id !== paths.stem) failures.push(`data-board-id "${board.id}" must match the board filename "${paths.stem}.html"`);
   if (board.version === null) return failures;
   const frozen = paths.frozen(board.version);
   if (fs.existsSync(frozen)) {
@@ -97,6 +110,10 @@ function issuanceConsistency({ paths, html, board }, issuing) {
   const index = lib.readIndex(paths);
   const entry = index.boards[paths.stem];
   if (entry && entry.reserved && board.version <= entry.reserved) failures.push(`v${board.version} is at or below the reserved legacy number ${entry.reserved}; the first issued number must be ${entry.reserved + 1} or higher`);
+  if (!fs.existsSync(frozen)) {
+    const highest = highestIssuedVersion(paths, entry);
+    if (board.version <= highest) failures.push(`new issuance v${board.version} must be above the highest issued version v${highest}; run "bump"`);
+  }
   return failures;
 }
 
@@ -149,6 +166,7 @@ function commandIssue(args) {
   if (!args.positionals[0]) usage(1);
   const inputs = loadInputs(args.positionals[0], args.flags);
   const { paths, board } = inputs;
+  if (board.id !== paths.stem) die(`data-board-id "${board.id}" must match the board filename "${paths.stem}.html"`);
   const date = args.flags.date || today();
   const frozenPath = paths.frozen(board.version);
   const issuedHtml = lib.stampIssued(inputs.html, board, date);
@@ -186,7 +204,7 @@ function commandBump(args) {
   const { paths, board } = inputs;
   const index = lib.readIndex(paths);
   const entry = index.boards[paths.stem];
-  const floor = Math.max(board.version, entry ? entry.reserved : 0, ...(entry ? entry.versions.map((v) => v.version) : [0]));
+  const floor = Math.max(board.version, entry ? entry.reserved : 0, highestIssuedVersion(paths, entry));
   const next = args.flags.to ? Number(args.flags.to) : floor + 1;
   if (!Number.isInteger(next) || next <= floor) die(`next version must be greater than ${floor}`);
   if (fs.existsSync(paths.frozen(next))) die(`v${next} already has a frozen file`);

@@ -540,7 +540,14 @@ window.VariantBoard = (function () {
     if (parsed.kind !== "scenario" && parsed.kind !== "malformed") { banner(""); return parsed; }
     var result = resolveScenario(state.def, hash);
     if (!result.ok) {
-      banner("Cited scenario not found: " + result.reason + ". Showing the section defaults; the citation was not replayed.");
+      var sectionId = parsed.section;
+      if (Object.prototype.hasOwnProperty.call(state.def.sections, sectionId)) {
+        state.selections[sectionId] = defaultSelection(state.def.sections[sectionId]);
+        paint(sectionId);
+        banner("Cited scenario not found: " + result.reason + ". Showing the section defaults; the citation was not replayed.");
+      } else {
+        banner("Cited scenario not found: " + result.reason + ". The citation was not replayed; existing selections are unchanged.");
+      }
       return result;
     }
     banner("");

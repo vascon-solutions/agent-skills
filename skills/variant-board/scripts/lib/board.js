@@ -152,6 +152,7 @@ function parseBoard(html) {
     [...revisionsBlock[1].matchAll(/<li\b([^>]*)>([\s\S]*?)<\/li>/gi)].forEach((li) => {
       const tag = `<li${li[1]}>`;
       board.revisions.push({
+        markup: li[0],
         version: Number(attr(tag, 'data-version')),
         type: attr(tag, 'data-type'),
         date: attr(tag, 'data-date'),
@@ -459,7 +460,9 @@ function checkStructure({ html, board, brief, starterHtml }) {
   if (brief) {
     if (brief.boardId && board.id && brief.boardId !== board.id) failures.push(`brief board id "${brief.boardId}" differs from data-board-id "${board.id}"`);
     brief.sections.forEach((s) => {
-      if (!board.sections.some((b) => b.id === s.id)) failures.push(`brief section #${s.id} ("${s.heading}") is missing from the board`);
+      const section = board.sections.find((b) => b.id === s.id);
+      if (!section) failures.push(`brief section #${s.id} ("${s.heading}") is missing from the board`);
+      else if (s.purposes.some((p) => !section.purposes.includes(p)) || section.purposes.some((p) => !s.purposes.includes(p))) failures.push(`section #${s.id} purposes must match its brief row (${s.purposes.join(', ') || 'none'})`);
     });
     board.sections.filter((s) => !core.includes(s.id)).forEach((s) => {
       if (brief.sections.length && !brief.sections.some((b) => b.id === s.id)) warnings.push(`section #${s.id} is not listed in the brief`);
@@ -470,7 +473,10 @@ function checkStructure({ html, board, brief, starterHtml }) {
     purposes.forEach((purpose) => {
       const carriers = purposeSections.filter((s) => s.purposes.includes(purpose));
       if (!carriers.length) failures.push(`brief purpose "${purpose}" has no section carrying data-purpose="${purpose}"`);
-      carriers.forEach((s) => {
+    });
+    // Section rows may declare a purpose even when the brief's global list omits it.
+    purposeSections.forEach((s) => {
+      s.purposes.forEach((purpose) => {
         const parts = s.parts;
         if (purpose === 'proposed-change' && !parts.includes('panes') && !parts.includes('before-pane')) failures.push(`section #${s.id} (proposed-change) needs Before/After panes (data-board-part="panes" or "before-pane")`);
         if (purpose === 'proposed-change' && parts.includes('before-pane') && !s.reconstructedLabel) failures.push(`section #${s.id} static Before pane lacks the "reconstructed from source" label`);
@@ -695,7 +701,15 @@ function resolveCitation(text, { home } = {}) {
   const report = { citation, frozenPath, ok: false, failures: [], legacy: false };
   const index = readIndex(paths);
   const entry = index.boards[paths.stem];
-  const legacyMatch = entry && entry.legacy.find((l) => l.citation.includes(`(v${citation.version})`) && l.citation.includes(path.basename(boardPath)));
+  const legacyMatch = entry && entry.legacy.find((l) => {
+    try {
+      const legacy = parseCitation(l.citation);
+      return path.resolve(expandHome(legacy.path, home)) === boardPath && legacy.version === citation.version && legacy.heading === citation.heading && legacy.anchor === citation.anchor;
+    } catch (error) {
+      if (error instanceof BoardError) return false;
+      throw error;
+    }
+  });
   if (!fs.existsSync(frozenPath)) {
     if (legacyMatch) {
       report.legacy = true;

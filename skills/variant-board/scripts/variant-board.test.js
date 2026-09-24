@@ -4,6 +4,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const test = require('node:test');
+const vm = require('vm');
 
 const lib = require('./lib/board');
 const fixtures = require('./lib/fixtures');
@@ -359,7 +360,7 @@ test('a new-board bundle round-trips through import; a used identity is rejected
   fs.copyFileSync(path.join(out, 'manifest.json'), path.join(candidate, 'manifest.json'));
   const noMap = run(bundle, ['import', candidate, '--into', target], { env: { HOME: home } });
   assert.equal(noMap.status, 1);
-  assert.match(noMap.out, /no token map available/);
+  assert.match(noMap.out, /--bundle <original-bundle-dir> is required/);
   assert.equal(fs.existsSync(path.join(target, 'html')), false, 'nothing written on rejection');
   const imported = run(bundle, ['import', candidate, '--into', target, '--bundle', out], { env: { HOME: home } });
   assert.equal(imported.status, 0, imported.out);
@@ -403,7 +404,7 @@ test('a revision bundle preserves the current board and decisions; stale bases a
   // A canonical edit after export makes the base stale: rejected, nothing replaced.
   const canonicalBefore = fs.readFileSync(route);
   fs.writeFileSync(route, decided.replace('Three placements', 'Three placements (edited after export)'));
-  const stale = run(bundle, ['import', candidate, '--into', ws], { env: { HOME: home } });
+  const stale = run(bundle, ['import', candidate, '--into', ws, '--bundle', out], { env: { HOME: home } });
   assert.equal(stale.status, 1);
   assert.match(stale.out, /stale base/);
   assert.doesNotMatch(fs.readFileSync(route, 'utf8'), /revised on the bundle path/);
@@ -413,7 +414,7 @@ test('a revision bundle preserves the current board and decisions; stale bases a
   const frozen1 = path.join(ws, 'html', 'versions', 'route-state.v1.html');
   const frozenBytes = fs.readFileSync(frozen1);
   fs.writeFileSync(frozen1, `${frozenBytes.toString('utf8')}\n<!-- tampered -->`);
-  const conflict = run(bundle, ['import', candidate, '--into', ws], { env: { HOME: home } });
+  const conflict = run(bundle, ['import', candidate, '--into', ws, '--bundle', out], { env: { HOME: home } });
   assert.equal(conflict.status, 1);
   assert.match(conflict.out, /differs from the bundle's digest/);
   assert.equal(fs.readFileSync(route).equals(canonicalBefore), true, 'working file untouched on a frozen conflict');
@@ -421,20 +422,20 @@ test('a revision bundle preserves the current board and decisions; stale bases a
 
   // A candidate that drops accepted history is rejected.
   fs.writeFileSync(path.join(candidate, 'route-state.html'), revised.replace(/\s*<li data-version="2" data-type="decision"[^\n]*<\/li>/, ''));
-  const dropped = run(bundle, ['import', candidate, '--into', ws], { env: { HOME: home } });
+  const dropped = run(bundle, ['import', candidate, '--into', ws, '--bundle', out], { env: { HOME: home } });
   assert.equal(dropped.status, 1);
   assert.match(dropped.out, /dropped the base revision entry v2 decision/);
   assert.equal(fs.readFileSync(route).equals(canonicalBefore), true);
 
   // A candidate claiming issuance is rejected.
   fs.writeFileSync(path.join(candidate, 'route-state.html'), revised.replace('data-board-issued="false"', 'data-board-issued="true"'));
-  const issued = run(bundle, ['import', candidate, '--into', ws], { env: { HOME: home } });
+  const issued = run(bundle, ['import', candidate, '--into', ws, '--bundle', out], { env: { HOME: home } });
   assert.equal(issued.status, 1);
   assert.match(issued.out, /cannot issue a version/);
   fs.writeFileSync(path.join(candidate, 'route-state.html'), revised);
 
   fs.writeFileSync(path.join(candidate, 'route-state.html'), revised);
-  const ok = run(bundle, ['import', candidate, '--into', ws], { env: { HOME: home } });
+  const ok = run(bundle, ['import', candidate, '--into', ws, '--bundle', out], { env: { HOME: home } });
   assert.equal(ok.status, 0, ok.out);
   const after = fs.readFileSync(route, 'utf8');
   assert.match(after, /revised on the bundle path/);
@@ -621,5 +622,223 @@ test('migrate --reserve, index notes with parentheses, and citations survive an 
   const again = lib.readIndex(paths);
   assert.equal(again.boards['memo-style'].notes, 'Accepted variant A (B dropped)');
   assert.equal(again.boards['memo-style'].reserved, 20);
+  assert.equal(fs.existsSync(path.join(ws, 'html', 'versions')), false);
+});
+
+/* ---------- PR review regressions ---------- */
+
+test('bundle import authenticates returned manifests before trusting their base or history fields', () => {
+  const { root, ws, route } = workspace();
+  const out = path.join(root, 'original-bundle');
+  const candidate = path.join(root, 'returned-candidate');
+  assert.equal(run(bundle, ['export', route, '--out', out]).status, 0);
+  fs.mkdirSync(candidate);
+  fs.copyFileSync(route, path.join(candidate, 'route-state.html'));
+  const manifestBytes = fs.readFileSync(path.join(out, 'manifest.json'));
+  const manifestPath = path.join(candidate, 'manifest.json');
+  const before = fs.readFileSync(route);
+  fs.writeFileSync(route, `${before}\n<!-- concurrent canonical edit -->`);
+  const current = fs.readFileSync(route);
+  const forged = JSON.parse(manifestBytes);
+  forged.baseDigest = lib.sha256(current);
+  forged.baseRevisions = [];
+  forged.frozen = {};
+  for (const returned of [JSON.stringify(forged), `${manifestBytes}\n`]) {
+    fs.writeFileSync(manifestPath, returned);
+    const result = run(bundle, ['import', candidate, '--into', ws, '--bundle', out]);
+    assert.equal(result.status, 1, result.out);
+    assert.match(result.out, /returned manifest differs from the original bundle/);
+    assert.equal(fs.readFileSync(route).equals(current), true);
+    assert.equal(fs.existsSync(path.join(ws, 'boards.md')), false);
+  }
+  fs.writeFileSync(manifestPath, manifestBytes);
+  const self = run(bundle, ['import', candidate, '--into', ws, '--bundle', candidate]);
+  assert.equal(self.status, 1, self.out);
+  assert.match(self.out, /retained original export/);
+  const stale = run(bundle, ['import', candidate, '--into', ws, '--bundle', out]);
+  assert.equal(stale.status, 1, stale.out);
+  assert.match(stale.out, /stale base/);
+  assert.equal(fs.readFileSync(route).equals(current), true);
+});
+
+test('bundle import preserves complete revision markup, repeated entries and order while allowing amendments', () => {
+  const { root, ws, route } = workspace();
+  assert.equal(run(verify, ['issue', route]).status, 0);
+  assert.equal(run(verify, ['bump', route]).status, 0);
+  const decision = '<li data-version="2" data-type="decision" data-date="2026-09-24" data-author="Dee" data-waives="--app-chart-1">Keep A; reject B.</li>';
+  const html = fs.readFileSync(route, 'utf8').replace('</ol>', `${decision}\n${decision}\n</ol>`);
+  fs.writeFileSync(route, html);
+  const out = path.join(root, 'original-bundle');
+  const candidate = path.join(root, 'returned-candidate');
+  assert.equal(run(bundle, ['export', route, '--out', out]).status, 0);
+  fs.mkdirSync(candidate);
+  fs.copyFileSync(path.join(out, 'manifest.json'), path.join(candidate, 'manifest.json'));
+  const candidatePath = path.join(candidate, 'route-state.html');
+  const indexBefore = fs.readFileSync(path.join(ws, 'boards.md'));
+  const frozenPath = path.join(ws, 'html', 'versions', 'route-state.v1.html');
+  const frozenBefore = fs.readFileSync(frozenPath);
+  const revisions = lib.parseBoard(html).revisions;
+  const reorder = html.replace(revisions[0].markup, '__ENTRY__').replace(revisions[1].markup, revisions[0].markup).replace('__ENTRY__', revisions[1].markup);
+  const cases = [
+    html.replace('Keep A; reject B.', 'Keep B; reject A.'),
+    html.replace('data-author="Dee"', 'data-author="Someone else"'),
+    html.replace('data-waives="--app-chart-1"', 'data-waives="--app-primary"'),
+    html.replace('href="versions/route-state.v1.html"', 'href="versions/other.v1.html"'),
+    html.replace(decision, ''),
+    reorder,
+  ];
+  for (const changed of cases) {
+    fs.writeFileSync(candidatePath, changed);
+    const result = run(bundle, ['import', candidate, '--into', ws, '--bundle', out]);
+    assert.equal(result.status, 1, result.out);
+    assert.match(result.out, /candidate dropped the base revision entry/);
+    assert.equal(fs.readFileSync(route, 'utf8'), html);
+    assert.equal(fs.readFileSync(path.join(ws, 'boards.md')).equals(indexBefore), true);
+    assert.equal(fs.readFileSync(frozenPath).equals(frozenBefore), true);
+  }
+  const amendment = '<li data-version="2" data-type="amendment" data-date="2026-09-25" data-author="Dee">Amends the earlier decision: choose B.</li>';
+  fs.writeFileSync(candidatePath, html.replace('</ol>', `${amendment}</ol>`));
+  const accepted = run(bundle, ['import', candidate, '--into', ws, '--bundle', out]);
+  assert.equal(accepted.status, 0, accepted.out);
+  assert.match(fs.readFileSync(route, 'utf8'), /Amends the earlier decision: choose B/);
+});
+
+test('new issuance must exceed indexed and on-disk versions; older identical reissue stays idempotent', () => {
+  const { ws, route } = workspace();
+  const draft = fs.readFileSync(route, 'utf8');
+  assert.equal(run(verify, ['issue', route]).status, 0);
+  const issued1 = fs.readFileSync(route);
+  assert.equal(run(verify, ['bump', route, '--to', '5']).status, 0);
+  assert.equal(run(verify, ['issue', route]).status, 0);
+  const indexPath = path.join(ws, 'boards.md');
+  const index5 = fs.readFileSync(indexPath);
+  const frozen5Path = path.join(ws, 'html', 'versions', 'route-state.v5.html');
+  const frozen5 = fs.readFileSync(frozen5Path);
+  const lower = lib.bumpWorking(draft, lib.parseBoard(draft), 2, '2026-09-24', 'restored old draft');
+  fs.writeFileSync(route, lower);
+  const rejected = run(verify, ['issue', route]);
+  assert.equal(rejected.status, 1, rejected.out);
+  assert.match(rejected.out, /must be above the highest issued version v5/);
+  assert.equal(fs.readFileSync(route, 'utf8'), lower);
+  assert.equal(fs.readFileSync(indexPath).equals(index5), true);
+  assert.equal(fs.existsSync(path.join(ws, 'html', 'versions', 'route-state.v2.html')), false);
+  fs.writeFileSync(route, issued1);
+  const repeat = run(verify, ['issue', route]);
+  assert.equal(repeat.status, 0, repeat.out);
+  assert.match(repeat.out, /already issued with identical content/);
+  assert.equal(fs.readFileSync(indexPath).equals(index5), true);
+  // An indexed version still reserves its number if its frozen file has gone missing.
+  fs.unlinkSync(frozen5Path);
+  fs.writeFileSync(route, lower);
+  assert.match(run(verify, ['issue', route]).out, /must be above the highest issued version v5/);
+  fs.writeFileSync(frozen5Path, frozen5);
+  // Conversely, the frozen file reserves its number even if the index is lost.
+  fs.unlinkSync(indexPath);
+  const noIndex = run(verify, ['issue', route]);
+  assert.equal(noIndex.status, 1, noIndex.out);
+  assert.match(noIndex.out, /must be above the highest issued version v5/);
+  assert.equal(fs.existsSync(indexPath), false);
+  const bumped = run(verify, ['bump', route]);
+  assert.equal(bumped.status, 0, bumped.out);
+  assert.match(bumped.out, /to v6/);
+  assert.equal(run(verify, ['issue', route]).status, 0);
+  assert.equal(fs.readFileSync(frozen5Path).equals(frozen5), true);
+});
+
+test('check and issue reject a renamed board without a matching embedded identity', () => {
+  const { ws, route } = workspace();
+  const renamed = path.join(ws, 'html', 'renamed.html');
+  fs.renameSync(route, renamed);
+  const before = fs.readFileSync(renamed);
+  const flags = ['--tokens', path.join(ws, 'markdown', 'route-state-tokens.md')];
+  for (const command of ['check', 'issue']) {
+    const result = run(verify, [command, renamed, ...flags]);
+    assert.equal(result.status, 1, result.out);
+    assert.match(result.out, /data-board-id "route-state" must match the board filename "renamed.html"/);
+  }
+  assert.equal(fs.readFileSync(renamed).equals(before), true);
+  assert.equal(fs.existsSync(path.join(ws, 'html', 'versions')), false);
+  assert.equal(fs.existsSync(path.join(ws, 'boards.md')), false);
+});
+
+test('each brief section retains its own purposes and required anatomy', () => {
+  const html = fixtures.memoStyleBoard();
+  const brief = lib.parseBrief(fixtures.memoStyleBrief());
+  const starterHtml = fs.readFileSync(lib.STARTER_PATH, 'utf8');
+  const check = (content, spec = brief) => lib.checkStructure({ html: content, board: lib.parseBoard(content), brief: spec, starterHtml });
+  const missing = html.replace('id="notes" data-purpose="proposed-change"', 'id="notes"');
+  assert.match(check(missing).failures.join('\n'), /section #notes purposes must match its brief row/);
+  const mixedBrief = JSON.parse(JSON.stringify(brief));
+  mixedBrief.sections[0].purposes.push('defect-report');
+  mixedBrief.purposes.push('defect-report');
+  const onWrongSection = html.replace('id="owner" data-purpose="proposed-change"', 'id="owner" data-purpose="proposed-change defect-report"');
+  assert.match(check(onWrongSection, mixedBrief).failures.join('\n'), /section #notes purposes must match its brief row/);
+  // Per-section anatomy is enforced even without a board-wide purpose list.
+  const sectionOnly = JSON.parse(JSON.stringify(brief));
+  sectionOnly.purposes = [];
+  const noPanes = html.replace('data-board-part="panes"', 'data-board-part="other"');
+  assert.match(check(noPanes, sectionOnly).failures.join('\n'), /section #notes .*needs Before\/After panes/);
+  assert.deepEqual(check(html, sectionOnly).failures, []);
+});
+
+test('invalid hash changes reset and repaint only the named section after replay or interaction', () => {
+  const def = fixtures.memoStyleDefinition();
+  const banner = { textContent: '', setAttribute() {} };
+  const mocks = { notes: { innerHTML: '' }, owner: { innerHTML: '' } };
+  const document = {
+    getElementById(id) {
+      if (id === 'board-scenarios') return { textContent: JSON.stringify(def) };
+      if (id === 'board-banner') return banner;
+      return null;
+    },
+    querySelector(selector) {
+      const match = /^\[data-mock="(notes|owner)"\]$/.exec(selector);
+      return match ? mocks[match[1]] : null;
+    },
+    addEventListener() {},
+  };
+  const context = { window: { location: { hash: '' }, addEventListener() {} }, document };
+  vm.runInNewContext(lib.extractRuntimeScript(fs.readFileSync(lib.STARTER_PATH, 'utf8')), context);
+  const mounted = context.window.VariantBoard;
+  mounted.mount({ notes: JSON.stringify, owner: JSON.stringify });
+  const defaults = JSON.stringify(mounted.selection('notes'));
+  mounted.select('owner', 'view', 'after');
+  const unrelated = JSON.stringify(mounted.selection('owner'));
+  for (const invalid of ['#notes?surface=record', '#notes?surface=record&state=empty&view=both', '#notes?surface=%ZZ']) {
+    assert.equal(mounted.applyHash('#notes?surface=record&state=legacy&view=after').ok, true);
+    assert.notEqual(JSON.stringify(mounted.selection('notes')), defaults);
+    assert.equal(mounted.applyHash(invalid).ok, false);
+    assert.equal(JSON.stringify(mounted.selection('notes')), defaults);
+    assert.equal(mocks.notes.innerHTML, defaults, 'defaults are painted, not just stored');
+    assert.equal(JSON.stringify(mounted.selection('owner')), unrelated);
+    assert.match(banner.textContent, /Showing the section defaults/);
+  }
+  mounted.select('notes', 'view', 'after');
+  mounted.applyHash('#notes?view=after');
+  assert.equal(JSON.stringify(mounted.selection('notes')), defaults);
+  mounted.select('notes', 'view', 'after');
+  const changed = JSON.stringify(mounted.selection('notes'));
+  mounted.applyHash('#unknown?view=after');
+  assert.equal(JSON.stringify(mounted.selection('notes')), changed);
+  assert.match(banner.textContent, /existing selections are unchanged/);
+  assert.doesNotMatch(banner.textContent, /Showing the section defaults/);
+  mounted.applyHash('#notes');
+  assert.equal(JSON.stringify(mounted.selection('notes')), changed);
+  assert.equal(banner.textContent, '');
+});
+
+test('legacy exemptions match the full inventoried citation, not just its board and version', () => {
+  const { home, ws, memo } = workspace();
+  const original = 'Companion: `~/agent-artifacts/northwind-jobs-ux/html/memo-style.html` (v17) — "Dispatch note" (#notes?surface=record&state=legacy&view=both)';
+  const result = run(verify, ['migrate', memo, '--citation', original, '--location', 'task.md:7']);
+  assert.equal(result.status, 0, result.out);
+  assert.equal(lib.resolveCitation(original, { home }).legacy, true);
+  assert.equal(lib.resolveCitation(original.replace('~/agent-artifacts/northwind-jobs-ux/html/memo-style.html', memo), { home }).legacy, true, 'equivalent absolute paths retain the exemption');
+  for (const changed of [original.replace('Dispatch note', 'Uninventoried section'), original.replace('#notes?', '#owner?'), original.replace('view=both', 'view=after'), original.replace(/ \(#notes[^)]+\)/, ''), original.replace('(v17)', '(v16)')]) {
+    const report = lib.resolveCitation(changed, { home });
+    assert.equal(report.legacy, false, changed);
+    assert.equal(report.ok, false);
+    assert.match(report.failures.join('\n'), /was never issued/);
+  }
   assert.equal(fs.existsSync(path.join(ws, 'html', 'versions')), false);
 });

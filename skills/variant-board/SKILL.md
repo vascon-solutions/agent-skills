@@ -77,7 +77,7 @@ node scripts/verify-variant-board.js scenario <board.html> '#section?dimension=i
 In a browser, through the host's preview (see [references/hosts.md](references/hosts.md)):
 
 - open the board at each representative scenario hash from the brief and confirm the expected visible result; every consequential role × state combination the brief lists
-- confirm invalid hashes (missing, repeated, unknown, forbidden) show the red "Cited scenario not found" banner and leave the defaults; a bare `#section` just scrolls
+- confirm invalid hashes (missing, repeated, unknown, forbidden) show the red "Cited scenario not found" banner and reset the named section to defaults, including after a prior replay or control change; an unknown section leaves existing selections unchanged; a bare `#section` just scrolls
 - confirm a controlling change hides the states its route cannot reach and repairs the dependent selection; unrelated sections do not move
 - Before panes carry "reconstructed from source @ commit" and their claims trace to files named in the colophon
 - at 390 px and 1280 px the board wrapper has no page-level horizontal scroll; the mock keeps its own width and scrolls inside its frame
@@ -105,7 +105,7 @@ Publication is optional and host-specific; a URL learned after issue goes into `
 
 ## 6. Hosts without this filesystem
 
-`node scripts/export-board-bundle.js export …` writes a self-contained authoring pack (instructions, brief with ids, token map, starter, sources, and for a revision the current board, frozen versions, index entry and base manifest). The host returns a candidate plus the manifest; `import` checks the base has not moved, validates the candidate, preserves frozen files, then replaces the working file. Details and the conformance rules are in [references/lifecycle.md](references/lifecycle.md) and [references/hosts.md](references/hosts.md).
+`node scripts/export-board-bundle.js export …` writes a self-contained authoring pack (instructions, brief with ids, token map, starter, sources, and for a revision the current board, frozen versions, index entry and base manifest). The host returns a candidate plus the manifest; `import --bundle <original-bundle-dir>` compares the returned manifest with the retained original export, checks the base has not moved, preserves complete revision entries and frozen files, validates the candidate, then replaces the working file. Details and the conformance rules are in [references/lifecycle.md](references/lifecycle.md) and [references/hosts.md](references/hosts.md).
 
 ## Boundaries
 

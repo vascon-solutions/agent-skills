@@ -10,7 +10,7 @@ function usage(exitCode = 0) {
   const out = exitCode === 0 ? process.stdout : process.stderr;
   out.write(`Usage:
   export-board-bundle.js export <board-id-or-board.html> --workspace <topic-or-path> --out <bundle-dir> [--brief <brief.md>] [--tokens <tokens.md>] [--sources <dir>] [--new|--revision]
-  export-board-bundle.js import <candidate-dir> --into <topic-or-path> [--bundle <bundle-dir>] [--skip-theme-source]
+  export-board-bundle.js import <candidate-dir> --into <topic-or-path> --bundle <original-bundle-dir> [--skip-theme-source]
 
 export writes a self-contained authoring pack for a host without this filesystem. A new-board bundle carries the
 portable instructions, brief, token map, starter and sources; a revision bundle also carries the current working
@@ -87,7 +87,8 @@ Return a folder containing:
   remote assets), with \`data-board-issued="false"\`.
 - \`manifest.json\` — this bundle's manifest, byte for byte. The importer uses it to confirm the base has not moved.
 
-The board owner imports the candidate with \`export-board-bundle.js import\`, which verifies it before it replaces
+The board owner retains this original export and imports the returned candidate from a separate folder with
+\`export-board-bundle.js import --bundle <original-bundle-dir>\`, which verifies it before it replaces
 anything. A candidate cannot issue a version; issuance happens on the canonical file after verification.
 `;
 }
@@ -143,7 +144,7 @@ function commandExport(args) {
     manifest.baseVersion = board.version;
     manifest.baseIssued = board.issued;
     manifest.baseDigest = lib.sha256(html);
-    manifest.baseRevisions = board.revisions.map((e) => ({ version: e.version, type: e.type, date: e.date, author: e.author }));
+    manifest.baseRevisions = board.revisions;
     manifest.frozen = {};
     fs.mkdirSync(path.join(out, 'current', 'versions'), { recursive: true });
     fs.writeFileSync(path.join(out, 'current', `${paths.stem}.html`), html);
@@ -170,17 +171,27 @@ function commandImport(args) {
   const dir = path.resolve(lib.expandHome(candidateDir));
   const manifestPath = path.join(dir, 'manifest.json');
   if (!fs.existsSync(manifestPath)) die(`candidate has no manifest.json: ${dir}`);
-  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  if (!args.flags.bundle) die('--bundle <original-bundle-dir> is required to verify the returned manifest');
+  const bundleDir = path.resolve(lib.expandHome(args.flags.bundle));
+  const originalManifestPath = path.join(bundleDir, 'manifest.json');
+  if (!fs.existsSync(originalManifestPath)) die(`original bundle has no manifest.json: ${bundleDir}`);
+  if (fs.realpathSync(manifestPath) === fs.realpathSync(originalManifestPath)) die('--bundle must point to the retained original export, separate from the returned candidate');
+  const originalManifest = fs.readFileSync(originalManifestPath);
+  if (!fs.readFileSync(manifestPath).equals(originalManifest)) die('returned manifest differs from the original bundle; candidate rejected without changes');
+  const manifest = JSON.parse(originalManifest.toString('utf8'));
   const workspace = resolveWorkspace(args.flags.into);
   const paths = lib.boardPaths(path.join(workspace, 'html', `${manifest.boardId}.html`));
   const candidatePath = [path.join(dir, `${manifest.boardId}.html`), path.join(dir, 'candidate.html')].find((p) => fs.existsSync(p));
   if (!candidatePath) die(`candidate board not found: expected ${manifest.boardId}.html or candidate.html in ${dir}`);
   const rejections = [];
+  let baseBoard = null;
   if (manifest.kind === 'revision') {
     if (!fs.existsSync(paths.board)) rejections.push(`stale base: canonical board ${paths.board} no longer exists`);
     else {
-      const currentDigest = lib.sha256(fs.readFileSync(paths.board));
+      const currentBytes = fs.readFileSync(paths.board);
+      const currentDigest = lib.sha256(currentBytes);
       if (currentDigest !== manifest.baseDigest) rejections.push(`stale base: canonical ${manifest.destination} is ${currentDigest}, bundle base was ${manifest.baseDigest}; re-export from the current board`);
+      baseBoard = lib.parseBoard(currentBytes.toString('utf8'));
     }
     Object.keys(manifest.frozen || {}).forEach((rel) => {
       const frozenPath = path.join(workspace, rel);
@@ -205,14 +216,16 @@ function commandImport(args) {
     const floor = manifest.baseIssued ? manifest.baseVersion + 1 : manifest.baseVersion;
     if (board.version < floor) rejections.push(`candidate is v${board.version}; a revision of ${manifest.baseIssued ? 'issued' : 'working'} v${manifest.baseVersion} must be v${floor} or higher`);
   }
-  if (manifest.kind === 'revision') {
-    // History travels with the board: every base revision entry (issued, decisions, proposals) must survive.
-    (manifest.baseRevisions || []).forEach((base) => {
-      const kept = board.revisions.some((e) => e.version === base.version && e.type === base.type && e.date === base.date);
-      if (!kept) rejections.push(`candidate dropped the base revision entry v${base.version} ${base.type} (${base.date}); a revision keeps the board's history`);
+  if (baseBoard) {
+    // Compare complete entries against the canonical base, including repeated entries and their order.
+    // New amendments may be added, but existing decisions and issued links cannot be rewritten.
+    let cursor = 0;
+    baseBoard.revisions.forEach((base) => {
+      const keptAt = board.revisions.findIndex((entry, index) => index >= cursor && entry.markup === base.markup);
+      if (keptAt < 0) rejections.push(`candidate dropped the base revision entry v${base.version} ${base.type} (${base.date}), changed its contents, or reordered it; a revision keeps the board's history`);
+      else cursor = keptAt + 1;
     });
   }
-  const bundleDir = args.flags.bundle ? path.resolve(lib.expandHome(args.flags.bundle)) : dir;
   const firstExisting = (candidates) => candidates.find((p) => fs.existsSync(p)) || null;
   const briefFile = firstExisting([paths.brief, path.join(dir, 'brief.md'), path.join(bundleDir, 'brief.md')]);
   const tokensFile = firstExisting([paths.tokens, path.join(dir, 'tokens.md'), path.join(bundleDir, 'tokens.md')]);
