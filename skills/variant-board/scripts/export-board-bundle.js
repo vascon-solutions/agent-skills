@@ -226,24 +226,30 @@ function commandImport(args) {
       else cursor = keptAt + 1;
     });
   }
-  const firstExisting = (candidates) => candidates.find((p) => fs.existsSync(p)) || null;
-  const briefFile = firstExisting([paths.brief, path.join(dir, 'brief.md'), path.join(bundleDir, 'brief.md')]);
-  const tokensFile = firstExisting([paths.tokens, path.join(dir, 'tokens.md'), path.join(bundleDir, 'tokens.md')]);
-  const brief = briefFile ? lib.parseBrief(fs.readFileSync(briefFile, 'utf8')) : null;
-  const tokens = tokensFile ? lib.parseTokenMap(fs.readFileSync(tokensFile, 'utf8')) : null;
+  const retainedInput = (name, digest, canonicalPath) => {
+    const source = path.join(bundleDir, name);
+    if (!fs.existsSync(source)) { rejections.push(`original bundle is missing ${name}`); return null; }
+    const bytes = fs.readFileSync(source);
+    if (lib.sha256(bytes) !== digest) { rejections.push(`original bundle ${name} differs from its manifest digest`); return null; }
+    if (fs.existsSync(canonicalPath) && !fs.readFileSync(canonicalPath).equals(bytes)) rejections.push(`stale ${name} input: canonical file differs from the export; re-export with the current requirements`);
+    return bytes;
+  };
+  const briefBytes = retainedInput('brief.md', manifest.briefDigest, paths.brief);
+  const tokenBytes = retainedInput('tokens.md', manifest.tokensDigest, paths.tokens);
+  const brief = briefBytes ? lib.parseBrief(briefBytes.toString('utf8')) : null;
+  const tokens = tokenBytes ? lib.parseTokenMap(tokenBytes.toString('utf8')) : null;
   const starterHtml = fs.readFileSync(lib.STARTER_PATH, 'utf8');
   const structure = lib.checkStructure({ html, board, brief, starterHtml });
   rejections.push(...structure.failures);
-  if (!tokens) rejections.push('no token map available (workspace markdown/<board>-tokens.md, candidate tokens.md, or --bundle <dir>/tokens.md)');
-  else rejections.push(...lib.checkTokens({ board, tokens, skipSource: Boolean(args.flags['skip-theme-source']) }).failures);
+  if (tokens) rejections.push(...lib.checkTokens({ board, tokens, skipSource: Boolean(args.flags['skip-theme-source']) }).failures);
   if (rejections.length) {
     rejections.forEach((r) => process.stdout.write(`REJECT ${r}\n`));
     die(`candidate rejected; ${workspace} unchanged`);
   }
   fs.mkdirSync(path.dirname(paths.board), { recursive: true });
   fs.mkdirSync(path.dirname(paths.brief), { recursive: true });
-  if (!fs.existsSync(paths.brief) && briefFile) fs.copyFileSync(briefFile, paths.brief);
-  if (!fs.existsSync(paths.tokens) && tokensFile) fs.copyFileSync(tokensFile, paths.tokens);
+  if (!fs.existsSync(paths.brief)) fs.writeFileSync(paths.brief, briefBytes);
+  if (!fs.existsSync(paths.tokens)) fs.writeFileSync(paths.tokens, tokenBytes);
   fs.writeFileSync(paths.board, html);
   const index = lib.readIndex(paths);
   const entry = lib.indexEntry(index, paths, board);

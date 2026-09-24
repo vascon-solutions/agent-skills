@@ -192,3 +192,39 @@ test('board-snapshot accepts only issued frozen boards with a resolvable scenari
   assert.equal(rejected.status, 1);
   assert.match(rejected.out, /not marked issued/);
 });
+
+test('board-snapshot rejects altered or unindexed frozen evidence before capture', () => {
+  const fixtures = require('../../variant-board/scripts/lib/fixtures');
+  const lib = require('../../variant-board/scripts/lib/board');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'snapshot-integrity-'));
+  const ws = path.join(root, 'workspace');
+  fixtures.writeWorkspace(ws);
+  const working = path.join(ws, 'html', 'route-state.html');
+  const verify = path.resolve(__dirname, '../../variant-board/scripts/verify-variant-board.js');
+  const issue = childProcess.spawnSync(process.execPath, [verify, 'issue', working], { encoding: 'utf8' });
+  assert.equal(issue.status, 0, `${issue.stdout}${issue.stderr}`);
+  const paths = lib.boardPaths(working);
+  const frozen = paths.frozen(1);
+  const bytes = fs.readFileSync(frozen);
+  const args = ['board-snapshot', frozen, '--scenario', '#commands?variant=a&route=external&state=authority-review&viewer=approver'];
+  assert.equal(runStatus([...args, '--engine', 'none']).status, 0);
+  fs.writeFileSync(frozen, bytes.toString().replace('Three placements', 'Changed evidence'));
+  for (const engine of ['none', 'chrome']) {
+    const rejected = runStatus([...args, '--engine', engine]);
+    assert.equal(rejected.status, 1, rejected.out);
+    assert.match(rejected.out, /digest/);
+    assert.equal(fs.existsSync(path.join(ws, 'images')), false);
+  }
+  fs.writeFileSync(frozen, bytes);
+  const originalIndex = fs.readFileSync(paths.index);
+  const index = lib.readIndex(paths);
+  index.boards['route-state'].versions = [];
+  lib.writeIndex(paths, index);
+  const missing = runStatus([...args, '--engine', 'none']);
+  assert.equal(missing.status, 1, missing.out);
+  assert.match(missing.out, /no issued version record/);
+  fs.unlinkSync(paths.index);
+  assert.equal(runStatus([...args, '--engine', 'none']).status, 1);
+  fs.writeFileSync(paths.index, originalIndex);
+  assert.equal(runStatus([...args, '--engine', 'none']).status, 0);
+});

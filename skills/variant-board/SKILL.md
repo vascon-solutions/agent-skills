@@ -91,7 +91,7 @@ Working edits accumulate under an unissued number. Issue when the owner says so 
 node scripts/verify-variant-board.js issue <board.html> [--date YYYY-MM-DD]
 ```
 
-`issue` runs the checks, stamps the working file `issued`, adds the `issued` revision entry linking the frozen file, writes `html/versions/<board>.v<N>.html`, and records the version, date and digest in `boards.md`. Issuing identical bytes again is a no-op; a frozen file is never overwritten. Any later change to an issued working copy, including a typo, needs `bump` (new number, `working` status, a `proposal` entry) before it can be issued.
+`issue` runs the checks, stamps the working file `issued`, adds the `issued` revision entry linking the frozen file, writes `html/versions/<board>.v<N>.html`, and records the version, date and digest in `boards.md`. Issuing identical bytes again repairs missing index metadata using the original issue date, or does nothing when the index is complete; a frozen file is never overwritten. Any later change to an issued working copy, including a typo, needs `bump` (new number, `working` status, a `proposal` entry) before it can be issued.
 
 Cite with the repo's familiar text plus the anchor and, for interactive sections, the complete scenario:
 
@@ -99,13 +99,13 @@ Cite with the repo's familiar text plus the anchor and, for interactive sections
 Companion: `~/agent-artifacts/<topic>/html/<board>.html` (v3) — "Section heading" (#section?dimension=id&…)
 ```
 
-`node scripts/verify-variant-board.js cite '<citation text>'` resolves it to the frozen file, checks the version and issued stamp, finds the section, and validates the scenario. Higher working versions never satisfy a lower citation. Boards that were cited before issuance existed are migrated with `migrate` (see [references/lifecycle.md](references/lifecycle.md)).
+`node scripts/verify-variant-board.js cite '<citation text>'` resolves it to the frozen file, verifies its indexed digest before parsing, checks the version and issued stamp, finds the section, and validates the scenario. Higher working versions never satisfy a lower citation. Boards that were cited before issuance existed are migrated with `migrate` (see [references/lifecycle.md](references/lifecycle.md)).
 
 Publication is optional and host-specific; a URL learned after issue goes into `boards.md` with `publish`, never into frozen HTML.
 
 ## 6. Hosts without this filesystem
 
-`node scripts/export-board-bundle.js export …` writes a self-contained authoring pack (instructions, brief with ids, token map, starter, sources, and for a revision the current board, frozen versions, index entry and base manifest). The host returns a candidate plus the manifest; `import --bundle <original-bundle-dir>` compares the returned manifest with the retained original export, checks the base has not moved, preserves complete revision entries and frozen files, validates the candidate, then replaces the working file. Details and the conformance rules are in [references/lifecycle.md](references/lifecycle.md) and [references/hosts.md](references/hosts.md).
+`node scripts/export-board-bundle.js export …` writes a self-contained authoring pack (instructions, brief with ids, token map, starter, sources, and for a revision the current board, frozen versions, index entry and base manifest). The host returns a candidate plus the manifest; `import --bundle <original-bundle-dir>` compares the returned manifest with the retained original export, verifies the original brief/token digests, checks the canonical base and inputs have not moved, preserves complete revision entries and frozen files, validates the candidate, then replaces the working file. Details and the conformance rules are in [references/lifecycle.md](references/lifecycle.md) and [references/hosts.md](references/hosts.md).
 
 ## Boundaries
 

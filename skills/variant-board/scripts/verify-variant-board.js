@@ -162,6 +162,32 @@ function commandCite(args) {
   process.exit(report.ok ? 0 : 1);
 }
 
+function repairIssuedIndex(paths, board, bytes) {
+  const index = lib.readIndex(paths);
+  const before = lib.renderIndex(index);
+  const entry = lib.indexEntry(index, paths, null);
+  let record = entry.versions.find((v) => v.version === board.version);
+  const file = path.relative(paths.workspace, paths.frozen(board.version));
+  const digest = lib.sha256(bytes);
+  if (record && record.digest && record.digest !== digest) die(`v${board.version} differs from its indexed digest; identical HTML copies do not permit replacing recorded evidence`);
+  if (record && record.file && record.file !== file) die(`v${board.version} has a conflicting indexed frozen path; index left unchanged`);
+  const stamp = /^v\d+ · (\d{4}-\d{2}-\d{2}) · issued$/.exec(board.facts.version || '');
+  if (!stamp || !board.issued) die('cannot repair the index without the frozen file\'s issued date and status');
+  if (!record) {
+    record = { version: board.version, date: stamp[1], file, digest, published: [] };
+    entry.versions.push(record);
+    entry.versions.sort((a, b) => a.version - b.version);
+  } else {
+    record.date = record.date || stamp[1];
+    record.file = record.file || file;
+    record.digest = record.digest || digest;
+  }
+  if (!entry.current || entry.current.version <= board.version) entry.current = { version: board.version, issued: true };
+  if (lib.renderIndex(index) === before) return false;
+  lib.writeIndex(paths, index);
+  return true;
+}
+
 function commandIssue(args) {
   if (!args.positionals[0]) usage(1);
   const inputs = loadInputs(args.positionals[0], args.flags);
@@ -175,7 +201,8 @@ function commandIssue(args) {
   if (fs.existsSync(frozenPath)) {
     const frozenBytes = fs.readFileSync(frozenPath);
     if (frozenBytes.equals(Buffer.from(issuedHtml))) {
-      process.stdout.write(`v${board.version} already issued with identical content; nothing to do\n`);
+      const repaired = repairIssuedIndex(paths, issuedBoard, frozenBytes);
+      process.stdout.write(`v${board.version} already issued with identical content; ${repaired ? 'repaired missing index metadata' : 'nothing to do'}\n`);
       process.exit(0);
     }
     die(`v${board.version} is already issued at ${path.relative(paths.workspace, frozenPath)} with different content. Frozen files are never overwritten; run "bump" and issue under a new number.`);

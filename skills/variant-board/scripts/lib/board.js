@@ -676,6 +676,15 @@ function indexEntry(index, paths, board) {
 
 /* ---------- citations ---------- */
 
+function verifyFrozenRecord(paths, version, bytes) {
+  const entry = readIndex(paths).boards[paths.stem];
+  const record = entry && entry.versions.find((v) => v.version === version);
+  if (!record) throw new BoardError(`no issued version record for ${paths.stem} v${version} in boards.md; reissue the identical canonical file to repair the index`);
+  if (path.resolve(paths.workspace, record.file) !== paths.frozen(version)) throw new BoardError(`indexed frozen path for ${paths.stem} v${version} does not match its version file`);
+  if (record.digest !== sha256(bytes)) throw new BoardError(`frozen file ${record.file} differs from its indexed digest; altered or unverified evidence cannot be used`);
+  return record;
+}
+
 function parseCitation(text) {
   const raw = String(text || '').trim();
   const pathMatch = /`?((?:~|\/|\.\.?\/)[^`\s()]+\.html)`?/.exec(raw);
@@ -717,7 +726,14 @@ function resolveCitation(text, { home } = {}) {
     } else report.failures.push(`frozen file ${frozenPath} does not exist; v${citation.version} was never issued`);
     return report;
   }
-  const html = fs.readFileSync(frozenPath, 'utf8');
+  const bytes = fs.readFileSync(frozenPath);
+  try { verifyFrozenRecord(paths, citation.version, bytes); }
+  catch (error) {
+    if (!(error instanceof BoardError)) throw error;
+    report.failures.push(error.message);
+    return report;
+  }
+  const html = bytes.toString('utf8');
   const board = parseBoard(html);
   if (board.version !== citation.version) report.failures.push(`frozen file carries data-board-version="${board.version}", not ${citation.version}`);
   if (!board.issued) report.failures.push('frozen file is not marked issued');
@@ -829,5 +845,6 @@ module.exports = {
   stampIssued,
   starterRuntime,
   workspaceOf,
+  verifyFrozenRecord,
   writeIndex,
 };

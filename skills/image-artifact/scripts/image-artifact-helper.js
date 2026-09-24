@@ -462,12 +462,20 @@ function boardSnapshot(args) {
   if (!fs.existsSync(frozenPath)) die(`frozen board not found: ${frozenPath}`);
   const nameMatch = /^(.+)\.v(\d+)\.html$/.exec(path.basename(frozenPath));
   if (path.basename(path.dirname(frozenPath)) !== 'versions' || !nameMatch) die('board-snapshot takes an issued frozen file: <workspace>/html/versions/<board>.v<N>.html (not the working file)');
-  const html = fs.readFileSync(frozenPath, 'utf8');
+  const frozenBytes = fs.readFileSync(frozenPath);
+  const html = frozenBytes.toString('utf8');
   const board = boardLib.parseBoard(html);
   const version = Number(nameMatch[2]);
   if (!board.issued) die(`${path.basename(frozenPath)} is not marked issued (data-board-issued="true"); snapshots capture issued evidence only`);
   if (board.version !== version) die(`${path.basename(frozenPath)} carries data-board-version="${board.version}", not ${version}`);
   if (board.id !== nameMatch[1]) die(`${path.basename(frozenPath)} carries data-board-id="${board.id}", which does not match the file name`);
+  const workspace = path.dirname(path.dirname(path.dirname(frozenPath)));
+  let record;
+  try {
+    const paths = boardLib.boardPaths(path.join(workspace, 'html', `${board.id}.html`));
+    if (paths.frozen(version) !== frozenPath) die('frozen board must live under <workspace>/html/versions/');
+    record = boardLib.verifyFrozenRecord(paths, version, frozenBytes);
+  } catch (error) { die(error.message); }
   let runtime;
   try { runtime = boardLib.loadRuntime(html); } catch (error) { die(`frozen file has no usable runtime: ${error.message}`); }
   const parsed = runtime.parseHash(args.flags.scenario);
@@ -484,7 +492,6 @@ function boardSnapshot(args) {
   } else die('--scenario must be #section or #section?dimension=id&...');
   const dimensions = parsed.kind === 'scenario' ? board.definition.sections[section].dimensions : [];
   const slug = scenarioSlug(section, selection, dimensions);
-  const workspace = path.dirname(path.dirname(path.dirname(frozenPath)));
   const viewportMatch = /^(\d+)x(\d+)$/.exec(args.flags.viewport || '1280x900');
   if (!viewportMatch) die(`invalid --viewport ${args.flags.viewport}; use <width>x<height>`);
   const viewport = { width: Number(viewportMatch[1]), height: Number(viewportMatch[2]) };
@@ -500,7 +507,7 @@ function boardSnapshot(args) {
     board: board.id,
     version,
     frozenFile: path.relative(workspace, frozenPath),
-    frozenDigest: boardLib.sha256(Buffer.from(html)),
+    frozenDigest: record.digest,
     scenario: `#${section}${parsed.kind === 'scenario' ? runtime.scenarioHash(section, board.definition.sections[section], selection).slice(section.length + 1) : ''}`,
     section,
     selection,

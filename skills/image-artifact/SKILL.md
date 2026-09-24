@@ -178,7 +178,7 @@ Prompt packs must include:
 
 `board-snapshot` is browser capture, not generation. It takes an issued frozen board (`<workspace>/html/versions/<board>.v<N>.html`) and a scenario hash, and bypasses prompt planning entirely:
 
-1. Rejects working files, unissued copies, version or id mismatches, and any scenario that does not resolve under `variant-board`'s exact citation policy (every dimension once, known ids, dependency-valid). A static section is cited with a bare `#section`; an interactive one needs the complete scenario.
+1. Rejects working files, unissued copies, version or id mismatches, missing issuance records or digest mismatches in `boards.md`, and any scenario that does not resolve under `variant-board`'s exact citation policy (every dimension once, known ids, dependency-valid). A static section is cited with a bare `#section`; an interactive one needs the complete scenario.
 2. Opens `file://<frozen>#<scenario>` in headless Chrome or Chromium (`CHROME_BIN`, the macOS app bundle, or `google-chrome`/`chromium` on PATH) at `--viewport` (default 1280x900) and writes `images/<board>.v<N>.<scenario-slug>.png` in the board's workspace, or the `--out` path.
 3. Writes a sidecar `.json` beside the PNG with the board id, version, frozen file and digest, scenario hash, resolved selection, viewport, engine, and capture time, so the image names exactly what it shows.
 

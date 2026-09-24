@@ -603,8 +603,14 @@ test('bump refreshes an older runtime from the starter; the frozen file keeps an
   assert.match(fs.readFileSync(route, 'utf8'), /proposal — runtime refreshed from the starter/);
   assert.equal(run(verify, ['issue', route, '--date', '2026-09-24']).status, 0);
   const frozen = path.join(ws, 'html', 'versions', 'route-state.v2.html');
-  fs.writeFileSync(frozen, fs.readFileSync(frozen, 'utf8').replace('function parseHash(hash) {', 'function parseHash(hash) { /* frozen with an older runtime */'));
-  const cite = run(verify, ['cite', `\`${route}\` (v2) — "Where the approval commands go" (#commands?variant=a&route=depot&state=draft&viewer=planner)`], { env: { HOME: home } });
+  // Model an authentic historical issuance by an older runtime, including its original digest.
+  const historical = fs.readFileSync(frozen, 'utf8').replace('function parseHash(hash) {', 'function parseHash(hash) { hash = String(hash).replace("variant=historic", "variant=a");');
+  fs.writeFileSync(frozen, historical);
+  const paths = lib.boardPaths(route);
+  const index = lib.readIndex(paths);
+  index.boards['route-state'].versions.find((v) => v.version === 2).digest = lib.sha256(Buffer.from(historical));
+  lib.writeIndex(paths, index);
+  const cite = run(verify, ['cite', `\`${route}\` (v2) — "Where the approval commands go" (#commands?variant=historic&route=depot&state=draft&viewer=planner)`], { env: { HOME: home } });
   assert.equal(cite.status, 0, cite.out);
 });
 
@@ -841,4 +847,136 @@ test('legacy exemptions match the full inventoried citation, not just its board 
     assert.match(report.failures.join('\n'), /was never issued/);
   }
   assert.equal(fs.existsSync(path.join(ws, 'html', 'versions')), false);
+});
+
+test('bundle imports use authenticated original briefs and tokens and reject changed canonical inputs', () => {
+  const { root, ws, memo } = workspace();
+  const original = path.join(root, 'trusted-bundle');
+  const candidate = path.join(root, 'returned');
+  const target = path.join(root, 'new-destination');
+  assert.equal(run(bundle, ['export', 'memo-style', '--workspace', target, '--out', original, '--brief', path.join(ws, 'markdown', 'memo-style-brief.md'), '--tokens', path.join(ws, 'markdown', 'memo-style-tokens.md')]).status, 0);
+  fs.mkdirSync(candidate);
+  fs.copyFileSync(path.join(original, 'manifest.json'), path.join(candidate, 'manifest.json'));
+  const originalHtml = fs.readFileSync(memo, 'utf8');
+  // The host changes both the candidate requirements and app palette while retaining the manifest.
+  const forgedHtml = originalHtml.replace('id="notes" data-purpose="proposed-change"', 'id="notes" data-purpose="state-coverage"').replace('data-board-part="panes"', 'data-board-part="state-matrix"').replace('--app-primary: #2f6f9f;', '--app-primary: #123456;');
+  const briefBytes = fs.readFileSync(path.join(original, 'brief.md'));
+  const tokenBytes = fs.readFileSync(path.join(original, 'tokens.md'));
+  fs.writeFileSync(path.join(candidate, 'memo-style.html'), forgedHtml);
+  fs.writeFileSync(path.join(candidate, 'brief.md'), briefBytes.toString().replace('| `notes` | Dispatch note on job creation | proposed-change |', '| `notes` | Dispatch note on job creation | state-coverage |'));
+  fs.writeFileSync(path.join(candidate, 'tokens.md'), tokenBytes.toString().replaceAll('#2f6f9f', '#123456'));
+  const args = ['import', candidate, '--into', target, '--bundle', original, '--skip-theme-source'];
+  for (const html of [forgedHtml, originalHtml.replace('--app-primary: #2f6f9f;', '--app-primary: #123456;')]) {
+    fs.writeFileSync(path.join(candidate, 'memo-style.html'), html);
+    const forged = run(bundle, args);
+    assert.equal(forged.status, 1, forged.out);
+    assert.match(forged.out, /section #notes purposes|--app-primary/);
+    assert.equal(fs.existsSync(target), false);
+  }
+  fs.writeFileSync(path.join(candidate, 'memo-style.html'), originalHtml);
+  // Altered or missing retained files must not bypass the manifest digests.
+  for (const file of ['brief.md', 'tokens.md']) {
+    const retained = path.join(original, file);
+    const bytes = fs.readFileSync(retained);
+    fs.writeFileSync(retained, `${bytes}\nchanged`);
+    const mismatch = run(bundle, args);
+    assert.equal(mismatch.status, 1, mismatch.out);
+    assert.match(mismatch.out, /differs from its manifest digest/);
+    fs.unlinkSync(retained);
+    assert.equal(run(bundle, args).status, 1);
+    assert.equal(fs.existsSync(target), false);
+    fs.writeFileSync(retained, bytes);
+  }
+  const accepted = run(bundle, args);
+  assert.equal(accepted.status, 0, accepted.out);
+  assert.equal(fs.readFileSync(path.join(target, 'markdown', 'memo-style-brief.md')).equals(briefBytes), true);
+  assert.equal(fs.readFileSync(path.join(target, 'markdown', 'memo-style-tokens.md')).equals(tokenBytes), true);
+  const revisionBundle = path.join(root, 'revision-bundle');
+  const working = path.join(target, 'html', 'memo-style.html');
+  assert.equal(run(bundle, ['export', working, '--out', revisionBundle]).status, 0);
+  fs.copyFileSync(path.join(revisionBundle, 'manifest.json'), path.join(candidate, 'manifest.json'));
+  const indexBefore = fs.readFileSync(path.join(target, 'boards.md'));
+  for (const file of ['memo-style-brief.md', 'memo-style-tokens.md']) {
+    const canonical = path.join(target, 'markdown', file);
+    const bytes = fs.readFileSync(canonical);
+    fs.writeFileSync(canonical, `${bytes}\nnew canonical requirement`);
+    const result = run(bundle, ['import', candidate, '--into', target, '--bundle', revisionBundle]);
+    assert.equal(result.status, 1, result.out);
+    assert.match(result.out, /stale .*input/);
+    assert.equal(fs.readFileSync(working, 'utf8'), originalHtml);
+    assert.equal(fs.readFileSync(path.join(target, 'boards.md')).equals(indexBefore), true);
+    fs.writeFileSync(canonical, bytes);
+  }
+});
+
+test('citations reject missing index records and changed evidence before executing the frozen runtime', () => {
+  const { ws, route } = workspace();
+  assert.equal(run(verify, ['issue', route]).status, 0);
+  const paths = lib.boardPaths(route);
+  const frozen = paths.frozen(1);
+  const bytes = fs.readFileSync(frozen);
+  const citation = `Companion: \`${route}\` (v1) — "Commands" (#commands?variant=a&route=external&state=authority-review&viewer=approver)`;
+  assert.equal(lib.resolveCitation(citation).ok, true);
+  fs.writeFileSync(frozen, bytes.toString().replace('Three placements', 'Changed decision evidence'));
+  let report = lib.resolveCitation(citation);
+  assert.equal(report.ok, false);
+  assert.match(report.failures.join('\n'), /digest/);
+  fs.writeFileSync(frozen, bytes.toString().replace('window.VariantBoard = (function () {', 'throw new Error("UNTRUSTED_RUNTIME_EXECUTED"); window.VariantBoard = (function () {'));
+  report = lib.resolveCitation(citation);
+  assert.equal(report.ok, false);
+  assert.match(report.failures.join('\n'), /digest/);
+  assert.doesNotMatch(report.failures.join('\n'), /UNTRUSTED_RUNTIME_EXECUTED/);
+  fs.writeFileSync(frozen, bytes);
+  const originalIndex = fs.readFileSync(paths.index);
+  const index = lib.readIndex(paths);
+  index.boards['route-state'].versions = [];
+  lib.writeIndex(paths, index);
+  report = lib.resolveCitation(citation);
+  assert.equal(report.ok, false);
+  assert.match(report.failures.join('\n'), /no issued version record/);
+  fs.unlinkSync(paths.index);
+  assert.equal(lib.resolveCitation(citation).ok, false);
+  fs.writeFileSync(paths.index, originalIndex);
+  assert.equal(lib.resolveCitation(citation).ok, true);
+});
+
+test('identical reissuance repairs a missing index record using the original issue date and preserves newer history', () => {
+  const { route } = workspace();
+  const paths = lib.boardPaths(route);
+  assert.equal(run(verify, ['issue', route, '--date', '2026-09-20']).status, 0);
+  const frozen1 = fs.readFileSync(paths.frozen(1));
+  fs.unlinkSync(paths.index);
+  const recovered = run(verify, ['issue', route, '--date', '2026-09-25']);
+  assert.equal(recovered.status, 0, recovered.out);
+  assert.equal(fs.existsSync(paths.index), true, 'retry reconstructs the missing index');
+  let record = lib.readIndex(paths).boards['route-state'].versions[0];
+  assert.equal(record.date, '2026-09-20');
+  assert.equal(record.digest, lib.sha256(frozen1));
+  assert.equal(fs.readFileSync(paths.frozen(1)).equals(frozen1), true);
+  assert.equal(fs.readFileSync(route).equals(frozen1), true);
+  assert.equal(run(verify, ['publish', route, '--version', '1', '--host', 'test', '--url', 'https://example.test/v1']).status, 0);
+  assert.equal(run(verify, ['bump', route, '--to', '3']).status, 0);
+  assert.equal(run(verify, ['issue', route]).status, 0);
+  let index = lib.readIndex(paths);
+  index.boards['route-state'].versions[0].digest = '';
+  lib.writeIndex(paths, index);
+  fs.writeFileSync(route, frozen1);
+  assert.equal(run(verify, ['issue', route]).status, 0);
+  index = lib.readIndex(paths);
+  assert.equal(index.boards['route-state'].current.version, 3);
+  record = index.boards['route-state'].versions[0];
+  assert.equal(record.digest, lib.sha256(frozen1));
+  assert.equal(record.published[0].url, 'https://example.test/v1');
+  const before = fs.readFileSync(paths.index);
+  const again = run(verify, ['issue', route]);
+  assert.equal(again.status, 0, again.out);
+  assert.equal(fs.readFileSync(paths.index).equals(before), true);
+  // A known digest is authoritative even when someone edits both HTML copies identically.
+  const tampered = frozen1.toString().replace('Three placements', 'Altered placement decision');
+  fs.writeFileSync(route, tampered);
+  fs.writeFileSync(paths.frozen(1), tampered);
+  const conflict = run(verify, ['issue', route]);
+  assert.equal(conflict.status, 1, conflict.out);
+  assert.match(conflict.out, /digest/);
+  assert.equal(fs.readFileSync(paths.index).equals(before), true);
 });
