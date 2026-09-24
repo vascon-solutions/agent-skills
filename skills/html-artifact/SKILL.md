@@ -1,6 +1,6 @@
 ---
 name: html-artifact
-description: "Use when existing Markdown needs a self-contained browser artifact: readable HTML companion, interactive prototype, slide deck, design-system sheet, annotated diff, chart report, draggable board, or split-view editor."
+description: "Use when existing Markdown needs a self-contained browser artifact: readable HTML companion, clickable flow, slide deck, design-system sheet, annotated diff, chart report, kanban triage board, or split-view editor. Not for UI variant boards (before/after, option comparison, state coverage) that specs or task docs will cite; use variant-board for those."
 ---
 
 # html-artifact
@@ -35,6 +35,7 @@ Use `image-artifact` when the user wants a low-text concept visual such as a pos
 - To generate Markdown from scratch — use task-doc, roadmap-todo, or prepare-qa-handoff
 - To host or serve the HTML file directly — hand local preview to `artifact-workbench`
 - When the destination expects Markdown (Slack, GitHub, README)
+- For a UI variant board — before/after panes, option trios, state coverage or defect reports drawn in the target app's design system and cited by a task doc at a version — use `variant-board`. `clickable-flow` and `approach-comparison` stay here for walkthroughs and comparisons no task doc will cite as a companion; if it will be cited as a companion, it is a board.
 
 ## Input
 

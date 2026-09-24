@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en" data-board-id="BOARD_ID" data-board-version="1" data-board-issued="false">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BOARD TITLE — variant board</title>
+<style>
+  /* ---- Board chrome tokens. Fixed across products; the verifier compares this block to the starter. ---- */
+  :root {
+    color-scheme: light;
+    --board-paper: #ffffff;
+    --board-surface: #f7f8f8;
+    --board-ink: #171717;
+    --board-ink-2: #525252;
+    --board-ink-3: #737373;
+    --board-line: #e5e7eb;
+    --board-line-2: #d7dbdb;
+    --board-accent: #1d5fbf;
+    --board-accent-wash: #eff6ff;
+    --board-warn: #b45309;
+    --board-warn-wash: #fef6e7;
+    --board-bad: #b42318;
+    --board-bad-wash: #fef3f2;
+    --board-ok: #15803d;
+    --board-ok-wash: #eaf7ee;
+    --board-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    --board-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --board-radius: 4px;
+    --board-shadow: 0 1px 2px rgba(16, 24, 40, .05), 0 8px 24px -14px rgba(16, 24, 40, .14);
+  }
+  /* ---- App mock tokens. Produced from the token map (tokens.md); the verifier compares them. ---- */
+  :root {
+    --app-background: #ffffff;
+    --app-foreground: #171717;
+    --app-muted: #f4f4f5;
+    --app-muted-foreground: #71717a;
+    --app-border: #e4e4e7;
+    --app-primary: #171717;
+    --app-primary-foreground: #ffffff;
+    --app-destructive: #b42318;
+    --app-success: #eaf7ee;
+    --app-success-foreground: #15803d;
+    --app-warning: #fef6e7;
+    --app-warning-foreground: #b45309;
+    --app-info: #eff6ff;
+    --app-info-foreground: #1d5fbf;
+    --app-radius-sm: 4px;
+    --app-radius-md: 6px;
+    --app-radius-lg: 8px;
+    --app-radius-xl: 12px;
+    --app-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  /* Host dark-mode rules are met by re-declaring the light scheme; the board is always light. */
+  @media (prefers-color-scheme: dark) {
+    :root { color-scheme: light; }
+  }
+
+  /* ---- Page shell ---- */
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--board-paper); color: var(--board-ink); }
+  body { font-family: var(--board-font); font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+  .board { max-width: 1180px; margin: 0 auto; padding: 32px 16px 64px; }
+  a { color: inherit; }
+  code, .mono { font-family: var(--board-mono); font-size: .92em; }
+  h1 { font-size: 30px; line-height: 1.15; margin: 8px 0 12px; letter-spacing: -.01em; }
+  h2 { font-size: 21px; line-height: 1.25; margin: 0 0 6px; }
+  h3 { font-size: 15px; margin: 0 0 4px; }
+  p { margin: 0 0 10px; }
+  .lede { font-size: 17px; color: var(--board-ink-2); max-width: 70ch; }
+  .eyebrow { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--board-ink-3); font-weight: 600; }
+  .board-banner { display: none; position: sticky; top: 0; z-index: 30; margin: 0 0 16px; padding: 10px 14px; border: 1px solid #f4cdc8; background: var(--board-bad-wash); color: var(--board-bad); border-radius: var(--board-radius); font-size: 14px; }
+  .board-banner[data-open="true"] { display: block; }
+
+  /* ---- Masthead ---- */
+  .masthead { border-bottom: 2px solid var(--board-ink); padding-bottom: 22px; margin-bottom: 30px; }
+  .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px 24px; margin: 18px 0 0; font-size: 13px; }
+  .facts div { display: contents; }
+  .facts dt { color: var(--board-ink-3); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
+  .facts dd { margin: 0 0 6px; color: var(--board-ink); word-break: break-word; }
+  .facts dd code { font-size: 12px; }
+  .stamp { display: inline-block; padding: 2px 8px; border: 1px solid var(--board-line-2); border-radius: 999px; font-family: var(--board-mono); font-size: 12px; }
+  .stamp[data-issued="true"] { border-color: var(--board-ok); color: var(--board-ok); background: var(--board-ok-wash); }
+
+  /* ---- Sections ---- */
+  section.board-section { padding: 26px 0; border-top: 1px solid var(--board-line); }
+  section.board-section > header { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: baseline; margin-bottom: 8px; }
+  .tag { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: 11.5px; font-weight: 600; letter-spacing: .02em; background: var(--board-surface); border: 1px solid var(--board-line-2); color: var(--board-ink-2); }
+  .tag.rec { background: var(--board-ok-wash); border-color: var(--board-ok); color: var(--board-ok); }
+  .tag.warn { background: var(--board-warn-wash); border-color: var(--board-warn); color: var(--board-warn); }
+  .tag.bad { background: var(--board-bad-wash); border-color: var(--board-bad); color: var(--board-bad); }
+  .note { font-size: 13.5px; color: var(--board-ink-2); max-width: 78ch; }
+
+  /* ---- Controls ---- */
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 22px; margin: 14px 0 16px; align-items: flex-end; }
+  .ctl > span { display: block; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--board-ink-3); margin-bottom: 4px; }
+  .seg { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+  .seg button { font: inherit; font-size: 13px; padding: 5px 10px; border: 1px solid var(--board-line-2); background: var(--board-paper); color: var(--board-ink); border-radius: var(--board-radius); cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--board-ink); border-color: var(--board-ink); color: #fff; }
+  .seg button[hidden] { display: none; }
+  .seg button .tag { margin-left: 6px; font-size: 10.5px; padding: 0 5px; }
+  .scenario-link { font-family: var(--board-mono); font-size: 12px; color: var(--board-ink-3); word-break: break-all; }
+
+  /* ---- Panes and comparison ---- */
+  .compare { display: grid; gap: 16px; grid-template-columns: 1fr; }
+  .compare.two { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+  .pane { min-width: 0; }
+  .pane-label { font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--board-ink-3); margin: 0 0 6px; }
+  .pane-label.after { color: var(--board-accent); }
+  .pane-label i { font-style: normal; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--board-ink-3); }
+  .frame { border: 1px solid var(--board-line-2); border-radius: var(--board-radius); background: var(--app-background); overflow: auto; box-shadow: var(--board-shadow); }
+  .frame > .mock { min-width: 360px; }
+  table.board-table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin: 10px 0 14px; }
+  table.board-table th, table.board-table td { text-align: left; vertical-align: top; padding: 7px 9px; border-bottom: 1px solid var(--board-line); }
+  table.board-table th { font-size: 11.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--board-ink-3); }
+  .options { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); margin: 12px 0; }
+  .option { border: 1px solid var(--board-line-2); border-radius: var(--board-radius); padding: 12px 14px; }
+  .option h3 { display: flex; gap: 8px; align-items: center; }
+  .cannot-settle { font-size: 13.5px; color: var(--board-ink-2); }
+  .revision-list { padding-left: 20px; font-size: 13.5px; }
+  .revision-list li { margin-bottom: 6px; }
+  .revision-list .who { color: var(--board-ink-3); }
+
+  /* ---- Colophon ---- */
+  footer.colophon { border-top: 1px solid var(--board-line); margin-top: 26px; padding-top: 16px; font-size: 12.5px; color: var(--board-ink-3); }
+  footer.colophon code { font-size: 11.5px; }
+  footer.colophon table { font-size: 12px; }
+
+  /* ---- Mock primitives. Consume only --app-* tokens. Proportions come from the app's component files. ---- */
+  .mock { font-family: var(--app-font); font-size: 14px; line-height: 1.45; color: var(--app-foreground); background: var(--app-background); padding: 16px; }
+  .mock * { box-sizing: border-box; }
+  .mock .m-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 36px; padding: 0 10px; border-radius: var(--app-radius-md); border: 1px solid transparent; background: var(--app-primary); color: var(--app-primary-foreground); font: inherit; font-weight: 500; font-size: 14px; white-space: nowrap; }
+  .mock .m-btn.outline { background: var(--app-background); color: var(--app-foreground); border-color: var(--app-border); }
+  .mock .m-btn.ghost { background: transparent; color: var(--app-foreground); }
+  .mock .m-btn.sm { height: 32px; font-size: 13px; }
+  .mock .m-btn[aria-disabled="true"] { opacity: .5; }
+  .mock .m-pill { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; font-size: 12px; font-weight: 500; background: var(--app-muted); color: var(--app-foreground); }
+  .mock .m-pill.primary { background: var(--app-primary); color: var(--app-primary-foreground); }
+  .mock .m-pill.success { background: var(--app-success); color: var(--app-success-foreground); }
+  .mock .m-pill.warning { background: var(--app-warning); color: var(--app-warning-foreground); }
+  .mock .m-alert { display: grid; gap: 2px; padding: 12px 16px; border-radius: var(--app-radius-md); background: var(--app-muted); font-size: 14px; }
+  .mock .m-alert b { font-weight: 500; }
+  .mock .m-alert.info { background: var(--app-info); }
+  .mock .m-alert.success { background: var(--app-success); color: var(--app-success-foreground); }
+  .mock .m-alert.warning { background: var(--app-warning); color: var(--app-warning-foreground); }
+  .mock .m-alert.destructive { color: var(--app-destructive); }
+  .mock .m-tabs { display: flex; gap: 16px; border-bottom: 1px solid var(--app-border); padding: 0 16px; }
+  .mock .m-tabs span { padding: 10px 0; font-weight: 500; color: var(--app-muted-foreground); position: relative; }
+  .mock .m-tabs span[aria-selected="true"] { color: var(--app-foreground); }
+  .mock .m-tabs span[aria-selected="true"]::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--app-primary); }
+  .mock .m-card { border-radius: var(--app-radius-xl); background: var(--app-background); box-shadow: 0 0 0 1px color-mix(in srgb, var(--app-foreground) 10%, transparent); padding: 24px; display: grid; gap: 16px; }
+  .mock .m-card.sm { padding: 16px; gap: 12px; }
+  .mock .m-card h4 { margin: 0; font-size: 16px; font-weight: 500; }
+  .mock .m-label { display: block; font-size: 14px; font-weight: 500; line-height: 1; margin-bottom: 8px; }
+  .mock .m-input { display: flex; align-items: center; height: 36px; width: 100%; padding: 0 10px; border: 1px solid var(--app-border); border-radius: var(--app-radius-md); background: transparent; color: var(--app-muted-foreground); font-size: 14px; }
+  .mock .m-textarea { min-height: 96px; width: 100%; padding: 8px 10px; border: 1px solid var(--app-border); border-radius: var(--app-radius-md); color: var(--app-muted-foreground); font-size: 14px; }
+  .mock table.m-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 14px; }
+  .mock table.m-table th { text-align: left; font-weight: 500; color: var(--app-muted-foreground); padding: 8px 12px; border-bottom: 1px solid var(--app-border); }
+  .mock table.m-table td { padding: 8px 12px; border-bottom: 1px solid var(--app-border); }
+  .mock .m-sheet { border-left: 1px solid var(--app-border); background: var(--app-background); padding: 16px; display: grid; gap: 12px; max-width: 384px; }
+  .mock .m-dialog { border-radius: var(--app-radius-xl); background: var(--app-background); box-shadow: 0 0 0 1px color-mix(in srgb, var(--app-foreground) 10%, transparent), 0 12px 32px -12px rgba(0, 0, 0, .25); padding: 24px; display: grid; gap: 12px; max-width: 448px; }
+  .mock .m-dialog h4 { margin: 0; font-size: 16px; font-weight: 500; }
+  .mock .m-dialog p { margin: 0; color: var(--app-muted-foreground); }
+  .mock .m-muted { color: var(--app-muted-foreground); }
+  /* A dark-mode app: add a [data-app-scheme="dark"] { --app-... } block from the token map's dark rows and a
+     `scheme` dimension; the runtime sets data-app-scheme on the mock only. */
+  @media (max-width: 640px) {
+    h1 { font-size: 24px; }
+    .board { padding: 20px 16px 48px; }
+    .compare.two { grid-template-columns: 1fr; }
+    table.board-table { display: block; overflow-x: auto; }
+  }
+  code { overflow-wrap: anywhere; }
+</style>
+</head>
+<body>
+<div class="board">
+  <div class="board-banner" id="board-banner" role="alert" aria-live="polite" data-open="false"></div>
+
+  <header class="masthead">
+    <p class="eyebrow">PRODUCT · SURFACE · SCOPE</p>
+    <h1>BOARD TITLE</h1>
+    <p class="lede">One or two sentences on what this board settles and what it does not.</p>
+    <dl class="facts">
+      <div><dt>Source of truth</dt><dd data-fact="source-of-truth"><code>.agent/tasks/example.md</code></dd></div>
+      <div><dt>Read against</dt><dd data-fact="read-against"><code>develop @ 0000000</code></dd></div>
+      <div><dt>Theme source</dt><dd data-fact="theme-source"><code>packages/ui/src/styles.css @ 0000000</code></dd></div>
+      <div><dt>Version</dt><dd data-fact="version"><span class="stamp" data-issued="false">v1 · 2026-01-01 · working</span></dd></div>
+      <div><dt>Status</dt><dd data-fact="status">Proposal, awaiting decision</dd></div>
+      <div><dt>Design tokens</dt><dd data-fact="tokens">all resolved</dd></div>
+    </dl>
+  </header>
+
+  <!-- One <section class="board-section" id="..."> per brief section. Keep the id from the brief; reword the heading freely. -->
+  <section class="board-section" id="example" data-purpose="proposed-change">
+    <header><h2>Example section</h2><span class="tag">example.md</span></header>
+    <p class="note">What this section shows and which source lines it reads.</p>
+    <div class="controls" data-controls="example"></div>
+    <p class="scenario-link" data-scenario-link="example"></p>
+    <div data-mock="example" data-board-part="panes"></div>
+  </section>
+
+  <section class="board-section" id="revisions">
+    <header><h2>Revision notes</h2></header>
+    <ol class="revision-list" data-board-part="revisions">
+      <li data-version="1" data-type="proposal" data-date="2026-01-01" data-author="agent"><b>v1</b> · 2026-01-01 · <span class="who">agent</span> · proposal — first draft from the brief.</li>
+    </ol>
+  </section>
+
+  <footer class="colophon" id="colophon" data-board-part="colophon">
+    <p>Sources read: <code>.agent/tasks/example.md</code>; Before panes reconstructed from <code>path/to/component.tsx</code> at the read-against commit.</p>
+    <p>Design tokens: <span data-colophon="tokens">all rows resolved from the theme source</span>.</p>
+    <p>File names, people and references are example fixtures. Prototype markup is a discussion aid, not an implementation.</p>
+  </footer>
+</div>
+
+<!-- Scenario definition: data only, so the verifier and citations can read it without running the page. -->
+<script type="application/json" id="board-scenarios">
+{
+  "sections": {
+    "example": {
+      "dimensions": [
+        { "id": "state", "label": "State", "options": [
+          { "id": "empty", "label": "Nothing attached" },
+          { "id": "staged", "label": "File staged" }
+        ] },
+        { "id": "view", "label": "View", "options": [
+          { "id": "both", "label": "Side by side" },
+          { "id": "before", "label": "Before" },
+          { "id": "after", "label": "After" }
+        ] }
+      ],
+      "dependencies": []
+    }
+  }
+}
+</script>
+
+<!-- variant-board runtime. Shipped by the starter; boards do not edit it. -->
+<script id="board-runtime">
+window.VariantBoard = (function () {
+  "use strict";
+
+  function fail(reason) { var e = new Error(reason); e.boardReason = reason; return e; }
+  function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+  function isPlainId(v) { return typeof v === "string" && /^[a-z0-9][a-z0-9_-]*$/i.test(v); }
+
+  /* ---------- definition validation ---------- */
+  function validateSection(id, section) {
+    if (!isPlainId(id)) throw fail("section id '" + id + "' is not a plain id");
+    if (!section || !Array.isArray(section.dimensions) || section.dimensions.length === 0) throw fail("section '" + id + "' declares no dimensions");
+    var dims = {};
+    section.dimensions.forEach(function (d) {
+      if (!d || !isPlainId(d.id)) throw fail("section '" + id + "' has a dimension without a plain id");
+      if (dims[d.id]) throw fail("section '" + id + "' declares dimension '" + d.id + "' twice");
+      if (!Array.isArray(d.options) || d.options.length === 0) throw fail("dimension '" + id + "." + d.id + "' has no options");
+      var seen = {};
+      d.options.forEach(function (o) {
+        if (!o || !isPlainId(o.id)) throw fail("dimension '" + id + "." + d.id + "' has an option without a plain id");
+        if (seen[o.id]) throw fail("dimension '" + id + "." + d.id + "' declares option '" + o.id + "' twice");
+        seen[o.id] = true;
+      });
+      dims[d.id] = d;
+    });
+    var deps = section.dependencies || [];
+    if (!Array.isArray(deps)) throw fail("section '" + id + "' dependencies must be an array");
+    deps.forEach(function (dep) {
+      if (!dep || !dims[dep.controlling]) throw fail("section '" + id + "' dependency names unknown controlling dimension '" + (dep && dep.controlling) + "'");
+      if (!dims[dep.dependent]) throw fail("section '" + id + "' dependency names unknown dependent dimension '" + dep.dependent + "'");
+      if (dep.controlling === dep.dependent) throw fail("section '" + id + "' dimension '" + dep.dependent + "' cannot depend on itself");
+      if (!dep.allowed || typeof dep.allowed !== "object") throw fail("dependency '" + dep.controlling + " -> " + dep.dependent + "' in section '" + id + "' has no allowed map");
+      dims[dep.controlling].options.forEach(function (o) {
+        var list = dep.allowed[o.id];
+        if (!Array.isArray(list) || list.length === 0) throw fail("dependency '" + dep.controlling + " -> " + dep.dependent + "' in section '" + id + "' leaves no valid '" + dep.dependent + "' option for '" + o.id + "'");
+        list.forEach(function (optId) {
+          if (!dims[dep.dependent].options.some(function (o2) { return o2.id === optId; })) throw fail("dependency '" + dep.controlling + " -> " + dep.dependent + "' in section '" + id + "' allows unknown option '" + optId + "'");
+        });
+      });
+      Object.keys(dep.allowed).forEach(function (k) {
+        if (!dims[dep.controlling].options.some(function (o) { return o.id === k; })) throw fail("dependency '" + dep.controlling + " -> " + dep.dependent + "' in section '" + id + "' keys unknown controlling option '" + k + "'");
+      });
+    });
+    var order = dependencyOrder(section, id);
+    rejectDeadEnds(section, id, order, dims);
+    return section;
+  }
+
+  /* Walk every reachable selection in dependency order; a dimension left with no allowed option under some
+     reachable combination of its controllers (several controllers whose allowed lists never intersect) is a
+     configuration the board must not draw. Boards are small, so exhaustive enumeration is cheap. */
+  function rejectDeadEnds(section, sectionId, order, dims) {
+    var deps = section.dependencies || [];
+    if (!deps.length) return;
+    var controllers = {};
+    deps.forEach(function (d) { controllers[d.controlling] = true; });
+    var budget = 50000;
+    /* Only controllers branch: a dimension that controls nothing cannot change what comes after it, so one
+       allowed-list check per reachable controller combination covers every state the board can reach. */
+    function walk(index, selection) {
+      if (index === order.length) return;
+      var dimId = order[index];
+      var allowed = allowedOptions(section, selection, dimId);
+      if (allowed.length === 0) {
+        var context = deps.filter(function (d) { return d.dependent === dimId; }).map(function (d) { return d.controlling + "=" + selection[d.controlling]; }).join(", ");
+        throw fail("section '" + sectionId + "' leaves no valid '" + dimId + "' option when " + context);
+      }
+      var branches = controllers[dimId] ? allowed : [allowed[0]];
+      for (var i = 0; i < branches.length; i += 1) {
+        if ((budget -= 1) < 0) throw fail("section '" + sectionId + "' has too many controller combinations to verify; reduce controlling dimensions or options");
+        selection[dimId] = branches[i];
+        walk(index + 1, selection);
+      }
+      delete selection[dimId];
+    }
+    walk(0, {});
+  }
+
+  function validateDefinition(def) {
+    if (!def || !def.sections || typeof def.sections !== "object") throw fail("board definition has no sections");
+    Object.keys(def.sections).forEach(function (id) { validateSection(id, def.sections[id]); });
+    return def;
+  }
+
+  /* Topological order of dimensions: controllers before dependents. Rejects cycles. */
+  function dependencyOrder(section, sectionId) {
+    var deps = section.dependencies || [];
+    var ids = section.dimensions.map(function (d) { return d.id; });
+    var incoming = {}; ids.forEach(function (i) { incoming[i] = 0; });
+    deps.forEach(function (d) { incoming[d.dependent] += 1; });
+    var ready = ids.filter(function (i) { return incoming[i] === 0; });
+    var order = [];
+    while (ready.length) {
+      var cur = ready.shift();
+      order.push(cur);
+      deps.forEach(function (d) {
+        if (d.controlling !== cur) return;
+        incoming[d.dependent] -= 1;
+        if (incoming[d.dependent] === 0) ready.push(d.dependent);
+      });
+    }
+    if (order.length !== ids.length) throw fail("section '" + (sectionId || "?") + "' has a dependency cycle");
+    return order;
+  }
+
+  function dimension(section, dimId) {
+    for (var i = 0; i < section.dimensions.length; i += 1) if (section.dimensions[i].id === dimId) return section.dimensions[i];
+    return null;
+  }
+
+  /* Options of dimId that every controlling selection allows. */
+  function allowedOptions(section, selection, dimId) {
+    var dim = dimension(section, dimId);
+    var ids = dim.options.map(function (o) { return o.id; });
+    (section.dependencies || []).forEach(function (dep) {
+      if (dep.dependent !== dimId) return;
+      var list = dep.allowed[selection[dep.controlling]] || [];
+      ids = ids.filter(function (id) { return list.indexOf(id) >= 0; });
+    });
+    return ids;
+  }
+
+  /* Repair dependents in dependency order: keep still-valid choices, reset invalid ones to the first valid option. */
+  function repair(section, selection) {
+    var next = {};
+    Object.keys(selection).forEach(function (k) { next[k] = selection[k]; });
+    dependencyOrder(section).forEach(function (dimId) {
+      var allowed = allowedOptions(section, next, dimId);
+      if (allowed.length === 0) throw fail("no valid option for dimension '" + dimId + "' under the current selection");
+      if (allowed.indexOf(next[dimId]) < 0) next[dimId] = allowed[0];
+    });
+    return next;
+  }
+
+  function defaultSelection(section) {
+    var sel = {};
+    section.dimensions.forEach(function (d) { sel[d.id] = d.options[0].id; });
+    return repair(section, sel);
+  }
+
+  /* Interaction policy: a person changed one control. */
+  function applyChange(section, selection, dimId, optionId) {
+    var dim = dimension(section, dimId);
+    if (!dim) throw fail("unknown dimension '" + dimId + "'");
+    if (!dim.options.some(function (o) { return o.id === optionId; })) throw fail("unknown option '" + optionId + "' for dimension '" + dimId + "'");
+    var next = {};
+    Object.keys(selection).forEach(function (k) { next[k] = selection[k]; });
+    next[dimId] = optionId;
+    if (allowedOptions(section, next, dimId).indexOf(optionId) < 0) throw fail("option '" + optionId + "' is not allowed for '" + dimId + "' under the current controlling selection");
+    return repair(section, next);
+  }
+
+  /* Exact policy: a cited scenario. Every dimension exactly once, known ids, dependency-valid. Never coerced. */
+  function isSelectionValid(section, selection) {
+    try {
+      var repaired = repair(section, selection);
+      return section.dimensions.every(function (d) { return repaired[d.id] === selection[d.id]; });
+    } catch (e) { return false; }
+  }
+
+  function decode(part) {
+    try { return decodeURIComponent(part); } catch (e) { return null; }
+  }
+
+  function parseHash(hash) {
+    var h = String(hash || "");
+    if (h.charAt(0) === "#") h = h.slice(1);
+    if (!h) return { kind: "none" };
+    var q = h.indexOf("?");
+    if (q < 0) {
+      var anchor = decode(h);
+      return anchor === null ? { kind: "malformed", reason: "malformed percent-encoding in '" + h + "'" } : { kind: "anchor", section: anchor };
+    }
+    var section = decode(h.slice(0, q));
+    if (section === null) return { kind: "malformed", reason: "malformed percent-encoding in section '" + h.slice(0, q) + "'" };
+    var params = [];
+    var bad = null;
+    h.slice(q + 1).split("&").forEach(function (pair) {
+      if (!pair || bad) return;
+      var eq = pair.indexOf("=");
+      var k = decode(eq < 0 ? pair : pair.slice(0, eq));
+      var v = eq < 0 ? "" : decode(pair.slice(eq + 1));
+      if (k === null || v === null) { bad = pair; return; }
+      params.push([k, v]);
+    });
+    if (bad) return { kind: "malformed", section: section, reason: "malformed percent-encoding in '" + bad + "'" };
+    return { kind: "scenario", section: section, params: params };
+  }
+
+  function resolveScenario(def, hash) {
+    var parsed = parseHash(hash);
+    if (parsed.kind === "malformed") return { ok: false, kind: "scenario", section: parsed.section, reason: parsed.reason };
+    if (parsed.kind !== "scenario") return { ok: false, kind: parsed.kind, reason: parsed.kind === "anchor" ? "bare section anchor" : "no scenario in hash" };
+    var section = def.sections[parsed.section];
+    if (!section) return { ok: false, kind: "scenario", reason: "unknown section '" + parsed.section + "'" };
+    var selection = {};
+    var seen = {};
+    for (var i = 0; i < parsed.params.length; i += 1) {
+      var k = parsed.params[i][0], v = parsed.params[i][1];
+      var dim = dimension(section, k);
+      if (!dim) return { ok: false, kind: "scenario", section: parsed.section, reason: "unknown dimension '" + k + "' in section '" + parsed.section + "'" };
+      if (seen[k]) return { ok: false, kind: "scenario", section: parsed.section, reason: "dimension '" + k + "' assigned twice" };
+      seen[k] = true;
+      if (!dim.options.some(function (o) { return o.id === v; })) return { ok: false, kind: "scenario", section: parsed.section, reason: "unknown option '" + v + "' for dimension '" + k + "'" };
+      selection[k] = v;
+    }
+    var missing = section.dimensions.filter(function (d) { return !seen[d.id]; }).map(function (d) { return d.id; });
+    if (missing.length) return { ok: false, kind: "scenario", section: parsed.section, reason: "missing dimension" + (missing.length > 1 ? "s" : "") + " '" + missing.join("', '") + "'" };
+    if (!isSelectionValid(section, selection)) return { ok: false, kind: "scenario", section: parsed.section, reason: "combination forbidden by the section's dependencies" };
+    return { ok: true, kind: "scenario", section: parsed.section, selection: selection };
+  }
+
+  function scenarioHash(sectionId, section, selection) {
+    return "#" + sectionId + "?" + section.dimensions.map(function (d) { return encodeURIComponent(d.id) + "=" + encodeURIComponent(selection[d.id]); }).join("&");
+  }
+
+  /* ---------- pane helpers used by renderers ---------- */
+  /* A `scheme` dimension (light | dark) declared by the board becomes data-app-scheme on the mock, which the
+     [data-app-scheme="dark"] --app-* block styles. The board chrome never changes scheme. */
+  function mockOpen(scheme) {
+    return '<div class="mock"' + (scheme && scheme !== "light" ? ' data-app-scheme="' + esc(scheme) + '"' : "") + ">";
+  }
+  function panes(opts) {
+    var view = opts.view || "both";
+    var readAgainst = opts.readAgainst || readAgainstFact();
+    var out = [];
+    if (view !== "after") out.push('<div class="pane" data-board-part="before-pane"><p class="pane-label">Before <i>· reconstructed from source @ ' + esc(readAgainst) + (opts.beforeNote ? " · " + esc(opts.beforeNote) : "") + '</i></p><div class="frame">' + mockOpen(opts.scheme) + opts.before + "</div></div></div>");
+    if (view !== "before") out.push('<div class="pane" data-board-part="after-pane"><p class="pane-label after">After' + (opts.afterNote ? " <i>· " + esc(opts.afterNote) + "</i>" : "") + '</p><div class="frame">' + mockOpen(opts.scheme) + opts.after + "</div></div></div>");
+    return '<div class="compare' + (view === "both" ? " two" : "") + '">' + out.join("") + "</div>";
+  }
+  function frame(html, note, scheme) {
+    return (note ? '<p class="pane-label">' + esc(note) + "</p>" : "") + '<div class="frame">' + mockOpen(scheme) + html + "</div></div>";
+  }
+  function readAgainstFact() {
+    if (typeof document === "undefined") return "";
+    var el = document.querySelector('[data-fact="read-against"]');
+    return el ? el.textContent.trim() : "";
+  }
+
+  /* ---------- DOM binding ---------- */
+  var state = { def: null, renderers: {}, selections: {} };
+
+  function banner(message) {
+    var el = document.getElementById("board-banner");
+    if (!el) return;
+    if (!message) { el.setAttribute("data-open", "false"); el.textContent = ""; return; }
+    el.textContent = message;
+    el.setAttribute("data-open", "true");
+  }
+
+  function readDefinition() {
+    var el = document.getElementById("board-scenarios");
+    if (!el) throw fail("board has no #board-scenarios definition");
+    var def;
+    try { def = JSON.parse(el.textContent); } catch (e) { throw fail("board scenario definition is not valid JSON: " + e.message); }
+    return validateDefinition(def);
+  }
+
+  function renderControls(sectionId) {
+    var section = state.def.sections[sectionId];
+    var selection = state.selections[sectionId];
+    var host = document.querySelector('[data-controls="' + sectionId + '"]');
+    if (!host) return;
+    host.innerHTML = section.dimensions.map(function (d) {
+      var allowed = allowedOptions(section, selection, d.id);
+      return '<div class="ctl"><span>' + esc(d.label || d.id) + '</span><div class="seg" role="group" aria-label="' + esc(d.label || d.id) + '">' + d.options.map(function (o) {
+        var hidden = allowed.indexOf(o.id) < 0 ? " hidden" : "";
+        return '<button type="button" data-scope="' + esc(sectionId) + '" data-dimension="' + esc(d.id) + '" data-option="' + esc(o.id) + '" aria-pressed="' + (selection[d.id] === o.id) + '"' + hidden + ">" + esc(o.label || o.id) + (o.rec ? ' <span class="tag rec">Recommended</span>' : "") + "</button>";
+      }).join("") + "</div></div>";
+    }).join("");
+    var link = document.querySelector('[data-scenario-link="' + sectionId + '"]');
+    if (link) {
+      var hash = scenarioHash(sectionId, section, selection);
+      link.innerHTML = 'Scenario <a href="' + esc(hash) + '">' + esc(hash) + "</a>";
+    }
+  }
+
+  function renderSection(sectionId) {
+    var renderer = state.renderers[sectionId];
+    var host = document.querySelector('[data-mock="' + sectionId + '"]');
+    if (!renderer || !host) return;
+    var selection = state.selections[sectionId];
+    var frozen = {}; Object.keys(selection).forEach(function (k) { frozen[k] = selection[k]; });
+    host.innerHTML = renderer(frozen, { panes: panes, frame: frame, esc: esc, section: state.def.sections[sectionId] });
+  }
+
+  function paint(sectionId) { renderControls(sectionId); renderSection(sectionId); }
+
+  function select(sectionId, dimId, optionId) {
+    var section = state.def.sections[sectionId];
+    try {
+      state.selections[sectionId] = applyChange(section, state.selections[sectionId], dimId, optionId);
+    } catch (e) {
+      banner("Control change rejected: " + (e.boardReason || e.message));
+      return;
+    }
+    paint(sectionId);
+  }
+
+  function applyHash(hash) {
+    var parsed = parseHash(hash);
+    if (parsed.kind !== "scenario" && parsed.kind !== "malformed") { banner(""); return parsed; }
+    var result = resolveScenario(state.def, hash);
+    if (!result.ok) {
+      var sectionId = parsed.section;
+      if (Object.prototype.hasOwnProperty.call(state.def.sections, sectionId)) {
+        state.selections[sectionId] = defaultSelection(state.def.sections[sectionId]);
+        paint(sectionId);
+        banner("Cited scenario not found: " + result.reason + ". Showing the section defaults; the citation was not replayed.");
+      } else {
+        banner("Cited scenario not found: " + result.reason + ". The citation was not replayed; existing selections are unchanged.");
+      }
+      return result;
+    }
+    banner("");
+    state.selections[result.section] = result.selection;
+    paint(result.section);
+    var target = document.getElementById(result.section);
+    if (target && typeof target.scrollIntoView === "function") target.scrollIntoView();
+    return result;
+  }
+
+  function mount(renderers) {
+    state.renderers = renderers || {};
+    try {
+      state.def = readDefinition();
+      Object.keys(state.def.sections).forEach(function (id) {
+        state.selections[id] = defaultSelection(state.def.sections[id]);
+      });
+    } catch (e) {
+      banner("Board definition rejected: " + (e.boardReason || e.message));
+      throw e;
+    }
+    Object.keys(state.def.sections).forEach(function (id) { paint(id); });
+    document.addEventListener("click", function (e) {
+      var b = e.target.closest ? e.target.closest("button[data-scope][data-dimension][data-option]") : null;
+      if (b) {
+        select(b.getAttribute("data-scope"), b.getAttribute("data-dimension"), b.getAttribute("data-option"));
+        var again = document.querySelector('button[data-scope="' + b.getAttribute("data-scope") + '"][data-dimension="' + b.getAttribute("data-dimension") + '"][data-option="' + b.getAttribute("data-option") + '"]');
+        if (again) again.focus();
+        return;
+      }
+      var r = e.target.closest ? e.target.closest("[data-reveal]") : null;
+      if (r) {
+        var m = /^([a-z0-9_-]+)\.([a-z0-9_-]+)=([a-z0-9_-]+)$/i.exec(r.getAttribute("data-reveal") || "");
+        if (m) { e.preventDefault(); select(m[1], m[2], m[3]); }
+      }
+    });
+    window.addEventListener("hashchange", function () { applyHash(window.location.hash); });
+    applyHash(window.location.hash);
+    return api;
+  }
+
+  var api = {
+    validateDefinition: validateDefinition,
+    dependencyOrder: dependencyOrder,
+    allowedOptions: allowedOptions,
+    defaultSelection: defaultSelection,
+    applyChange: applyChange,
+    isSelectionValid: isSelectionValid,
+    parseHash: parseHash,
+    resolveScenario: resolveScenario,
+    scenarioHash: scenarioHash,
+    panes: panes,
+    frame: frame,
+    esc: esc,
+    mount: mount,
+    select: select,
+    applyHash: applyHash,
+    selection: function (sectionId) { return state.selections[sectionId]; }
+  };
+  return api;
+})();
+</script>
+
+<!-- Board-specific tables and renderers. Replace the example with the sections from the brief. -->
+<script>
+(function () {
+  var COPY = {
+    empty: { before: '<div class="m-dialog"><h4>Complete step</h4><p>Nothing attached yet.</p><span class="m-btn outline">Choose file</span></div>',
+             after: '<div class="m-dialog"><h4>Complete step</h4><p>Nothing attached yet.</p><span class="m-btn">Choose file</span></div>' },
+    staged: { before: '<div class="m-dialog"><h4>Complete step</h4><p>example.pdf · 2.4 MB</p><span class="m-btn outline">Replace</span></div>',
+              after: '<div class="m-dialog"><h4>Complete step</h4><p>example.pdf · 2.4 MB · Ready</p><span class="m-btn">Complete</span></div>' }
+  };
+  VariantBoard.mount({
+    example: function (sel, api) {
+      var copy = COPY[sel.state];
+      return api.panes({ view: sel.view, before: copy.before, after: copy.after });
+    }
+  });
+})();
+</script>
+</body>
+</html>

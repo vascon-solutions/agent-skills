@@ -1,6 +1,6 @@
 ---
 name: image-artifact
-description: Use when an existing Markdown source document needs a static visual companion such as a summary card, UI variant board, comparison board, decision board, concept poster, architecture diagram, or API flow image under an artifact workspace or explicit output path.
+description: Use when an existing Markdown source document needs a static visual companion such as a summary card, comparison board, decision board, concept poster, architecture diagram, or API flow image under an artifact workspace or explicit output path, or when an issued variant board needs a browser snapshot image. Not for building UI variant boards; use variant-board for those.
 ---
 
 # image-artifact
@@ -13,7 +13,9 @@ This is a rendering companion, not a source generator. If the source Markdown do
 
 For browser-readable or interactive companions, use `html-artifact` instead. Use both when the workspace needs a readable HTML artifact and a shareable static visual.
 
-This skill is for low-text visual companionship: concept posters, illustrations, comparison boards, UI variant boards, architecture diagrams, mood visuals, and stakeholder visuals. When a user asks for an "image artifact for this spec/doc/source" and the source is text-heavy, default to a low-text illustrative companion and recommend `html-artifact` if the user needs exact wording.
+This skill is for low-text visual companionship: concept posters, illustrations, comparison boards, architecture diagrams, mood visuals, and stakeholder visuals. When a user asks for an "image artifact for this spec/doc/source" and the source is text-heavy, default to a low-text illustrative companion and recommend `html-artifact` if the user needs exact wording.
+
+UI variant boards are not generated here. `variant-board` builds and issues them in the app's own design system; this skill's `board-snapshot` captures an issued frozen version at a validated scenario as a PNG (see Board Snapshots). A request to draw UI variants, states, or before/after options is a `variant-board` request even when it says "image".
 
 ## Inputs
 
@@ -40,27 +42,30 @@ node <this-skill-dir>/scripts/image-artifact-helper.js prompt-pack <source.md> -
 node <this-skill-dir>/scripts/image-artifact-helper.js prompt-plan <source.md> --workspace <workspace> [--kind <kind>] [--variants <n>] [--format png|svg]
 node <this-skill-dir>/scripts/image-artifact-helper.js metadata <workspace> --source <source.md> --output <image-or-prompt> --kind <kind> [--tool <name>]
 node <this-skill-dir>/scripts/image-artifact-helper.js validate <image-file> [<image-file>...]
+node <this-skill-dir>/scripts/image-artifact-helper.js board-snapshot <workspace>/html/versions/<board>.v<N>.html --scenario '#section?dimension=id&...' [--out <dir-or-file>] [--viewport 1280x900] [--engine chrome|none] [--force]
 ```
 
-The script does not generate images. It handles prompt plans, prompt-pack fallback files, metadata updates, path resolution, and file-level image validation. It resolves repo Markdown sources to repo-aware `~/agent-artifacts/<repo-name>-<source-stem>/` workspaces by default. Use `--format svg` only when exact-text static-image work needs deterministic SVG filename guidance. Validation recognizes deterministic SVG files and reads dimensions from `width`/`height` or `viewBox`.
+The script does not generate images. It handles prompt plans, prompt-pack fallback files, metadata updates, path resolution, file-level image validation, and browser capture of issued variant boards. An explicit or inferred UI-variant-board request exits with a handoff to `variant-board` instead of writing a prompt plan or pack. It resolves repo Markdown sources to repo-aware `~/agent-artifacts/<repo-name>-<source-stem>/` workspaces by default. Use `--format svg` only when exact-text static-image work needs deterministic SVG filename guidance. Validation recognizes deterministic SVG files and reads dimensions from `width`/`height` or `viewBox`.
 
 ## Output Kinds
 
 | Kind | Use when | Default filename |
 |---|---|---|
 | `summary-card` | Concise low-text visual summary; for dense text prefer html-artifact | `<source-stem>-summary.png` |
-| `comparison-board` | Options, variants, or tradeoffs | `<source-stem>-comparison-board.png` |
-| `ui-variant-board` | UI component or flow variants | `<source-stem>-variant-board.png` |
+| `comparison-board` | Options, variants, or tradeoffs that are not UI states | `<source-stem>-comparison-board.png` |
 | `architecture-diagram` | Systems, services, APIs, or data flow | `<source-stem>-architecture.png` |
 | `api-flow` | Endpoints, actors, states, or request flow | `<source-stem>-api-flow.png` |
 | `concept-poster` | Product, business, or campaign concept | `<source-stem>-poster.png` |
 | `decision-board` | Choosing between alternatives | `<source-stem>-decision-board.png` |
 | `prompt-pack` | Image generation is unavailable or prompts only are requested | `<source-stem>-image-prompts.md` |
+| `board-snapshot` | An issued variant board at one scenario, captured in a browser | `<board>.v<N>.<scenario-slug>.png` plus a `.json` sidecar |
+
+`ui-variant-board` is retired. Passing it explicitly, or a source that reads as a UI document with variants, states, screens, options, or approaches, ends with a handoff to `variant-board`; nothing is generated.
 
 If `--kind` is absent, infer from source signals:
 
 - workspace metadata doc type, when available, before prose-only inference
-- UI/component/flow docs with multiple variants, states, screens, options, or approaches -> `ui-variant-board`
+- UI/component/flow docs with multiple variants, states, screens, options, or approaches -> hand off to `variant-board`
 - UI/component/flow docs describing one component or one flow without variants -> `summary-card`
 - architecture/backend/API/data-model docs -> `architecture-diagram` or `api-flow`
 - option/tradeoff docs -> `comparison-board`
@@ -75,7 +80,6 @@ Ask one focused question only if the kind materially changes the output.
 
 - Use source-defined variants, options, states, screens, or approaches first.
 - If `--variants <n>` is provided, generate at most `n` variants from the source-defined set.
-- If a variant board is requested with no count and no clear source-defined count, default to 3 variants.
 - Do not generate more than 6 variants unless the user explicitly requests more.
 - Do not invent arbitrary variants. If the requested count exceeds what the Markdown supports, mark the gap as an assumption in the prompt plan or ask one focused question.
 
@@ -170,6 +174,16 @@ Prompt packs must include:
 - one prompt per requested image or variant
 - notes about text that should stay short or be rendered outside the image
 
+## Board Snapshots
+
+`board-snapshot` is browser capture, not generation. It takes an issued frozen board (`<workspace>/html/versions/<board>.v<N>.html`) and a scenario hash, and bypasses prompt planning entirely:
+
+1. Rejects working files, unissued copies, version or id mismatches, missing issuance records or digest mismatches in `boards.md`, and any scenario that does not resolve under `variant-board`'s exact citation policy (every dimension once, known ids, dependency-valid). A static section is cited with a bare `#section`; an interactive one needs the complete scenario.
+2. Opens `file://<frozen>#<scenario>` in headless Chrome or Chromium (`CHROME_BIN`, the macOS app bundle, or `google-chrome`/`chromium` on PATH) at `--viewport` (default 1280x900) and writes `images/<board>.v<N>.<scenario-slug>.png` in the board's workspace, or the `--out` path.
+3. Writes a sidecar `.json` beside the PNG with the board id, version, frozen file and digest, scenario hash, resolved selection, viewport, engine, and capture time, so the image names exactly what it shows.
+
+`--engine none` prints the validated plan without capturing, for a machine without a browser. Existing files are kept unless `--force`. Do not run `board-snapshot` on the working file to "preview" a draft; use `artifact-workbench` for that.
+
 ### Ambiguous Image-Artifact Requests
 
 When the user says "create an image artifact for this spec/doc/source" and the source is text-heavy:
@@ -241,7 +255,9 @@ If using the image-only `Type | Source | Output | Tool` table and creating it fr
 12. Update `metadata.md` only when using a full artifact workspace, publishing workflow, or explicit metadata request; use `scripts/image-artifact-helper.js metadata` when possible.
 13. Verify outputs; use `scripts/image-artifact-helper.js validate` for file-level image checks when visual inspection is unavailable.
 14. Report concise paths and repo design context when scanned.
-15. If the user wants to inspect image companions, variant boards, or related HTML in the same workspace, invoke `artifact-workbench` for the requested local preview without another approval turn. For browser selection between images, use `html-artifact` to build a comparison page with embedded images and marked choice buttons, then serve with `--capture-selections`; images alone do not record choices.
+15. If the user wants to inspect image companions or related HTML in the same workspace, invoke `artifact-workbench` for the requested local preview without another approval turn. For browser selection between images, use `html-artifact` to build a comparison page with embedded images and marked choice buttons, then serve with `--capture-selections`; images alone do not record choices.
+
+For `board-snapshot`, steps 3 to 10 do not apply: validate the frozen file and scenario, capture, write the sidecar, and report the PNG, sidecar, version and scenario.
 
 ## Validation
 
@@ -296,6 +312,7 @@ Image generation unavailable in this environment.
 
 - Do not modify source Markdown unless explicitly asked.
 - Do not use this to generate primary Markdown source.
+- Do not draw UI variant boards here; `variant-board` owns them, and `board-snapshot` only captures issued versions.
 - Do not require a specific image-generation vendor, model, or API.
 - Do not claim exact UI fidelity unless the generated artifact was visually inspected.
 - Do not use images as the source of truth.

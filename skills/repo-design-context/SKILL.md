@@ -13,6 +13,8 @@ Default artifact behavior remains neutral. No opt-out flag is needed because con
 
 Do not invoke this skill on its own just because a user mentions design tokens, themes, branding, or architecture. It is a helper for artifact skills that explicitly request repo-design discovery.
 
+The one request that does not need `--use-repo-design` is `board-mock` from `variant-board` (see Board Mock Requests): for a board the app's design system is the point, not an opt-in.
+
 ## Inputs
 
 Consumers should pass:
@@ -99,6 +101,17 @@ Repo design context:
 ```
 
 Consuming skills may apply only high-confidence results. Medium and low confidence results must be reported but not applied unless the user explicitly chooses a specific source after being asked.
+
+## Board Mock Requests
+
+`variant-board` asks for `board-mock` when its token map has missing evidence: no theme file found, an unresolved alias, or conflicting sources. The request carries the artifact target `board-mock`, the repo path, the theme file path when known, and the revision the board is read against.
+
+- Given a theme file path that exists at that revision, read it directly and return its literal custom-property values (aliases followed to a literal, values verbatim, never converted) and the body font stack at **high** confidence, without `--use-repo-design`. One named file is one clear source; the opt-in exists to stop accidental branding of neutral artifacts, and a board mock is not neutral by design.
+- Without a theme path, run the normal discovery order and confidence rules. Medium or low confidence is reported with the candidates found, not applied; the board records those roles as `unresolved` until the owner names a source.
+- Fonts: return the app's stack verbatim. Say when a family is a web font that cannot be embedded so the board can record a `substituted` row. Remote font or logo URLs are never returned as usable assets.
+- Report in the usual shape with `applied:` listing the tokens by source name and literal value, plus the file and revision they were read from, so the board's token map can cite them row by row.
+
+This request does not weaken any other consumer: `html-artifact` and `image-artifact` still require `--use-repo-design` and still apply only high-confidence results.
 
 ## Cautions
 

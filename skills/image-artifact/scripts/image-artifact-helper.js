@@ -1,18 +1,22 @@
 #!/usr/bin/env node
 
+const childProcess = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
 const KIND_FILENAMES = {
   'summary-card': 'summary',
   'comparison-board': 'comparison-board',
-  'ui-variant-board': 'variant-board',
   'architecture-diagram': 'architecture',
   'api-flow': 'api-flow',
   'concept-poster': 'poster',
   'decision-board': 'decision-board',
   'prompt-pack': 'image-prompts',
 };
+
+// UI variant boards are authored and issued by the variant-board skill; this helper only snapshots issued ones.
+const RETIRED_BOARD_KINDS = ['ui-variant-board', 'variant-board'];
+const BOARD_HANDOFF = 'variant-board';
 
 function usage(exitCode = 0) {
   const out = exitCode === 0 ? process.stdout : process.stderr;
@@ -21,10 +25,17 @@ function usage(exitCode = 0) {
   image-artifact-helper.js prompt-plan <source.md> [--workspace <slug-or-path>] [--out <path>] [--kind <kind>] [--variants <n>] [--format png|svg] [--repo-design <summary>]
   image-artifact-helper.js metadata <workspace> --source <source.md> --output <image-or-prompt> --kind <kind> [--tool <name>] [--repo-design <summary>]
   image-artifact-helper.js validate <image-file> [<image-file>...]
+  image-artifact-helper.js board-snapshot <html/versions/board.vN.html> --scenario '#section?dimension=id&...' [--out <dir-or-file>] [--viewport 1280x900] [--engine chrome|none] [--force]
 
-Deterministic helper for image-artifact. It does not generate images.
+Deterministic helper for image-artifact. It does not generate images. UI variant boards are built with the
+variant-board skill; board-snapshot captures an issued frozen version at a validated scenario through a browser.
 `);
   process.exit(exitCode);
+}
+
+function boardHandoff(reason) {
+  process.stderr.write(`${reason}\nUI variant boards are not generated here. Use the \`${BOARD_HANDOFF}\` skill to build or revise the board from a brief in the app's own design system, issue a frozen version, and cite it. To snapshot an issued board as an image, run: image-artifact-helper.js board-snapshot <html/versions/<board>.v<N>.html> --scenario '<#section?...>'. For an illustrative non-board companion, pass an explicit --kind such as summary-card or comparison-board.\n`);
+  process.exit(2);
 }
 
 function parseArgs(argv) {
@@ -38,7 +49,7 @@ function parseArgs(argv) {
     if (arg.startsWith('--')) {
       const key = arg.slice(2);
       const next = argv[i + 1];
-      if (!next || next.startsWith('--')) {
+      if (key === 'force' || !next || next.startsWith('--')) {
         flags[key] = true;
       } else {
         flags[key] = next;
@@ -129,7 +140,7 @@ function inferKind(markdown, explicitKind) {
   const text = markdown.toLowerCase();
   const hasUi = /\b(ui|component|screen|flow|responsive|state|props?)\b/.test(text);
   const hasVariants = /\b(variant|option|approach|tradeoff|comparison|alternative|state)\b/.test(text);
-  if (hasUi && hasVariants) return 'ui-variant-board';
+  if (hasUi && hasVariants) return BOARD_HANDOFF;
   if (hasUi) return 'summary-card';
   if (/\b(endpoint|route|request|response|actor|api)\b/.test(text)) return 'api-flow';
   if (/\b(architecture|service|queue|database|data flow|integration|system)\b/.test(text)) return 'architecture-diagram';
@@ -174,7 +185,6 @@ function variantNames(markdown, flags, kind) {
     .map((match, index) => `${match[1]} ${match[2] || String.fromCharCode(65 + index)}${match[3] ? ` - ${match[3].trim()}` : ''}`.trim());
   if (headings.length) return headings.slice(0, requested || headings.length);
   if (requested) return Array.from({ length: requested }, (_, index) => `Variant ${String.fromCharCode(65 + index)}`);
-  if (kind === 'ui-variant-board') return ['Variant A', 'Variant B', 'Variant C'];
   return [];
 }
 
@@ -182,7 +192,6 @@ function visualStyle(kind, repoDesign) {
   const base = {
     'summary-card': 'clean editorial summary card with strong hierarchy and minimal text',
     'comparison-board': 'structured comparison board with clear option columns and concise labels',
-    'ui-variant-board': 'UI variant board with distinct layouts, states, and tradeoff labels',
     'architecture-diagram': 'architecture diagram with labeled services, data flow arrows, and restrained styling',
     'api-flow': 'API flow diagram with actors, requests, responses, and state transitions',
     'concept-poster': 'concept poster with one strong message and supporting visual cues',
@@ -280,7 +289,9 @@ function writePromptArtifact(command, args) {
   if (args.positionals.length < 1) usage(1);
   const source = readSource(args.positionals[0]);
   const explicitKind = args.flags.kind === 'prompt-pack' ? null : args.flags.kind;
+  if (RETIRED_BOARD_KINDS.includes(explicitKind)) boardHandoff(`--kind ${explicitKind} is retired.`);
   const kind = inferKind(source.markdown, explicitKind);
+  if (kind === BOARD_HANDOFF) boardHandoff(`${source.sourcePath} reads as a UI document with variants, options, or states.`);
   const workspace = resolveWorkspace(args.flags, source.sourcePath, source.markdown);
   const outPath = resolvePromptOutput(args.flags, source, workspace, command);
   fs.mkdirSync(path.dirname(outPath), { recursive: true });
@@ -404,6 +415,125 @@ function validateImages(args) {
   }
 }
 
+/* ---------- board-snapshot: browser capture of an issued frozen board at a validated scenario ---------- */
+
+function loadBoardLib() {
+  const candidate = path.join(__dirname, '..', '..', 'variant-board', 'scripts', 'lib', 'board.js');
+  if (!fs.existsSync(candidate)) die(`board-snapshot needs the sibling variant-board skill at ${path.dirname(path.dirname(candidate))}`);
+  return require(candidate);
+}
+
+function scenarioSlug(section, selection, dimensions) {
+  const parts = [section, ...dimensions.map((d) => `${d.id}-${selection[d.id]}`)];
+  return parts.map(slugify).join('.');
+}
+
+function findChrome() {
+  const candidates = [
+    process.env.CHROME_BIN,
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    '/Applications/Chromium.app/Contents/MacOS/Chromium',
+    'google-chrome',
+    'google-chrome-stable',
+    'chromium',
+    'chromium-browser',
+  ].filter(Boolean);
+  for (const candidate of candidates) {
+    if (candidate.includes('/')) {
+      if (fs.existsSync(candidate)) return candidate;
+      continue;
+    }
+    const found = childProcess.spawnSync('sh', ['-c', `command -v ${candidate}`], { encoding: 'utf8' });
+    if (found.status === 0 && found.stdout.trim()) return found.stdout.trim();
+  }
+  return null;
+}
+
+function captureWithChrome(binary, url, outputPath, viewport) {
+  const args = ['--headless=new', '--disable-gpu', '--hide-scrollbars', '--no-first-run', '--no-default-browser-check', `--window-size=${viewport.width},${viewport.height}`, '--virtual-time-budget=2500', `--screenshot=${outputPath}`, url];
+  const result = childProcess.spawnSync(binary, args, { encoding: 'utf8', timeout: 90000 });
+  if (result.status !== 0 || !fs.existsSync(outputPath)) die(`browser capture failed (${binary} exit ${result.status}): ${(result.stderr || '').trim().slice(-400)}`);
+}
+
+function boardSnapshot(args) {
+  if (!args.positionals[0] || !args.flags.scenario) usage(1);
+  const boardLib = loadBoardLib();
+  const frozenPath = path.resolve(expandHome(args.positionals[0]));
+  if (!fs.existsSync(frozenPath)) die(`frozen board not found: ${frozenPath}`);
+  const nameMatch = /^(.+)\.v(\d+)\.html$/.exec(path.basename(frozenPath));
+  if (path.basename(path.dirname(frozenPath)) !== 'versions' || !nameMatch) die('board-snapshot takes an issued frozen file: <workspace>/html/versions/<board>.v<N>.html (not the working file)');
+  const frozenBytes = fs.readFileSync(frozenPath);
+  const html = frozenBytes.toString('utf8');
+  const board = boardLib.parseBoard(html);
+  const version = Number(nameMatch[2]);
+  if (!board.issued) die(`${path.basename(frozenPath)} is not marked issued (data-board-issued="true"); snapshots capture issued evidence only`);
+  if (board.version !== version) die(`${path.basename(frozenPath)} carries data-board-version="${board.version}", not ${version}`);
+  if (board.id !== nameMatch[1]) die(`${path.basename(frozenPath)} carries data-board-id="${board.id}", which does not match the file name`);
+  const workspace = path.dirname(path.dirname(path.dirname(frozenPath)));
+  let record;
+  try {
+    const paths = boardLib.boardPaths(path.join(workspace, 'html', `${board.id}.html`));
+    if (paths.frozen(version) !== frozenPath) die('frozen board must live under <workspace>/html/versions/');
+    record = boardLib.verifyFrozenRecord(paths, version, frozenBytes);
+  } catch (error) { die(error.message); }
+  let runtime;
+  try { runtime = boardLib.loadRuntime(html); } catch (error) { die(`frozen file has no usable runtime: ${error.message}`); }
+  const parsed = runtime.parseHash(args.flags.scenario);
+  let selection = {};
+  let section = parsed.section;
+  if (parsed.kind === 'scenario') {
+    if (!board.definition) die('the board has no scenario definition; cite a bare #section for a static board');
+    const result = runtime.resolveScenario(board.definition, args.flags.scenario);
+    if (!result.ok) die(`scenario does not resolve: ${result.reason}`);
+    selection = result.selection;
+  } else if (parsed.kind === 'anchor') {
+    if (!board.sections.some((s) => s.id === parsed.section)) die(`section #${parsed.section} not found in the board`);
+    if (board.definition && board.definition.sections && board.definition.sections[parsed.section]) die(`section #${parsed.section} is interactive; pass the complete scenario (#${parsed.section}?dimension=id&...)`);
+  } else die('--scenario must be #section or #section?dimension=id&...');
+  const dimensions = parsed.kind === 'scenario' ? board.definition.sections[section].dimensions : [];
+  const slug = scenarioSlug(section, selection, dimensions);
+  const viewportMatch = /^(\d+)x(\d+)$/.exec(args.flags.viewport || '1280x900');
+  if (!viewportMatch) die(`invalid --viewport ${args.flags.viewport}; use <width>x<height>`);
+  const viewport = { width: Number(viewportMatch[1]), height: Number(viewportMatch[2]) };
+  const defaultName = `${board.id}.v${version}.${slug}.png`;
+  let outputPath = path.join(workspace, 'images', defaultName);
+  if (args.flags.out) {
+    const out = path.resolve(expandHome(args.flags.out));
+    outputPath = out.endsWith('.png') ? out : path.join(out, defaultName);
+  }
+  const sidecarPath = outputPath.replace(/\.png$/, '.json');
+  const sidecar = {
+    kind: 'board-snapshot',
+    board: board.id,
+    version,
+    frozenFile: path.relative(workspace, frozenPath),
+    frozenDigest: record.digest,
+    scenario: `#${section}${parsed.kind === 'scenario' ? runtime.scenarioHash(section, board.definition.sections[section], selection).slice(section.length + 1) : ''}`,
+    section,
+    selection,
+    viewport,
+    engine: null,
+    capturedAt: null,
+  };
+  const url = `file://${frozenPath}${sidecar.scenario}`;
+  const engine = args.flags.engine || 'chrome';
+  if (engine === 'none') {
+    process.stdout.write(`Snapshot plan (no capture):\n  frozen: ${frozenPath}\n  scenario: ${sidecar.scenario}\n  url: ${url}\n  output: ${outputPath}\n  sidecar: ${sidecarPath}\n  viewport: ${viewport.width}x${viewport.height}\n`);
+    return;
+  }
+  if (engine !== 'chrome') die(`unsupported --engine ${engine}; use chrome or none`);
+  if (fs.existsSync(outputPath) && !args.flags.force) die(`${outputPath} exists; pass --force to replace it`);
+  const binary = findChrome();
+  if (!binary) die('no Chrome or Chromium binary found; set CHROME_BIN or run with --engine none to print the plan and capture by hand');
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+  captureWithChrome(binary, url, outputPath, viewport);
+  const info = imageInfo(outputPath);
+  sidecar.engine = `${path.basename(binary)} headless`;
+  sidecar.capturedAt = new Date().toISOString();
+  fs.writeFileSync(sidecarPath, `${JSON.stringify(sidecar, null, 2)}\n`);
+  process.stdout.write(`Captured: ${outputPath} (${info.mime}, ${info.width}x${info.height})\nSidecar: ${sidecarPath}\nScenario: ${sidecar.scenario} on ${sidecar.frozenFile}\n`);
+}
+
 function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.command === 'prompt-pack' || args.command === 'prompt-plan') {
@@ -412,6 +542,8 @@ function main() {
     updateMetadata(args);
   } else if (args.command === 'validate') {
     validateImages(args);
+  } else if (args.command === 'board-snapshot') {
+    boardSnapshot(args);
   } else {
     die(`Unknown command: ${args.command}`);
   }
