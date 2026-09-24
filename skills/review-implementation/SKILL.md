@@ -18,6 +18,12 @@ Infer the context from the request; do not ask the user to choose a mode when it
 
 Read relevant repo instructions and review the full intended diff, including uncommitted changes when in scope. Evaluate both requirement compliance and implementation quality: preserved behavior, excluded scope, contracts, errors/recovery, authorization, state transitions, accessibility, and adequacy of validation. Scale inspection to risk; do not demand a full repository tour or additional tests for cosmetic details.
 
+When the diff adds or moves stateful UI (dialogs, forms, drafts, retry or idempotency tokens), check three risks that automated PR reviewers repeatedly catch after delivery:
+
+- **Identity change:** a component the router or parent reuses across records (for example a route param change) drops dialogs, form values, and attempt tokens, so an action opened for one record cannot run against the next.
+- **Async prerequisites:** a form that depends on another read (configuration, a roster, permissions) accepts input or offers submit only once that read has succeeded; loading and failure are stated rather than treated as absent data.
+- **Version conflicts:** after an optimistic-concurrency refusal, the refreshed record replaces the edited state (reset or remount) before a retry is possible, so a retry cannot carry the new version with stale values and overwrite the other save.
+
 Use direct review unless a fresh reviewer is explicitly requested or required by the calling workflow and delegation is available. When delegating, supply focused source paths, repo/base/head or diff, candidate evidence, prior decisions, and the review context. The reviewer does not inherit broad chat history or delegate again. One reviewer can assess both compliance and quality; separate agents per pass are not mandatory. The coordinating agent may delegate; the reviewer itself must not recursively delegate.
 
 For each actionable finding include file:line or symbol, violated requirement or concrete risk, impact, supporting evidence, and the smallest credible fix. Classify severity:

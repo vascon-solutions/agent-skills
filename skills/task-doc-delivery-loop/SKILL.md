@@ -31,13 +31,15 @@ Use one implementation owner by default. Delegate bounded independent work only 
 
 Read [validation](references/validation.md) when choosing checks or reusing evidence. Implement in dependency order with focused checks during development and one deduplicated required final gate. Capture failing behavior before a bug fix when practical; add durable tests for named behavioral or contract risks, not for incidental copy, CSS, or DOM shape. Runtime UI acceptance may require browser inspection without requiring a permanent browser test.
 
+Delegate a requested browser audit (`audit-ui`) to a subagent on a cheaper model when the runtime offers one, such as a `ui-auditor` agent definition; keep implementation and fixes with the delivery owner. Before delegating, prove which URL serves the candidate and hand over a brief with URLs, free personas, fixture identifiers and scenarios, so the auditor does not rediscover them. Consume its verdict, findings and report path, not its transcript, and send rechecks for affected checkpoints only.
+
 When a check fails, read [debugging](references/debugging.md), investigate, and fix related failures within the authorized scope. A recoverable failure is work to do, not automatically a user approval gate. Record unrelated/environmental failures and their effect on completion.
 
 ## 3. Review And Remediate
 
 Use `review-implementation` in delivery-review mode with the task sources, complete diff, candidate identity, prior decisions, and validation evidence. Use one independent reviewer when requested or required and available; otherwise perform a local review and identify its limits. Additional task-boundary reviews need an explicit gate or a material risk boundary. A PR-bound delivery receives review unless the user explicitly waives it and repo policy permits that.
 
-Use `address-review-findings` to evaluate valid, invalid, unclear, and out-of-scope findings. Apply valid fixes as one coherent batch. Rerun invalidated checks; request one final focused review only after material behavioral remediation. Continue beyond this bound for new critical/blocking findings or explicit instruction, not endless polish. Keep independent work moving when one finding needs clarification.
+Use `address-review-findings` to evaluate valid, invalid, unclear, and out-of-scope findings. Apply valid fixes as one coherent batch. Rerun invalidated checks; request one final focused review only after material behavioral remediation. Give that focused review to a fresh reviewer with only the remediation diff, the original findings, and their claimed dispositions; resuming the first reviewer carries its whole context forward. Continue beyond this bound for new critical/blocking findings or explicit instruction, not endless polish. Keep independent work moving when one finding needs clarification.
 
 ## 4. Publish And Close
 
