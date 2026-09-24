@@ -417,9 +417,12 @@ window.VariantBoard = (function () {
      configuration the board must not draw. Boards are small, so exhaustive enumeration is cheap. */
   function rejectDeadEnds(section, sectionId, order, dims) {
     var deps = section.dependencies || [];
-    var controlled = order.filter(function (dimId) { return deps.some(function (d) { return d.dependent === dimId; }); });
-    if (!controlled.length) return;
+    if (!deps.length) return;
+    var controllers = {};
+    deps.forEach(function (d) { controllers[d.controlling] = true; });
     var budget = 50000;
+    /* Only controllers branch: a dimension that controls nothing cannot change what comes after it, so one
+       allowed-list check per reachable controller combination covers every state the board can reach. */
     function walk(index, selection) {
       if (index === order.length) return;
       var dimId = order[index];
@@ -428,9 +431,9 @@ window.VariantBoard = (function () {
         var context = deps.filter(function (d) { return d.dependent === dimId; }).map(function (d) { return d.controlling + "=" + selection[d.controlling]; }).join(", ");
         throw fail("section '" + sectionId + "' leaves no valid '" + dimId + "' option when " + context);
       }
-      var branches = controlled.indexOf(dimId) >= 0 || deps.some(function (d) { return d.controlling === dimId; }) ? allowed : [allowed[0]];
+      var branches = controllers[dimId] ? allowed : [allowed[0]];
       for (var i = 0; i < branches.length; i += 1) {
-        if ((budget -= 1) < 0) return;
+        if ((budget -= 1) < 0) throw fail("section '" + sectionId + "' has too many controller combinations to verify; reduce controlling dimensions or options");
         selection[dimId] = branches[i];
         walk(index + 1, selection);
       }

@@ -68,13 +68,17 @@ function starterRuntime() {
 
 /* ---------- board html ---------- */
 
+/* Token declarations from the board's own <style>: `:root` blocks, or any block whose selector list names the
+   given attribute selector outside a :not(). */
 function parseCssVars(html, selector) {
-  const pattern = selector === ':root'
-    ? /(?:^|[\s}]):root\s*\{([^}]*)\}/g
-    : new RegExp(`[^{}]*${escapeRegExp(selector)}\\s*\\{([^}]*)\\}`, 'g');
   const vars = {};
-  [...html.matchAll(pattern)].forEach((block) => {
-    [...block[1].matchAll(/(--[a-z0-9-]+)\s*:\s*([^;]+);/gi)].forEach((m) => {
+  [...html.matchAll(/([^{}]*)\{([^{}]*)\}/g)].forEach((block) => {
+    const selectors = block[1].replace(/\/\*[\s\S]*?\*\//g, '').trim();
+    const matches = selector === ':root'
+      ? /(?:^|[\s,}]):root\s*$/.test(selectors)
+      : selectors.replace(/:not\([^)]*\)/gi, '').includes(selector);
+    if (!matches) return;
+    [...block[2].matchAll(/(--[a-z0-9-]+)\s*:\s*([^;]+);/gi)].forEach((m) => {
       vars[m[1]] = m[2].replace(/\s+/g, ' ').trim();
     });
   });
@@ -82,7 +86,7 @@ function parseCssVars(html, selector) {
 }
 
 function stripScripts(html) {
-  return html.replace(/<script\b[\s\S]*?<\/script>/gi, '');
+  return html.replace(/<script\b[\s\S]*?<\/script>/gi, '').replace(/<!--[\s\S]*?-->/g, '');
 }
 
 function pickVars(vars, prefix) {
@@ -170,7 +174,7 @@ function parseBoard(html) {
     try {
       board.definition = JSON.parse(definition[1]);
       const sections = (board.definition && board.definition.sections) || {};
-      board.hasSchemeDimension = Object.keys(sections).some((id) => Array.isArray(sections[id].dimensions) && sections[id].dimensions.some((d) => d && d.id === 'scheme'));
+      board.hasSchemeDimension = Object.keys(sections).some((id) => Array.isArray(sections[id].dimensions) && sections[id].dimensions.some((d) => d && d.id === 'scheme' && Array.isArray(d.options) && ['light', 'dark'].every((o) => d.options.some((opt) => opt && opt.id === o))));
     } catch (error) {
       board.definitionError = `scenario definition is not valid JSON: ${error.message}`;
     }
@@ -287,37 +291,46 @@ function gitShow(repo, revision, file) {
   return result.stdout;
 }
 
-const DARK_SELECTOR = /\.dark\b|\[data-(?:theme|mode|scheme|color-scheme|app-scheme)=["']?dark|prefers-color-scheme\s*:\s*dark|\bdark\b/i;
+const DARK_SELECTOR = /\.dark\b|\[data-(?:theme|mode|scheme|color-scheme|app-scheme)=["']?dark|prefers-color-scheme\s*:\s*dark/i;
+
+/* `:root:not(.dark)` scopes the light theme; the negated part must not count as dark. */
+function isDarkSelector(selector) {
+  return DARK_SELECTOR.test(selector.replace(/:not\([^)]*\)/gi, ''));
+}
 
 /*
- * Custom-property declarations grouped by mode. A block is dark when its own selector or an enclosing at-rule
- * names a dark scheme; everything else is light. Within a mode the last declaration wins, which matches how an
- * app-level override after the theme block applies in the browser.
+ * Custom-property declarations grouped by mode. Each declaration belongs to the innermost block it sits in; a
+ * block is dark when its own selector or any enclosing at-rule names a dark scheme (`@layer base { :root {…}
+ * .dark {…} }` keeps the two apart). Within a mode the last declaration wins, which matches how an app-level
+ * override after the theme block applies in the browser.
  */
-function cssDeclarations(css) {
+function cssDeclarations(rawCss) {
+  const css = rawCss.replace(/\/\*[\s\S]*?\*\//g, '');
   const modes = { light: {}, dark: {} };
   const stack = [];
-  let i = 0;
   let cursor = 0;
-  while (i < css.length) {
+  const record = (text) => {
+    if (!stack.length) return;
+    const m = /^\s*(--[a-z0-9-]+)\s*:\s*([\s\S]+?)\s*$/i.exec(text);
+    if (!m) return;
+    const target = stack[stack.length - 1].dark ? modes.dark : modes.light;
+    target[m[1]] = m[2].replace(/\s+/g, ' ').trim();
+  };
+  for (let i = 0; i < css.length; i += 1) {
     const ch = css[i];
     if (ch === '{') {
-      const selector = css.slice(cursor, i).replace(/\/\*[\s\S]*?\*\//g, '').trim();
+      const selector = css.slice(cursor, i).trim();
       const inherited = stack.some((s) => s.dark);
-      stack.push({ selector, dark: inherited || DARK_SELECTOR.test(selector), start: i + 1 });
+      stack.push({ selector, dark: inherited || isDarkSelector(selector) });
       cursor = i + 1;
     } else if (ch === '}') {
-      const frame = stack.pop();
-      if (frame) {
-        const body = css.slice(frame.start, i);
-        const target = frame.dark ? modes.dark : modes.light;
-        [...body.matchAll(/(?:^|[;\s{])(--[a-z0-9-]+)\s*:\s*([^;{}]+);/gi)].forEach((m) => { target[m[1]] = m[2].replace(/\s+/g, ' ').trim(); });
-      }
+      record(css.slice(cursor, i));
+      stack.pop();
       cursor = i + 1;
     } else if (ch === ';') {
+      record(css.slice(cursor, i));
       cursor = i + 1;
     }
-    i += 1;
   }
   return modes;
 }
@@ -400,7 +413,7 @@ function checkStructure({ html, board, brief, starterHtml }) {
   }
   if (!board.colorScheme) failures.push('color-scheme: light must be declared');
   if (!board.runtime) failures.push('runtime script (<script id="board-runtime">) missing');
-  else if (board.runtime.trim() !== (starter.runtime || '').trim()) failures.push('runtime script differs from the starter; boards do not edit the runtime');
+  else if (board.runtime.trim() !== (starter.runtime || '').trim()) failures.push('runtime script differs from the starter; boards do not edit the runtime (an older starter runtime is refreshed by "bump")');
   Object.keys(starter.boardVars).forEach((name) => {
     if (!(name in board.boardVars)) failures.push(`chrome token ${name} missing; boards keep the starter chrome`);
     else if (normalizeCssValue(board.boardVars[name]) !== normalizeCssValue(starter.boardVars[name])) failures.push(`chrome token ${name} differs from the starter (${board.boardVars[name]} vs ${starter.boardVars[name]})`);
@@ -501,7 +514,7 @@ function checkTokens({ board, tokens, skipSource = false, home }) {
   const hasDarkRows = tokens.rows.some((r) => r.mode === 'dark');
   if (hasDarkRows) {
     failures.push(...relativeAppVarsMatch(board.appDarkVars, tokens.rows, 'dark'));
-    if (!board.hasSchemeDimension) failures.push('dark token rows need a mock-only Scheme control: declare a "scheme" dimension (light, dark) in a section and pass its selection to api.panes/api.frame');
+    if (!board.hasSchemeDimension) failures.push('dark token rows need a mock-only Scheme control: declare a "scheme" dimension with options "light" and "dark" in a section and pass its selection to api.panes/api.frame');
   } else if (Object.keys(board.appDarkVars).length) failures.push('the board declares a [data-app-scheme="dark"] block but the token map has no dark rows');
   const factTokens = board.facts.tokens || '';
   substituted.forEach((name) => { if (!factTokens.includes(name)) failures.push(`substituted token ${name} is not named in the masthead "Design tokens" fact`); });
@@ -753,6 +766,14 @@ function appendRevisionEntry(html, entry) {
   return `${before}${match[1]}\n${entry}${match[2]}</ol>${after}`;
 }
 
+/* A new working number is the moment to pick up a newer starter runtime; frozen files keep theirs. */
+function refreshRuntime(html) {
+  const starter = extractRuntimeScript(fs.readFileSync(STARTER_PATH, 'utf8'));
+  const current = extractRuntimeScript(html);
+  if (!starter || current === null || current.trim() === starter.trim()) return { html, refreshed: false };
+  return { html: html.replace(/<script id="board-runtime">[\s\S]*?<\/script>/, () => `<script id="board-runtime">${starter}</script>`), refreshed: true };
+}
+
 function bumpWorking(html, board, nextVersion, date, note) {
   let out = html;
   out = out.replace(/(<html\b[^>]*\sdata-board-version=")\d+(")/i, `$1${nextVersion}$2`);
@@ -785,6 +806,7 @@ module.exports = {
   parseIndex,
   parseTokenMap,
   readIndex,
+  refreshRuntime,
   renderIndex,
   resolveCitation,
   resolveVar,

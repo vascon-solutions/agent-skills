@@ -190,10 +190,12 @@ function commandBump(args) {
   const next = args.flags.to ? Number(args.flags.to) : floor + 1;
   if (!Number.isInteger(next) || next <= floor) die(`next version must be greater than ${floor}`);
   if (fs.existsSync(paths.frozen(next))) die(`v${next} already has a frozen file`);
-  const html = lib.bumpWorking(inputs.html, board, next, args.flags.date || today(), args.flags.note);
+  const refreshed = lib.refreshRuntime(inputs.html);
+  const note = args.flags.note ? `${args.flags.note}${refreshed.refreshed ? '; runtime refreshed from the starter' : ''}` : refreshed.refreshed ? 'runtime refreshed from the starter' : undefined;
+  const html = lib.bumpWorking(refreshed.html, board, next, args.flags.date || today(), note);
   fs.writeFileSync(paths.board, html);
   if (entry) { entry.current = { version: next, issued: false }; lib.writeIndex(paths, index); }
-  process.stdout.write(`Bumped ${path.basename(paths.board)} to v${next} (working)\n`);
+  process.stdout.write(`Bumped ${path.basename(paths.board)} to v${next} (working)${refreshed.refreshed ? '; runtime refreshed from the starter' : ''}\n`);
 }
 
 function commandPublish(args) {

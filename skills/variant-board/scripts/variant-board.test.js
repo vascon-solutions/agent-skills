@@ -446,10 +446,41 @@ test('a revision bundle preserves the current board and decisions; stale bases a
 
 /* ---------- review follow-ups: dark mode, multi-controller dead ends, static sections, parsing edges ---------- */
 
+test('theme declarations are attributed to their innermost block and mode', () => {
+  const css = `/* dark theme lives in .dark { below */
+@layer base {
+  :root { --background: oklch(1 0 0); --primary: #1a56db; }
+  :root:not(.dark) { --ring: #cccccc; }
+  .dark { --background: oklch(0.145 0 0); --primary: #7fb8e0; }
+  /* .dark { --background: black; } */
+}
+@theme inline { --color-background: var(--background); --color-primary: var(--primary) }
+@media (prefers-color-scheme: dark) { :root { --primary: #ffffff } }
+.btn-dark-outline { --btn: #123456; }
+`;
+  assert.equal(lib.sourceValue(css, '--background', 'light'), 'oklch(1 0 0)');
+  assert.equal(lib.sourceValue(css, '--color-background', 'light'), 'oklch(1 0 0)');
+  assert.equal(lib.sourceValue(css, '--primary', 'light'), '#1a56db');
+  assert.equal(lib.sourceValue(css, '--ring', 'light'), '#cccccc');
+  assert.equal(lib.sourceValue(css, '--btn', 'light'), '#123456');
+  assert.equal(lib.sourceValue(css, '--background', 'dark'), 'oklch(0.145 0 0)');
+  assert.equal(lib.sourceValue(css, '--color-primary', 'dark'), '#ffffff', 'the media-query override is the last dark declaration');
+  const modes = lib.cssDeclarations(css);
+  assert.equal(modes.dark['--background'], 'oklch(0.145 0 0)');
+  assert.equal(modes.light['--background'], 'oklch(1 0 0)');
+});
+
+test('the starter itself parses without phantom sections; selector lists with the dark attribute are read', () => {
+  const starter = lib.parseBoard(fs.readFileSync(lib.STARTER_PATH, 'utf8'));
+  assert.deepEqual(starter.sections.map((s) => s.id), ['example', 'revisions']);
+  const html = '<style>.mock[data-app-scheme="dark"],\n.mock[data-app-scheme="dark"] .m-card { --app-x: #111; }\n.mock:not([data-app-scheme="dark"]) { --app-y: #222; }</style>';
+  assert.deepEqual(lib.parseBoard(html).appDarkVars, { '--app-x': '#111' });
+});
+
 test('dark token rows resolve in the theme dark block, need a dark --app-* block and a scheme dimension', () => {
   const { home, ws, memo } = workspace();
   const tokensPath = path.join(ws, 'markdown', 'memo-style-tokens.md');
-  const css = `${fixtures.THEME_CSS}\n.dark {\n  --color-background: oklch(0.15 0 0);\n  --color-primary: #7fb8e0;\n}\n`;
+  const css = `@layer base {\n${fixtures.THEME_CSS}\n  .dark {\n    --color-background: oklch(0.15 0 0);\n    --color-primary: #7fb8e0;\n  }\n}\n`;
   const { sha } = themeRepo(home, tokensPath, css);
   const light = run(verify, ['check', memo], { env: { HOME: home } });
   assert.equal(light.status, 0, `light rows must not read the .dark override: ${light.out}`);
@@ -493,6 +524,21 @@ test('two controllers whose allowed lists never meet are rejected at definition 
   const meets = JSON.parse(JSON.stringify(deadEnd));
   meets.sections.s.dependencies[1].allowed = { b1: ['c1', 'c2'], b2: ['c1', 'c2'] };
   assert.doesNotThrow(() => runtime.validateDefinition(meets));
+  // Many controlled dimensions do not blow up the search; a conflict hidden behind them is still found.
+  const wide = { sections: { s: { dimensions: [], dependencies: [] } } };
+  const opts = ['o0', 'o1', 'o2', 'o3', 'o4', 'o5'].map((id) => ({ id }));
+  for (let d = 0; d < 9; d += 1) wide.sections.s.dimensions.push({ id: `d${d}`, options: opts.map((o) => ({ ...o })) });
+  for (let d = 2; d < 9; d += 1) wide.sections.s.dependencies.push({ controlling: 'd0', dependent: `d${d}`, allowed: Object.fromEntries(opts.map((o) => [o.id, opts.map((x) => x.id)])) });
+  wide.sections.s.dependencies.push({ controlling: 'd1', dependent: 'd8', allowed: Object.fromEntries(opts.map((o) => [o.id, opts.map((x) => x.id)])) });
+  assert.doesNotThrow(() => runtime.validateDefinition(wide));
+  wide.sections.s.dependencies[wide.sections.s.dependencies.length - 1].allowed.o5 = ['o0'];
+  wide.sections.s.dependencies[wide.sections.s.dependencies.length - 2].allowed.o5 = ['o1'];
+  assert.throws(() => runtime.validateDefinition(wide), /leaves no valid 'd8' option when d0=o5, d1=o5/);
+  const huge = { sections: { s: { dimensions: [], dependencies: [] } } };
+  const many = Array.from({ length: 30 }, (_, i) => ({ id: `o${i}` }));
+  for (let d = 0; d < 5; d += 1) huge.sections.s.dimensions.push({ id: `d${d}`, options: many.map((o) => ({ ...o })) });
+  for (let d = 1; d < 5; d += 1) huge.sections.s.dependencies.push({ controlling: `d${d - 1}`, dependent: `d${d}`, allowed: Object.fromEntries(many.map((o) => [o.id, many.map((x) => x.id)])) });
+  assert.throws(() => runtime.validateDefinition(huge), /too many controller combinations/);
   const sel = runtime.applyChange(meets.sections.s, runtime.defaultSelection(meets.sections.s), 'a', 'a2');
   assert.deepEqual(sel, { a: 'a2', b: 'b1', c: 'c2' });
 });
@@ -540,6 +586,25 @@ test('static sections, mock <section> markup and other <ol> lists do not confuse
   const scenario = run(verify, ['scenario', memo, '#owner?state=depot&view=after']);
   assert.equal(scenario.status, 0, scenario.out);
   assert.match(scenario.out, /Scenario ok: #owner/);
+});
+
+test('bump refreshes an older runtime from the starter; the frozen file keeps and uses its own', () => {
+  const { home, ws, route } = workspace();
+  const stale = fs.readFileSync(route, 'utf8').replace('function parseHash(hash) {', 'function parseHash(hash) { /* older starter */');
+  fs.writeFileSync(route, stale);
+  const check = run(verify, ['check', route]);
+  assert.equal(check.status, 1);
+  assert.match(check.out, /refreshed by "bump"/);
+  const bump = run(verify, ['bump', route, '--date', '2026-09-24']);
+  assert.equal(bump.status, 0, bump.out);
+  assert.match(bump.out, /runtime refreshed from the starter/);
+  assert.equal(run(verify, ['check', route]).status, 0);
+  assert.match(fs.readFileSync(route, 'utf8'), /proposal — runtime refreshed from the starter/);
+  assert.equal(run(verify, ['issue', route, '--date', '2026-09-24']).status, 0);
+  const frozen = path.join(ws, 'html', 'versions', 'route-state.v2.html');
+  fs.writeFileSync(frozen, fs.readFileSync(frozen, 'utf8').replace('function parseHash(hash) {', 'function parseHash(hash) { /* frozen with an older runtime */'));
+  const cite = run(verify, ['cite', `\`${route}\` (v2) — "Where the approval commands go" (#commands?variant=a&route=depot&state=draft&viewer=planner)`], { env: { HOME: home } });
+  assert.equal(cite.status, 0, cite.out);
 });
 
 test('migrate --reserve, index notes with parentheses, and citations survive an index round trip', () => {

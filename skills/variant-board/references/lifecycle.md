@@ -15,6 +15,8 @@ node scripts/verify-variant-board.js issue  <board.html> [--date YYYY-MM-DD] [--
 node scripts/verify-variant-board.js bump   <board.html> [--to N] [--date YYYY-MM-DD] [--note 'what changed']
 ```
 
+`bump` also replaces the board's runtime script with the starter's when the starter has moved on, and says so in the proposal entry; `check` fails a working board whose runtime differs from the starter until it is bumped. Frozen files keep the runtime they were issued with, and citations are resolved with that runtime.
+
 `issue` refuses when any check fails, when a token row is `unresolved`, or when N is at or below the reserved legacy number. `--skip-theme-source` skips only the re-read of resolved values from the theme repo (for a machine without it); the warning is printed so the gap stays visible.
 
 ## Citations
