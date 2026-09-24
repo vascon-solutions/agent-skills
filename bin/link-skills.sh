@@ -57,6 +57,7 @@ image-artifact
 artifact-workbench
 repo-design-context
 publish-artifact
+variant-board
 "
 
 # Skills removed in this version — unlink symlinks and flag copied installs.

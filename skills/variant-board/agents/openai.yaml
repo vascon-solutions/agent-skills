@@ -1,0 +1,4 @@
+interface:
+  display_name: "Variant Board"
+  short_description: "Build or revise a UI variant board in the app's design system, issued in citable frozen versions"
+  default_prompt: "Use $variant-board to build or revise the requested UI variant board from a brief: start from the starter, draw mocks in the target app's own tokens, keep the board chrome white, verify with the bundled scripts, preview locally, and issue a frozen version only when asked or when a doc is about to cite it."

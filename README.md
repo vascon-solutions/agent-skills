@@ -36,6 +36,7 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
     ├── artifact-workbench/
     ├── repo-design-context/
     ├── publish-artifact/
+    ├── variant-board/
     ├── brainstorm/
     ├── unslop/
     ├── task-doc/
@@ -88,9 +89,10 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 | `tanstack-fe-standard`      | Build or review React SPA/admin frontends that use TanStack Router, TanStack Query, Vite, Tailwind, protected routes, route search state, feature folders, or browser smoke tests                                                                                                    |
 | `tanstack-start-standard`   | Build or review TanStack Start apps with SSR, server functions, server routes, streaming, server/client env boundaries, route loaders, or full-stack React behavior                                                                                                                  |
 | `ultracite-standard`        | Set up, migrate, or review JavaScript and TypeScript projects that use Ultracite, Biome, check/fix scripts, generated path exclusions, or ESLint/Prettier replacement                                                                                                                |
-| `html-artifact`             | Convert any Markdown file into a self-contained, browser-ready HTML companion stored in `~/agent-artifacts/`. Supports task docs, roadmaps, QA handoffs, frontend handoffs, repo docs, and generic files                                                                             |
+| `html-artifact`             | Convert any Markdown file into a self-contained, browser-ready HTML companion stored in `~/agent-artifacts/`. Supports task docs, roadmaps, QA handoffs, frontend handoffs, repo docs, and generic files; UI variant boards belong to `variant-board`                                |
 | `markdown-artifact`         | Create polished Markdown artifact workspaces under `~/agent-artifacts/<slug>/` from ideas, notes, UI/backend designs, learning topics, tutorials, task plans, and other early-stage source docs                                                                                      |
-| `image-artifact`            | Create static visual companions from existing Markdown, including summary cards, UI variant boards, comparison boards, decision boards, concept posters, architecture diagrams, and API flow images. Repo Markdown defaults to `~/agent-artifacts/<repo-name>-<source-stem>/images/` |
+| `image-artifact`            | Create static visual companions from existing Markdown, including summary cards, comparison boards, decision boards, concept posters, architecture diagrams, and API flow images, plus `board-snapshot` browser captures of issued variant boards. Repo Markdown defaults to `~/agent-artifacts/<repo-name>-<source-stem>/images/` |
+| `variant-board`             | Build or revise a UI variant board (before/after, option comparison, state coverage, defect report) from a brief in the target app's own design system on a white editorial page; verify, issue frozen versions under `html/versions/`, resolve task-doc citations, migrate legacy boards, and export/import bundles for hosts without the filesystem |
 | `artifact-workbench`        | Serve an artifact workspace or single HTML artifact through a localhost workbench (read-only by default, optional live refresh and selection capture) for variant comparison, browser QA, and pre-publish inspection                                                                                                                           |
 | `repo-design-context`       | Discover whether local repo styling, design tokens, brand assets, or architecture vocabulary can safely inform generated artifacts                                                                                                                                                   |
 | `publish-artifact`          | Publish a `~/agent-artifacts/<slug>/` workspace to S3, GitHub Wikis, ClickUp Docs, native Google Docs, or raw Google Drive folders with explicit destination flags. Explicit command only                                                                                            |
@@ -207,7 +209,7 @@ Documentation audits and reviews report findings without editing. Existing clean
 ### Review-gated implementation
 
 1. `task-doc-intake` — classify the work (downshifting `small`/`fix`), run a guided interview or map notes into an approved change inventory, render the task doc via `task-doc`, and carry existing authorization through the handoff
-2. Optional companions: `image-artifact` for visual/API/architecture summaries, `html-artifact` for browsable or interactive review surfaces; `review-task-docs` for high-risk scope
+2. Optional companions: `image-artifact` for visual/API/architecture summaries, `html-artifact` for browsable review surfaces, `variant-board` for UI variant boards the task doc will cite; `review-task-docs` for high-risk scope
 3. When implementation is authorized: `task-doc-delivery-loop` owns execution, review, and remediation without starting duplicate workflows
 
 ### Approved task-doc delivery
@@ -261,7 +263,14 @@ Documentation audits and reviews report findings without editing. Existing clean
 
 ### Generating image artifact companions
 
-1. `image-artifact` — convert existing Markdown into static visual companions. Repo Markdown defaults to `~/agent-artifacts/<repo-name>-<source-stem>/images/`; explicit `--workspace ./artifacts/<source-stem>` or `--out ./artifacts/<source-stem>/images/<file>` keeps outputs in the repo when desired. Use it for shareable summaries, UI variant boards, comparison boards, decision boards, concept posters, architecture diagrams, and API flow images.
+1. `image-artifact` — convert existing Markdown into static visual companions. Repo Markdown defaults to `~/agent-artifacts/<repo-name>-<source-stem>/images/`; explicit `--workspace ./artifacts/<source-stem>` or `--out ./artifacts/<source-stem>/images/<file>` keeps outputs in the repo when desired. Use it for shareable summaries, comparison boards, decision boards, concept posters, architecture diagrams, and API flow images. UI variant boards are built with `variant-board`; `image-artifact-helper.js board-snapshot` captures an issued board at a cited scenario as a PNG.
+
+### Building UI variant boards
+
+1. `variant-board` — build a board from a brief (product, surface, source of truth, read-against commit, sections with stable ids, scenarios), resolve the app's tokens into `markdown/<board>-tokens.md`, copy `starter.html`, and draw the mocks in the app's own design system with the board chrome kept white.
+2. `node skills/variant-board/scripts/verify-variant-board.js check <board.html>` — structure and token-map checks; then preview with `artifact-workbench` for the scenario, banner, Before-label and viewport checks.
+3. `node skills/variant-board/scripts/verify-variant-board.js issue <board.html>` — freeze `html/versions/<board>.v<N>.html` and record it in `boards.md`; task docs cite `Companion: \`~/agent-artifacts/<topic>/html/<board>.html\` (vN) — "Heading" (#section?dimension=id&…)` and `cite` resolves it. `bump`, `publish`, and `migrate` cover revisions, late publish URLs, and boards cited before issuance existed.
+4. `node skills/variant-board/scripts/export-board-bundle.js export|import` — the bundle path for hosts without this filesystem (ChatGPT); the candidate is imported and verified here before issue.
 
 ### Previewing artifact workspaces locally
 
@@ -273,7 +282,7 @@ node skills/artifact-workbench/scripts/serve-artifact-workbench.js <workspace-or
 
 ### Applying repo design context to artifacts
 
-1. `repo-design-context` — shared helper for `html-artifact --use-repo-design` and `image-artifact --use-repo-design`. It discovers local design tokens or architecture vocabulary, applies only high-confidence results, and falls back to neutral output otherwise.
+1. `repo-design-context` — shared helper for `html-artifact --use-repo-design` and `image-artifact --use-repo-design`. It discovers local design tokens or architecture vocabulary, applies only high-confidence results, and falls back to neutral output otherwise. `variant-board` sends it a `board-mock` request with a theme path when its token map has missing evidence; that request needs no opt-in flag and returns literal tokens and the body font at high confidence.
 
 ### Publishing artifact workspaces externally
 
@@ -288,7 +297,7 @@ Use `implementation-map` for a requested implementation map or deep review dossi
 
 1. `markdown-artifact` — turn rough ideas, notes, learning topics, UI/backend design options, feature proposals, tutorials, or operational task plans into polished Markdown under `~/agent-artifacts/<slug>/markdown/`.
 2. Optional follow-up: `html-artifact` — render the Markdown into the same workspace's `html/` folder with an explicit `--out` path.
-3. Optional follow-up: `image-artifact` — render the Markdown into the same workspace's `images/` folder when it clearly benefits from a visual summary, diagram, option board, or variant board.
+3. Optional follow-up: `image-artifact` — render the Markdown into the same workspace's `images/` folder when it clearly benefits from a visual summary, diagram, or option board; a UI variant board is a `variant-board` request instead.
 4. Optional follow-up: `artifact-workbench` — serve the workspace locally for read-only review, variant comparison, screenshots, or pre-publish inspection.
 
 ## How To Add a Skill
