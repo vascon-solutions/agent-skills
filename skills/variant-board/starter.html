@@ -161,6 +161,8 @@
   .mock .m-dialog h4 { margin: 0; font-size: 16px; font-weight: 500; }
   .mock .m-dialog p { margin: 0; color: var(--app-muted-foreground); }
   .mock .m-muted { color: var(--app-muted-foreground); }
+  /* A dark-mode app: add a [data-app-scheme="dark"] { --app-... } block from the token map's dark rows and a
+     `scheme` dimension; the runtime sets data-app-scheme on the mock only. */
   @media (max-width: 640px) {
     h1 { font-size: 24px; }
     .board { padding: 20px 16px 48px; }
@@ -277,8 +279,36 @@ window.VariantBoard = (function () {
         if (!dims[dep.controlling].options.some(function (o) { return o.id === k; })) throw fail("dependency '" + dep.controlling + " -> " + dep.dependent + "' in section '" + id + "' keys unknown controlling option '" + k + "'");
       });
     });
-    dependencyOrder(section, id);
+    var order = dependencyOrder(section, id);
+    rejectDeadEnds(section, id, order, dims);
     return section;
+  }
+
+  /* Walk every reachable selection in dependency order; a dimension left with no allowed option under some
+     reachable combination of its controllers (several controllers whose allowed lists never intersect) is a
+     configuration the board must not draw. Boards are small, so exhaustive enumeration is cheap. */
+  function rejectDeadEnds(section, sectionId, order, dims) {
+    var deps = section.dependencies || [];
+    var controlled = order.filter(function (dimId) { return deps.some(function (d) { return d.dependent === dimId; }); });
+    if (!controlled.length) return;
+    var budget = 50000;
+    function walk(index, selection) {
+      if (index === order.length) return;
+      var dimId = order[index];
+      var allowed = allowedOptions(section, selection, dimId);
+      if (allowed.length === 0) {
+        var context = deps.filter(function (d) { return d.dependent === dimId; }).map(function (d) { return d.controlling + "=" + selection[d.controlling]; }).join(", ");
+        throw fail("section '" + sectionId + "' leaves no valid '" + dimId + "' option when " + context);
+      }
+      var branches = controlled.indexOf(dimId) >= 0 || deps.some(function (d) { return d.controlling === dimId; }) ? allowed : [allowed[0]];
+      for (var i = 0; i < branches.length; i += 1) {
+        if ((budget -= 1) < 0) return;
+        selection[dimId] = branches[i];
+        walk(index + 1, selection);
+      }
+      delete selection[dimId];
+    }
+    walk(0, {});
   }
 
   function validateDefinition(def) {
@@ -363,26 +393,38 @@ window.VariantBoard = (function () {
     } catch (e) { return false; }
   }
 
+  function decode(part) {
+    try { return decodeURIComponent(part); } catch (e) { return null; }
+  }
+
   function parseHash(hash) {
     var h = String(hash || "");
     if (h.charAt(0) === "#") h = h.slice(1);
     if (!h) return { kind: "none" };
     var q = h.indexOf("?");
-    if (q < 0) return { kind: "anchor", section: decodeURIComponent(h) };
-    var section = decodeURIComponent(h.slice(0, q));
+    if (q < 0) {
+      var anchor = decode(h);
+      return anchor === null ? { kind: "malformed", reason: "malformed percent-encoding in '" + h + "'" } : { kind: "anchor", section: anchor };
+    }
+    var section = decode(h.slice(0, q));
+    if (section === null) return { kind: "malformed", reason: "malformed percent-encoding in section '" + h.slice(0, q) + "'" };
     var params = [];
+    var bad = null;
     h.slice(q + 1).split("&").forEach(function (pair) {
-      if (!pair) return;
+      if (!pair || bad) return;
       var eq = pair.indexOf("=");
-      var k = decodeURIComponent(eq < 0 ? pair : pair.slice(0, eq));
-      var v = eq < 0 ? "" : decodeURIComponent(pair.slice(eq + 1));
+      var k = decode(eq < 0 ? pair : pair.slice(0, eq));
+      var v = eq < 0 ? "" : decode(pair.slice(eq + 1));
+      if (k === null || v === null) { bad = pair; return; }
       params.push([k, v]);
     });
+    if (bad) return { kind: "malformed", section: section, reason: "malformed percent-encoding in '" + bad + "'" };
     return { kind: "scenario", section: section, params: params };
   }
 
   function resolveScenario(def, hash) {
     var parsed = parseHash(hash);
+    if (parsed.kind === "malformed") return { ok: false, kind: "scenario", section: parsed.section, reason: parsed.reason };
     if (parsed.kind !== "scenario") return { ok: false, kind: parsed.kind, reason: parsed.kind === "anchor" ? "bare section anchor" : "no scenario in hash" };
     var section = def.sections[parsed.section];
     if (!section) return { ok: false, kind: "scenario", reason: "unknown section '" + parsed.section + "'" };
@@ -408,16 +450,21 @@ window.VariantBoard = (function () {
   }
 
   /* ---------- pane helpers used by renderers ---------- */
+  /* A `scheme` dimension (light | dark) declared by the board becomes data-app-scheme on the mock, which the
+     [data-app-scheme="dark"] --app-* block styles. The board chrome never changes scheme. */
+  function mockOpen(scheme) {
+    return '<div class="mock"' + (scheme && scheme !== "light" ? ' data-app-scheme="' + esc(scheme) + '"' : "") + ">";
+  }
   function panes(opts) {
     var view = opts.view || "both";
     var readAgainst = opts.readAgainst || readAgainstFact();
     var out = [];
-    if (view !== "after") out.push('<div class="pane" data-board-part="before-pane"><p class="pane-label">Before <i>· reconstructed from source @ ' + esc(readAgainst) + (opts.beforeNote ? " · " + esc(opts.beforeNote) : "") + '</i></p><div class="frame"><div class="mock">' + opts.before + "</div></div></div>");
-    if (view !== "before") out.push('<div class="pane" data-board-part="after-pane"><p class="pane-label after">After' + (opts.afterNote ? " <i>· " + esc(opts.afterNote) + "</i>" : "") + '</p><div class="frame"><div class="mock">' + opts.after + "</div></div></div>");
+    if (view !== "after") out.push('<div class="pane" data-board-part="before-pane"><p class="pane-label">Before <i>· reconstructed from source @ ' + esc(readAgainst) + (opts.beforeNote ? " · " + esc(opts.beforeNote) : "") + '</i></p><div class="frame">' + mockOpen(opts.scheme) + opts.before + "</div></div></div>");
+    if (view !== "before") out.push('<div class="pane" data-board-part="after-pane"><p class="pane-label after">After' + (opts.afterNote ? " <i>· " + esc(opts.afterNote) + "</i>" : "") + '</p><div class="frame">' + mockOpen(opts.scheme) + opts.after + "</div></div></div>");
     return '<div class="compare' + (view === "both" ? " two" : "") + '">' + out.join("") + "</div>";
   }
-  function frame(html, note) {
-    return (note ? '<p class="pane-label">' + esc(note) + "</p>" : "") + '<div class="frame"><div class="mock">' + html + "</div></div>";
+  function frame(html, note, scheme) {
+    return (note ? '<p class="pane-label">' + esc(note) + "</p>" : "") + '<div class="frame">' + mockOpen(scheme) + html + "</div></div>";
   }
   function readAgainstFact() {
     if (typeof document === "undefined") return "";
@@ -476,13 +523,18 @@ window.VariantBoard = (function () {
 
   function select(sectionId, dimId, optionId) {
     var section = state.def.sections[sectionId];
-    state.selections[sectionId] = applyChange(section, state.selections[sectionId], dimId, optionId);
+    try {
+      state.selections[sectionId] = applyChange(section, state.selections[sectionId], dimId, optionId);
+    } catch (e) {
+      banner("Control change rejected: " + (e.boardReason || e.message));
+      return;
+    }
     paint(sectionId);
   }
 
   function applyHash(hash) {
     var parsed = parseHash(hash);
-    if (parsed.kind !== "scenario") { banner(""); return parsed; }
+    if (parsed.kind !== "scenario" && parsed.kind !== "malformed") { banner(""); return parsed; }
     var result = resolveScenario(state.def, hash);
     if (!result.ok) {
       banner("Cited scenario not found: " + result.reason + ". Showing the section defaults; the citation was not replayed.");
@@ -500,14 +552,14 @@ window.VariantBoard = (function () {
     state.renderers = renderers || {};
     try {
       state.def = readDefinition();
+      Object.keys(state.def.sections).forEach(function (id) {
+        state.selections[id] = defaultSelection(state.def.sections[id]);
+      });
     } catch (e) {
       banner("Board definition rejected: " + (e.boardReason || e.message));
       throw e;
     }
-    Object.keys(state.def.sections).forEach(function (id) {
-      state.selections[id] = defaultSelection(state.def.sections[id]);
-      paint(id);
-    });
+    Object.keys(state.def.sections).forEach(function (id) { paint(id); });
     document.addEventListener("click", function (e) {
       var b = e.target.closest ? e.target.closest("button[data-scope][data-dimension][data-option]") : null;
       if (b) {

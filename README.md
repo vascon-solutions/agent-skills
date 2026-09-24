@@ -269,7 +269,7 @@ Documentation audits and reviews report findings without editing. Existing clean
 
 1. `variant-board` — build a board from a brief (product, surface, source of truth, read-against commit, sections with stable ids, scenarios), resolve the app's tokens into `markdown/<board>-tokens.md`, copy `starter.html`, and draw the mocks in the app's own design system with the board chrome kept white.
 2. `node skills/variant-board/scripts/verify-variant-board.js check <board.html>` — structure and token-map checks; then preview with `artifact-workbench` for the scenario, banner, Before-label and viewport checks.
-3. `node skills/variant-board/scripts/verify-variant-board.js issue <board.html>` — freeze `html/versions/<board>.v<N>.html` and record it in `boards.md`; task docs cite `Companion: \`~/agent-artifacts/<topic>/html/<board>.html\` (vN) — "Heading" (#section?dimension=id&…)` and `cite` resolves it. `bump`, `publish`, and `migrate` cover revisions, late publish URLs, and boards cited before issuance existed.
+3. `node skills/variant-board/scripts/verify-variant-board.js issue <board.html>` — freeze `html/versions/<board>.v<N>.html` and record it in `boards.md`; task docs cite the familiar `Companion: <path> (vN) — "Heading"` line plus the scenario anchor `(#section?dimension=id&…)`, and `cite` resolves it. `bump`, `publish`, and `migrate` cover revisions, late publish URLs, and boards cited before issuance existed.
 4. `node skills/variant-board/scripts/export-board-bundle.js export|import` — the bundle path for hosts without this filesystem (ChatGPT); the candidate is imported and verified here before issue.
 
 ### Previewing artifact workspaces locally

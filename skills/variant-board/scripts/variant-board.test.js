@@ -199,7 +199,9 @@ test('substituted and waived rows must be visible; a waiver needs an owner decis
   fs.writeFileSync(memo, html);
   fs.writeFileSync(tokensPath, original.replace('| `#1a56db` | resolved |', '| | unresolved |'));
   result = run(verify, ['check', memo]);
+  assert.equal(result.status, 0, 'a draft with the token still declared is reviewable');
   assert.match(result.out, /draft: unresolved tokens block issuance/);
+  assert.doesNotMatch(result.out, /has no token map row/);
   const issue = run(verify, ['issue', memo, '--date', '2026-09-24']);
   assert.equal(issue.status, 1);
   assert.match(issue.out, /unresolved token rows make this board a draft/);
@@ -347,7 +349,7 @@ test('a new-board bundle round-trips through import; a used identity is rejected
   assert.equal(exported.status, 0, exported.out);
   const manifest = JSON.parse(fs.readFileSync(path.join(out, 'manifest.json'), 'utf8'));
   assert.equal(manifest.kind, 'new');
-  for (const file of ['README.md', 'instructions/SKILL.md', 'instructions/anatomy.md', 'brief.md', 'tokens.md', 'starter.html']) assert.equal(fs.existsSync(path.join(out, file)), true, file);
+  for (const file of ['README.md', 'instructions/SKILL.md', 'instructions/references/anatomy.md', 'instructions/references/lifecycle.md', 'instructions/templates/brief.md', 'instructions/starter.html', 'brief.md', 'tokens.md', 'starter.html']) assert.equal(fs.existsSync(path.join(out, file)), true, file);
   assert.equal(fs.existsSync(path.join(out, 'current')), false);
 
   // The host returns a candidate plus the untouched manifest.
@@ -414,7 +416,15 @@ test('a revision bundle preserves the current board and decisions; stale bases a
   const conflict = run(bundle, ['import', candidate, '--into', ws], { env: { HOME: home } });
   assert.equal(conflict.status, 1);
   assert.match(conflict.out, /differs from the bundle's digest/);
+  assert.equal(fs.readFileSync(route).equals(canonicalBefore), true, 'working file untouched on a frozen conflict');
   fs.writeFileSync(frozen1, frozenBytes);
+
+  // A candidate that drops accepted history is rejected.
+  fs.writeFileSync(path.join(candidate, 'route-state.html'), revised.replace(/\s*<li data-version="2" data-type="decision"[^\n]*<\/li>/, ''));
+  const dropped = run(bundle, ['import', candidate, '--into', ws], { env: { HOME: home } });
+  assert.equal(dropped.status, 1);
+  assert.match(dropped.out, /dropped the base revision entry v2 decision/);
+  assert.equal(fs.readFileSync(route).equals(canonicalBefore), true);
 
   // A candidate claiming issuance is rejected.
   fs.writeFileSync(path.join(candidate, 'route-state.html'), revised.replace('data-board-issued="false"', 'data-board-issued="true"'));
@@ -423,6 +433,7 @@ test('a revision bundle preserves the current board and decisions; stale bases a
   assert.match(issued.out, /cannot issue a version/);
   fs.writeFileSync(path.join(candidate, 'route-state.html'), revised);
 
+  fs.writeFileSync(path.join(candidate, 'route-state.html'), revised);
   const ok = run(bundle, ['import', candidate, '--into', ws], { env: { HOME: home } });
   assert.equal(ok.status, 0, ok.out);
   const after = fs.readFileSync(route, 'utf8');
@@ -431,4 +442,119 @@ test('a revision bundle preserves the current board and decisions; stale bases a
   assert.match(after, /data-type="issued"[^>]*>.*route-state\.v1\.html/, 'issued history survives');
   assert.equal(fs.readFileSync(frozen1).equals(frozenBytes), true);
   assert.equal(run(verify, ['check', route]).status, 0);
+});
+
+/* ---------- review follow-ups: dark mode, multi-controller dead ends, static sections, parsing edges ---------- */
+
+test('dark token rows resolve in the theme dark block, need a dark --app-* block and a scheme dimension', () => {
+  const { home, ws, memo } = workspace();
+  const tokensPath = path.join(ws, 'markdown', 'memo-style-tokens.md');
+  const css = `${fixtures.THEME_CSS}\n.dark {\n  --color-background: oklch(0.15 0 0);\n  --color-primary: #7fb8e0;\n}\n`;
+  const { sha } = themeRepo(home, tokensPath, css);
+  const light = run(verify, ['check', memo], { env: { HOME: home } });
+  assert.equal(light.status, 0, `light rows must not read the .dark override: ${light.out}`);
+
+  fs.appendFileSync(tokensPath, `| \`--app-background\` | \`--color-background\` | \`${fixtures.THEME_FILE}\` | dark | \`${sha}\` | \`oklch(0.15 0 0)\` | resolved | |\n| \`--app-primary\` | \`--color-primary\` | \`${fixtures.THEME_FILE}\` | dark | \`${sha}\` | \`#7fb8e0\` | resolved | |\n`);
+  const missing = run(verify, ['check', memo], { env: { HOME: home } });
+  assert.equal(missing.status, 1);
+  assert.match(missing.out, /dark token map row --app-background has no matching/);
+  assert.match(missing.out, /need a mock-only Scheme control/);
+
+  const briefPath = path.join(ws, 'markdown', 'memo-style-brief.md');
+  fs.writeFileSync(briefPath, fs.readFileSync(briefPath, 'utf8').replace('#owner?state=region&view=after', '#owner?state=region&view=after&scheme=light'));
+  const html = fs.readFileSync(memo, 'utf8');
+  const withDark = html
+    .replace('  /* Host dark-mode rules', '  .mock[data-app-scheme="dark"] {\n    --app-background: oklch(0.15 0 0);\n    --app-primary: #7fb8e0;\n  }\n  /* Host dark-mode rules')
+    .replace(/<script type="application\/json" id="board-scenarios">([\s\S]*?)<\/script>/, (m, json) => {
+      const def = JSON.parse(json);
+      def.sections.owner.dimensions.push({ id: 'scheme', label: 'Scheme', options: [{ id: 'light', label: 'Light' }, { id: 'dark', label: 'Dark' }] });
+      return `<script type="application/json" id="board-scenarios">\n${JSON.stringify(def, null, 2)}\n</script>`;
+    });
+  fs.writeFileSync(memo, withDark);
+  const ok = run(verify, ['check', memo], { env: { HOME: home } });
+  assert.equal(ok.status, 0, ok.out);
+  assert.match(ok.out, /21 rows: 20 resolved, 1 substituted/);
+  fs.writeFileSync(memo, withDark.replace('--app-primary: #7fb8e0;', '--app-primary: #000000;'));
+  const wrong = run(verify, ['check', memo], { env: { HOME: home } });
+  assert.match(wrong.out, /--app-primary is #000000 in the board but #7fb8e0 in the token map/);
+  const html2 = runtime.frame('<b>x</b>', 'note', 'dark');
+  assert.match(html2, /<div class="mock" data-app-scheme="dark">/);
+  assert.doesNotMatch(runtime.frame('<b>x</b>', 'note', 'light'), /data-app-scheme/);
+});
+
+test('two controllers whose allowed lists never meet are rejected at definition time', () => {
+  const deadEnd = { sections: { s: { dimensions: [
+    { id: 'a', options: [{ id: 'a1' }, { id: 'a2' }] }, { id: 'b', options: [{ id: 'b1' }, { id: 'b2' }] }, { id: 'c', options: [{ id: 'c1' }, { id: 'c2' }] },
+  ], dependencies: [
+    { controlling: 'a', dependent: 'c', allowed: { a1: ['c1'], a2: ['c2'] } },
+    { controlling: 'b', dependent: 'c', allowed: { b1: ['c1'], b2: ['c2'] } },
+  ] } } };
+  assert.throws(() => runtime.validateDefinition(deadEnd), /leaves no valid 'c' option when a=a1, b=b2/);
+  const meets = JSON.parse(JSON.stringify(deadEnd));
+  meets.sections.s.dependencies[1].allowed = { b1: ['c1', 'c2'], b2: ['c1', 'c2'] };
+  assert.doesNotThrow(() => runtime.validateDefinition(meets));
+  const sel = runtime.applyChange(meets.sections.s, runtime.defaultSelection(meets.sections.s), 'a', 'a2');
+  assert.deepEqual(sel, { a: 'a2', b: 'b1', c: 'c2' });
+});
+
+test('malformed percent-encoding is reported, not thrown', () => {
+  const result = runtime.resolveScenario(routeDef, '#commands?variant=%E0');
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /malformed percent-encoding/);
+  assert.equal(runtime.parseHash('#%E0').kind, 'malformed');
+  const { home, route } = workspace();
+  assert.equal(run(verify, ['issue', route, '--date', '2026-09-24']).status, 0);
+  const cite = run(verify, ['cite', `\`${route}\` (v1) — "Where the approval commands go" (#commands?variant=%E0)`], { env: { HOME: home } });
+  assert.equal(cite.status, 1);
+  assert.match(cite.out, /FAIL scenario does not resolve: malformed percent-encoding/);
+});
+
+test('static sections, mock <section> markup and other <ol> lists do not confuse structure checks or issuance', () => {
+  const { home, ws, memo } = workspace();
+  const briefPath = path.join(ws, 'markdown', 'memo-style-brief.md');
+  fs.writeFileSync(briefPath, fs.readFileSync(briefPath, 'utf8')
+    .replace('- Purpose: proposed-change', '- Purpose: proposed-change, defect-report')
+    .replace('| `owner` | Job detail reads the owning unit | proposed-change |', '| `owner` | Job detail reads the owning unit | proposed-change |\n| `defects` | On the page today | defect-report |'));
+  const staticSection = `  <section class="board-section" id="defects" data-purpose="defect-report">
+    <header><h2>On the page today</h2></header>
+    <ol data-board-part="defects"><li>D1 · the owner label wraps at 390 px</li></ol>
+    <div class="pane" data-board-part="before-pane"><p class="pane-label">Before <i>· reconstructed from source @ main @ a1b2c3d</i></p><div class="frame"><div class="mock"><section class="m-card">Static mock with its own section tag</section></div></div></div>
+  </section>
+
+`;
+  const html = fs.readFileSync(memo, 'utf8')
+    .replace('  <section class="board-section" id="revisions">', `${staticSection}  <section class="board-section" id="revisions">`)
+    .replace("var OWNER = {", "var PHANTOM = '<section class=\"m-card\">inside a renderer string</section>';\n  var OWNER = {");
+  fs.writeFileSync(memo, html);
+  const check = run(verify, ['check', '--skip-theme-source', memo]);
+  assert.equal(check.status, 0, check.out);
+  const parsed = lib.parseBoard(html);
+  assert.deepEqual(parsed.sections.map((s) => s.id), ['notes', 'owner', 'defects', 'revisions']);
+  assert.equal(run(verify, ['issue', memo, '--date', '2026-09-24']).status, 0);
+  const issued = fs.readFileSync(memo, 'utf8');
+  assert.doesNotMatch(/<ol data-board-part="defects">[\s\S]*?<\/ol>/.exec(issued)[0], /data-type="issued"/, 'the issued entry lands in the revision list, not the defects list');
+  assert.match(/<ol class="revision-list"[\s\S]*?<\/ol>/.exec(issued)[0], /data-type="issued"/);
+  const staticCite = run(verify, ['cite', `\`${memo}\` (v1) — "On the page today"`], { env: { HOME: home } });
+  assert.equal(staticCite.status, 0, staticCite.out);
+  assert.match(staticCite.out, /#defects/);
+  const scenario = run(verify, ['scenario', memo, '#owner?state=depot&view=after']);
+  assert.equal(scenario.status, 0, scenario.out);
+  assert.match(scenario.out, /Scenario ok: #owner/);
+});
+
+test('migrate --reserve, index notes with parentheses, and citations survive an index round trip', () => {
+  const { ws, memo } = workspace();
+  const reserve = run(verify, ['migrate', memo, '--reserve', '20']);
+  assert.equal(reserve.status, 0, reserve.out);
+  assert.match(reserve.out, /reserved through v20; next issue must be v21/);
+  const bump = run(verify, ['bump', memo, '--date', '2026-09-24']);
+  assert.match(bump.out, /to v21/);
+  const paths = lib.boardPaths(memo);
+  const index = lib.readIndex(paths);
+  index.boards['memo-style'].notes = 'Accepted variant A (B dropped)';
+  lib.writeIndex(paths, index);
+  const again = lib.readIndex(paths);
+  assert.equal(again.boards['memo-style'].notes, 'Accepted variant A (B dropped)');
+  assert.equal(again.boards['memo-style'].reserved, 20);
+  assert.equal(fs.existsSync(path.join(ws, 'html', 'versions')), false);
 });

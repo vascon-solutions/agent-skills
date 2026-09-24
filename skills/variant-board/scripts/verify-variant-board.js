@@ -22,6 +22,8 @@ Defaults: brief = <workspace>/markdown/<board>-brief.md, tokens = <workspace>/ma
   process.exit(exitCode);
 }
 
+const BOOLEAN_FLAGS = new Set(['skip-theme-source']);
+
 function parseArgs(argv) {
   if (!argv.length || argv[0] === '--help' || argv[0] === '-h') usage(0);
   const command = argv[0];
@@ -34,7 +36,7 @@ function parseArgs(argv) {
     if (arg.startsWith('--')) {
       const key = arg.slice(2);
       const next = argv[i + 1];
-      const value = !next || next.startsWith('--') ? true : (i += 1, next);
+      const value = BOOLEAN_FLAGS.has(key) || !next || next.startsWith('--') ? true : (i += 1, next);
       if (key === 'citation' || key === 'location') {
         (lists[key] = lists[key] || []).push(value);
       } else flags[key] = value;
@@ -117,7 +119,7 @@ function commandScenario(args) {
   if (args.positionals.length < 2) usage(1);
   const inputs = loadInputs(args.positionals[0], args.flags);
   if (!inputs.board.definition) die('board has no scenario definition');
-  const runtime = lib.starterRuntime();
+  const runtime = lib.loadRuntime(inputs.html);
   const result = runtime.resolveScenario(inputs.board.definition, args.positionals[1]);
   if (!result.ok) {
     process.stdout.write(`Scenario not found: ${result.reason}\n`);

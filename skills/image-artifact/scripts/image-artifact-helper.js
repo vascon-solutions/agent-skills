@@ -185,7 +185,6 @@ function variantNames(markdown, flags, kind) {
     .map((match, index) => `${match[1]} ${match[2] || String.fromCharCode(65 + index)}${match[3] ? ` - ${match[3].trim()}` : ''}`.trim());
   if (headings.length) return headings.slice(0, requested || headings.length);
   if (requested) return Array.from({ length: requested }, (_, index) => `Variant ${String.fromCharCode(65 + index)}`);
-  if (kind === 'comparison-board' || kind === 'decision-board') return ['Option A', 'Option B', 'Option C'];
   return [];
 }
 
@@ -469,7 +468,8 @@ function boardSnapshot(args) {
   if (!board.issued) die(`${path.basename(frozenPath)} is not marked issued (data-board-issued="true"); snapshots capture issued evidence only`);
   if (board.version !== version) die(`${path.basename(frozenPath)} carries data-board-version="${board.version}", not ${version}`);
   if (board.id !== nameMatch[1]) die(`${path.basename(frozenPath)} carries data-board-id="${board.id}", which does not match the file name`);
-  const runtime = boardLib.starterRuntime();
+  let runtime;
+  try { runtime = boardLib.loadRuntime(html); } catch (error) { die(`frozen file has no usable runtime: ${error.message}`); }
   const parsed = runtime.parseHash(args.flags.scenario);
   let selection = {};
   let section = parsed.section;

@@ -2,6 +2,7 @@
 'use strict';
 
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const lib = require('./lib/board');
 
@@ -21,6 +22,8 @@ then replaces the working file and updates boards.md. Frozen files are never wri
   process.exit(exitCode);
 }
 
+const BOOLEAN_FLAGS = new Set(['new', 'revision', 'skip-theme-source']);
+
 function parseArgs(argv) {
   if (!argv.length || argv[0] === '--help' || argv[0] === '-h') usage(0);
   const command = argv[0];
@@ -32,7 +35,7 @@ function parseArgs(argv) {
     if (arg.startsWith('--')) {
       const key = arg.slice(2);
       const next = argv[i + 1];
-      flags[key] = !next || next.startsWith('--') ? true : (i += 1, next);
+      flags[key] = BOOLEAN_FLAGS.has(key) || !next || next.startsWith('--') ? true : (i += 1, next);
     } else positionals.push(arg);
   }
   return { command, positionals, flags };
@@ -43,7 +46,7 @@ function die(message) {
   process.exit(1);
 }
 
-function resolveWorkspace(value, home = process.env.HOME) {
+function resolveWorkspace(value, home = os.homedir()) {
   const raw = lib.expandHome(value, home);
   if (raw.includes('/') || raw.startsWith('.')) return path.resolve(raw);
   return path.join(home, 'agent-artifacts', raw);
@@ -65,9 +68,10 @@ function bundleReadme(manifest) {
 This folder is a complete authoring pack for the \`${manifest.boardId}\` variant board. It was exported from
 \`${manifest.topic}\` on ${manifest.exportedAt}.
 
-Read \`instructions/SKILL.md\` and \`instructions/anatomy.md\` first, then \`brief.md\` (section ids and scenarios
-are already assigned), \`tokens.md\` (the app token values to put in the \`--app-*\` block) and \`sources/\`
-(requirement and source excerpts with file path and commit for the Before panes).
+Read \`instructions/SKILL.md\` and \`instructions/references/anatomy.md\` first, then \`brief.md\` (section ids and
+scenarios are already assigned), \`tokens.md\` (the app token values to put in the \`--app-*\` block) and \`sources/\`
+(requirement and source excerpts with file path and commit for the Before panes). The instructions mention
+verification scripts; they are not in this bundle and run on the owner's side after import.
 
 ${manifest.kind === 'revision'
     ? `This is a **revision** bundle. Start from \`current/${manifest.boardId}.html\`, not from the starter: it is the
@@ -120,8 +124,11 @@ function commandExport(args) {
     briefDigest: lib.sha256(fs.readFileSync(briefPath)),
     tokensDigest: lib.sha256(fs.readFileSync(tokensPath)),
   };
+  // The instructions keep their relative layout so SKILL.md's links to references/ and templates/ resolve in the bundle.
   fs.copyFileSync(path.join(lib.SKILL_ROOT, 'SKILL.md'), path.join(out, 'instructions', 'SKILL.md'));
-  fs.copyFileSync(path.join(lib.SKILL_ROOT, 'references', 'anatomy.md'), path.join(out, 'instructions', 'anatomy.md'));
+  copyTree(path.join(lib.SKILL_ROOT, 'references'), path.join(out, 'instructions', 'references'));
+  copyTree(path.join(lib.SKILL_ROOT, 'templates'), path.join(out, 'instructions', 'templates'));
+  fs.writeFileSync(path.join(out, 'instructions', 'starter.html'), starterHtml);
   fs.copyFileSync(briefPath, path.join(out, 'brief.md'));
   fs.copyFileSync(tokensPath, path.join(out, 'tokens.md'));
   fs.writeFileSync(path.join(out, 'starter.html'), starterHtml);
@@ -136,6 +143,7 @@ function commandExport(args) {
     manifest.baseVersion = board.version;
     manifest.baseIssued = board.issued;
     manifest.baseDigest = lib.sha256(html);
+    manifest.baseRevisions = board.revisions.map((e) => ({ version: e.version, type: e.type, date: e.date, author: e.author }));
     manifest.frozen = {};
     fs.mkdirSync(path.join(out, 'current', 'versions'), { recursive: true });
     fs.writeFileSync(path.join(out, 'current', `${paths.stem}.html`), html);
@@ -196,6 +204,13 @@ function commandImport(args) {
   if (manifest.kind === 'revision' && board.version !== null) {
     const floor = manifest.baseIssued ? manifest.baseVersion + 1 : manifest.baseVersion;
     if (board.version < floor) rejections.push(`candidate is v${board.version}; a revision of ${manifest.baseIssued ? 'issued' : 'working'} v${manifest.baseVersion} must be v${floor} or higher`);
+  }
+  if (manifest.kind === 'revision') {
+    // History travels with the board: every base revision entry (issued, decisions, proposals) must survive.
+    (manifest.baseRevisions || []).forEach((base) => {
+      const kept = board.revisions.some((e) => e.version === base.version && e.type === base.type && e.date === base.date);
+      if (!kept) rejections.push(`candidate dropped the base revision entry v${base.version} ${base.type} (${base.date}); a revision keeps the board's history`);
+    });
   }
   const bundleDir = args.flags.bundle ? path.resolve(lib.expandHome(args.flags.bundle)) : dir;
   const firstExisting = (candidates) => candidates.find((p) => fs.existsSync(p)) || null;

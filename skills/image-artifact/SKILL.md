@@ -80,7 +80,6 @@ Ask one focused question only if the kind materially changes the output.
 
 - Use source-defined variants, options, states, screens, or approaches first.
 - If `--variants <n>` is provided, generate at most `n` variants from the source-defined set.
-- If a comparison or decision board is requested with no count and no clear source-defined count, default to 3 options.
 - Do not generate more than 6 variants unless the user explicitly requests more.
 - Do not invent arbitrary variants. If the requested count exceeds what the Markdown supports, mark the gap as an assumption in the prompt plan or ask one focused question.
 

@@ -69,15 +69,20 @@ function starterRuntime() {
 /* ---------- board html ---------- */
 
 function parseCssVars(html, selector) {
-  const escaped = escapeRegExp(selector);
-  const blocks = [...html.matchAll(new RegExp(`(?:^|[\\s}])${escaped}\\s*\\{([^}]*)\\}`, 'g'))];
+  const pattern = selector === ':root'
+    ? /(?:^|[\s}]):root\s*\{([^}]*)\}/g
+    : new RegExp(`[^{}]*${escapeRegExp(selector)}\\s*\\{([^}]*)\\}`, 'g');
   const vars = {};
-  blocks.forEach((block) => {
+  [...html.matchAll(pattern)].forEach((block) => {
     [...block[1].matchAll(/(--[a-z0-9-]+)\s*:\s*([^;]+);/gi)].forEach((m) => {
       vars[m[1]] = m[2].replace(/\s+/g, ' ').trim();
     });
   });
   return vars;
+}
+
+function stripScripts(html) {
+  return html.replace(/<script\b[\s\S]*?<\/script>/gi, '');
 }
 
 function pickVars(vars, prefix) {
@@ -106,18 +111,21 @@ function parseBoard(html) {
     boardVars: pickVars(parseCssVars(html, ':root'), '--board-'),
     appVars: pickVars(parseCssVars(html, ':root'), '--app-'),
     appDarkVars: pickVars(parseCssVars(html, '[data-app-scheme="dark"]'), '--app-'),
+    hasSchemeDimension: false,
     colorScheme: /color-scheme\s*:\s*light/i.test(html),
     partsBySection: {},
   };
   [...html.matchAll(/<dd data-fact="([a-z-]+)"[^>]*>([\s\S]*?)<\/dd>/gi)].forEach((m) => { board.facts[m[1]] = stripTags(m[2]); });
   const stampTag = /<span class="stamp"[^>]*>/i.exec(html);
   board.stampIssued = stampTag ? attr(stampTag[0], 'data-issued') : null;
-  const sectionRe = /<section\b([^>]*)>([\s\S]*?)<\/section>/gi;
-  let m;
-  while ((m = sectionRe.exec(html))) {
-    const tag = `<section${m[1]}>`;
+  // Only top-level board sections count; mock markup inside renderers or static panes may use <section> too.
+  const markup = stripScripts(html);
+  const starts = [...markup.matchAll(/<section\b[^>]*\bclass="[^"]*\bboard-section\b[^"]*"[^>]*>/gi)];
+  starts.forEach((start, index) => {
+    const tag = start[0];
     const id = attr(tag, 'id');
-    const body = m[2];
+    const endAt = index + 1 < starts.length ? starts[index + 1].index : (markup.indexOf('<footer class="colophon"', start.index) >= 0 ? markup.indexOf('<footer class="colophon"', start.index) : markup.length);
+    const body = markup.slice(start.index + tag.length, endAt).replace(/<\/section>\s*$/i, '');
     const h2 = /<h2\b[^>]*>([\s\S]*?)<\/h2>/i.exec(body);
     const purposes = (attr(tag, 'data-purpose') || '').split(/\s+/).filter(Boolean);
     const parts = [...body.matchAll(/data-board-part="([a-z-]+)"/g)].map((p) => p[1]);
@@ -134,7 +142,7 @@ function parseBoard(html) {
     };
     board.sections.push(section);
     if (id) board.partsBySection[id] = parts;
-  }
+  });
   const revisionsBlock = /<ol class="revision-list"[^>]*>([\s\S]*?)<\/ol>/i.exec(html);
   if (revisionsBlock) {
     [...revisionsBlock[1].matchAll(/<li\b([^>]*)>([\s\S]*?)<\/li>/gi)].forEach((li) => {
@@ -161,6 +169,8 @@ function parseBoard(html) {
   if (definition) {
     try {
       board.definition = JSON.parse(definition[1]);
+      const sections = (board.definition && board.definition.sections) || {};
+      board.hasSchemeDimension = Object.keys(sections).some((id) => Array.isArray(sections[id].dimensions) && sections[id].dimensions.some((d) => d && d.id === 'scheme'));
     } catch (error) {
       board.definitionError = `scenario definition is not valid JSON: ${error.message}`;
     }
@@ -190,7 +200,7 @@ function parseKeyValues(markdown) {
     if (!m) return;
     const raw = m[2].trim();
     const quoted = /^`([^`]*)`/.exec(raw);
-    values[m[1].trim().toLowerCase()] = quoted ? quoted[1].trim() : raw.replace(/\s+\(.*\)$/, '').trim();
+    values[m[1].trim().toLowerCase()] = quoted ? quoted[1].trim() : raw;
   });
   return values;
 }
@@ -238,7 +248,7 @@ function parseBrief(markdown) {
     surface: values.surface || null,
     sourceOfTruth: values['source of truth'] || null,
     readAgainst: values['read against'] || null,
-    purposes: (values['purpose'] || values['purposes'] || '').split(/[,\s]+/).map((p) => unbacktick(p)).filter(Boolean),
+    purposes: (values['purpose'] || values['purposes'] || '').replace(/\s*\(.*\)\s*$/, '').split(/[,\s]+/).map((p) => unbacktick(p)).filter(Boolean),
     themeSource: values['theme source'] || null,
     sections: sectionsTable ? sectionsTable.rows.map((row) => ({ id: unbacktick(row[0]).replace(/^#/, ''), heading: unbacktick(row[1] || ''), purposes: (row[2] || '').split(/[,\s]+/).map(unbacktick).filter(Boolean) })) : [],
     scenarios: scenariosTable ? scenariosTable.rows.map((row) => ({ section: unbacktick(row[0]).replace(/^#/, ''), hash: unbacktick(row[1] || ''), expected: row[2] || '' })) : [],
@@ -277,10 +287,39 @@ function gitShow(repo, revision, file) {
   return result.stdout;
 }
 
+const DARK_SELECTOR = /\.dark\b|\[data-(?:theme|mode|scheme|color-scheme|app-scheme)=["']?dark|prefers-color-scheme\s*:\s*dark|\bdark\b/i;
+
+/*
+ * Custom-property declarations grouped by mode. A block is dark when its own selector or an enclosing at-rule
+ * names a dark scheme; everything else is light. Within a mode the last declaration wins, which matches how an
+ * app-level override after the theme block applies in the browser.
+ */
 function cssDeclarations(css) {
-  const vars = {};
-  [...css.matchAll(/(--[a-z0-9-]+)\s*:\s*([^;]+);/gi)].forEach((m) => { vars[m[1]] = m[2].replace(/\s+/g, ' ').trim(); });
-  return vars;
+  const modes = { light: {}, dark: {} };
+  const stack = [];
+  let i = 0;
+  let cursor = 0;
+  while (i < css.length) {
+    const ch = css[i];
+    if (ch === '{') {
+      const selector = css.slice(cursor, i).replace(/\/\*[\s\S]*?\*\//g, '').trim();
+      const inherited = stack.some((s) => s.dark);
+      stack.push({ selector, dark: inherited || DARK_SELECTOR.test(selector), start: i + 1 });
+      cursor = i + 1;
+    } else if (ch === '}') {
+      const frame = stack.pop();
+      if (frame) {
+        const body = css.slice(frame.start, i);
+        const target = frame.dark ? modes.dark : modes.light;
+        [...body.matchAll(/(?:^|[;\s{])(--[a-z0-9-]+)\s*:\s*([^;{}]+);/gi)].forEach((m) => { target[m[1]] = m[2].replace(/\s+/g, ' ').trim(); });
+      }
+      cursor = i + 1;
+    } else if (ch === ';') {
+      cursor = i + 1;
+    }
+    i += 1;
+  }
+  return modes;
 }
 
 function resolveVar(vars, name, seen = new Set()) {
@@ -303,9 +342,11 @@ function propertyValue(css, selector, property) {
   return null;
 }
 
-function sourceValue(css, sourceToken) {
+function sourceValue(css, sourceToken, mode = 'light') {
   if (sourceToken.startsWith('--')) {
-    const vars = cssDeclarations(css);
+    const modes = cssDeclarations(css);
+    // Dark rows resolve in the dark block first, then fall back to light declarations the dark block inherits.
+    const vars = mode === 'dark' ? { ...modes.light, ...modes.dark } : modes.light;
     return resolveVar(vars, sourceToken);
   }
   const m = /^(.+?)\s*\{\s*([a-z-]+)\s*\}$/.exec(sourceToken);
@@ -322,13 +363,17 @@ function normalizeCssValue(value) {
 function relativeAppVarsMatch(boardVars, rows, mode) {
   const failures = [];
   const expected = {};
-  rows.filter((r) => (r.mode || 'light') === mode && r.status !== 'unresolved').forEach((r) => { expected[r.boardToken] = r.value; });
+  const known = new Set();
+  rows.filter((r) => (r.mode || 'light') === mode).forEach((r) => {
+    known.add(r.boardToken);
+    if (r.status !== 'unresolved') expected[r.boardToken] = r.value;
+  });
   Object.keys(expected).forEach((name) => {
     if (!(name in boardVars)) failures.push(`${mode} token map row ${name} has no matching --app-* declaration in the board`);
     else if (normalizeCssValue(boardVars[name]) !== normalizeCssValue(expected[name])) failures.push(`${name} is ${boardVars[name]} in the board but ${expected[name]} in the token map`);
   });
   Object.keys(boardVars).forEach((name) => {
-    if (!(name in expected)) failures.push(`${name} is declared in the board (${mode}) but has no token map row`);
+    if (!known.has(name)) failures.push(`${name} is declared in the board (${mode}) but has no token map row`);
   });
   return failures;
 }
@@ -453,7 +498,11 @@ function checkTokens({ board, tokens, skipSource = false, home }) {
     if (row.status !== 'unresolved' && !row.value) failures.push(`token row ${row.boardToken} has no value`);
   });
   failures.push(...relativeAppVarsMatch(board.appVars, tokens.rows, 'light'));
-  if (tokens.rows.some((r) => r.mode === 'dark')) failures.push(...relativeAppVarsMatch(board.appDarkVars, tokens.rows, 'dark'));
+  const hasDarkRows = tokens.rows.some((r) => r.mode === 'dark');
+  if (hasDarkRows) {
+    failures.push(...relativeAppVarsMatch(board.appDarkVars, tokens.rows, 'dark'));
+    if (!board.hasSchemeDimension) failures.push('dark token rows need a mock-only Scheme control: declare a "scheme" dimension (light, dark) in a section and pass its selection to api.panes/api.frame');
+  } else if (Object.keys(board.appDarkVars).length) failures.push('the board declares a [data-app-scheme="dark"] block but the token map has no dark rows');
   const factTokens = board.facts.tokens || '';
   substituted.forEach((name) => { if (!factTokens.includes(name)) failures.push(`substituted token ${name} is not named in the masthead "Design tokens" fact`); });
   waived.forEach((name) => {
@@ -480,9 +529,9 @@ function checkTokens({ board, tokens, skipSource = false, home }) {
         try {
           if (!(key in cache)) cache[key] = gitShow(repo, revision, file);
         } catch (error) { failures.push(error.message); return; }
-        const found = sourceValue(cache[key], row.sourceToken);
-        if (found === null) failures.push(`resolved row ${row.boardToken}: source token ${row.sourceToken} not found in ${file} at ${revision}`);
-        else if (normalizeCssValue(found) !== normalizeCssValue(row.value)) failures.push(`resolved row ${row.boardToken}: ${row.sourceToken} is "${found}" at ${revision}, not "${row.value}"`);
+        const found = sourceValue(cache[key], row.sourceToken, row.mode || 'light');
+        if (found === null) failures.push(`resolved row ${row.boardToken}: source token ${row.sourceToken} not found in ${file} at ${revision} (${row.mode || 'light'})`);
+        else if (normalizeCssValue(found) !== normalizeCssValue(row.value)) failures.push(`resolved row ${row.boardToken}: ${row.sourceToken} is "${found}" at ${revision} (${row.mode || 'light'}), not "${row.value}"`);
       });
     }
   }
@@ -645,9 +694,12 @@ function resolveCitation(text, { home } = {}) {
   const board = parseBoard(html);
   if (board.version !== citation.version) report.failures.push(`frozen file carries data-board-version="${board.version}", not ${citation.version}`);
   if (!board.issued) report.failures.push('frozen file is not marked issued');
+  // The frozen file is the evidence, so its own runtime interprets the citation, not whatever the starter is today.
+  let runtime;
+  try { runtime = loadRuntime(html); } catch (error) { runtime = starterRuntime(); report.failures.push(`frozen file has no usable runtime (${error.message}); resolved with the starter runtime instead`); }
   let sectionId = null;
   if (citation.anchor) {
-    const parsed = starterRuntime().parseHash(citation.anchor);
+    const parsed = runtime.parseHash(citation.anchor);
     sectionId = parsed.section;
   } else if (citation.heading) {
     const section = board.sections.find((s) => s.heading && s.heading.toLowerCase().includes(citation.heading.toLowerCase()));
@@ -657,11 +709,11 @@ function resolveCitation(text, { home } = {}) {
   if (sectionId && !board.sections.some((s) => s.id === sectionId)) report.failures.push(`section #${sectionId} not found in the frozen file`);
   report.section = sectionId;
   if (citation.anchor) {
-    const parsed = starterRuntime().parseHash(citation.anchor);
-    if (parsed.kind === 'scenario') {
+    const parsed = runtime.parseHash(citation.anchor);
+    if (parsed.kind === 'scenario' || parsed.kind === 'malformed') {
       if (!board.definition) report.failures.push('citation carries a scenario but the frozen board has no scenario definition');
       else {
-        const result = starterRuntime().resolveScenario(board.definition, citation.anchor);
+        const result = runtime.resolveScenario(board.definition, citation.anchor);
         if (!result.ok) report.failures.push(`scenario does not resolve: ${result.reason}`);
         else report.selection = result.selection;
       }
@@ -687,9 +739,18 @@ function stampIssued(html, board, date) {
   const frozenHref = `versions/${board.id}.v${board.version}.html`;
   if (!board.revisions.some((e) => e.version === board.version && e.type === 'issued')) {
     const entry = `      <li data-version="${board.version}" data-type="issued" data-date="${date}" data-author="agent"><b>v${board.version}</b> · ${date} · <span class="who">agent</span> · issued — frozen as <a href="${frozenHref}">${frozenHref}</a> after verification.</li>\n`;
-    out = out.replace(/(\n?)(\s*)<\/ol>/, (m, nl, ws) => `\n${entry}${ws}</ol>`);
+    out = appendRevisionEntry(out, entry);
   }
   return out;
+}
+
+/* Insert before the revision list's own closing tag; other <ol> elements on the page are not touched. */
+function appendRevisionEntry(html, entry) {
+  const match = /(<ol class="revision-list"[^>]*>[\s\S]*?)\n?([ \t]*)<\/ol>/.exec(html);
+  if (!match) throw new BoardError('board has no <ol class="revision-list"> to record the revision in');
+  const before = html.slice(0, match.index);
+  const after = html.slice(match.index + match[0].length);
+  return `${before}${match[1]}\n${entry}${match[2]}</ol>${after}`;
 }
 
 function bumpWorking(html, board, nextVersion, date, note) {
@@ -698,8 +759,7 @@ function bumpWorking(html, board, nextVersion, date, note) {
   out = out.replace(/(<html\b[^>]*\sdata-board-issued=")(true|false)(")/i, '$1false$3');
   out = out.replace(/(<span class="stamp" data-issued=")(true|false)("[^>]*>)v\d+ · \d{4}-\d{2}-\d{2} · (?:issued|working)(<\/span>)/, `$1false$3v${nextVersion} · ${date} · working$4`);
   const entry = `      <li data-version="${nextVersion}" data-type="proposal" data-date="${date}" data-author="agent"><b>v${nextVersion}</b> · ${date} · <span class="who">agent</span> · proposal — ${note || 'working revision after v' + board.version}.</li>\n`;
-  out = out.replace(/(\n?)(\s*)<\/ol>/, (m, nl, ws) => `\n${entry}${ws}</ol>`);
-  return out;
+  return appendRevisionEntry(out, entry);
 }
 
 module.exports = {
