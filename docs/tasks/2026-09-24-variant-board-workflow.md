@@ -1,6 +1,6 @@
 # Portable Variant Board Workflow
 
-- Status: Ready for implementation handoff; implementation not started.
+- Status: Implemented 2026-09-24 on `feat/variant-board-workflow`. Automated checks, browser checks, and the NCDMB pilot (Claude direct path) are recorded in `skills/variant-board/references/hosts.md`; the Codex pilot was attempted and blocked by the local CLI version, and the ChatGPT bundle pilot has not run, so three-host portability acceptance remains incomplete.
 - Prepared: 2026-09-24.
 - Classification: Feature-grade; one coherent delivery covering the new board contract and the existing routes that must hand off to it.
 - Repository baseline: `fac71e45bbe0e120762ca8d3c0feefe0d60df16c`. Recheck at execution time.

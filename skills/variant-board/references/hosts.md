@@ -18,7 +18,7 @@ Conformance: **supported (direct path)**, verified 2026-09-24 on the pilot `~/ag
 - Same capabilities as Claude Code: filesystem, shell, browser via the workbench. Discover the skill through `~/.codex/skills/variant-board` (installed by `bin/link-skills.sh`) or point the session at the skill directory.
 - Publishing: none built in; share the canonical file or use another publisher. Record any URL with `publish`.
 
-Conformance: **unverified** until a Codex session has produced a board that passed the checks. Record the date, fixture and results here when it has.
+Conformance: **unverified**. Attempted 2026-09-24 with `codex exec` (Codex CLI 0.146.0) on the synthetic `route-state` brief: the configured model (`gpt-6-astra`) required a newer CLI, and the explicit fallback (`gpt-5-codex`) is not available on a ChatGPT account, so no board was produced. Rerun after upgrading the CLI; record the date, fixture and check results here when a Codex board passes.
 
 ## ChatGPT (bundle path)
 
