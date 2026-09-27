@@ -12,7 +12,8 @@ Run the publish path inline by default. Preserve intended scope, existing author
 - `commit`: stage intended changes and commit, no push.
 - `commit and push` or `push this branch`: publish the branch, no PR unless requested.
 - `publish` or `create/open a PR`: push as needed and create a draft PR by default.
-- Ready-for-review, merge, and narrower endpoints require explicit wording; reuse a choice already made rather than presenting integration options again.
+- Ready-for-review, merge, and narrower endpoints require explicit wording; reuse a choice already made rather than presenting integration options again. [Authorization](../task-doc-delivery-loop/references/authorization.md) is the shared endpoint, monitoring and merge table.
+- When the caller supplies a delivery ledger, read [ledger handoff](references/ledger-handoff.md): publish its frozen candidate under the caller's claim and record each push, PR write and reply as a verified publication.
 - Include existing branch commits in a normal push. If the user asks to publish only selected work, verify the full branch diff does not include unrelated commits; do not rewrite published history to make it fit.
 
 Verify target repository, branch, upstream, intended diff, and any existing PR. Derive the PR base from explicit direction, the approved task/ledger, and applicable repo conventions. Never assume the remote default or `main` is the delivery target. Resolve conflicting evidence before publication. Pass the verified base explicitly at PR creation and read it back afterward; do not silently retarget an existing PR.

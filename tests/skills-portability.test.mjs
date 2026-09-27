@@ -302,3 +302,66 @@ test("skill frontmatter scalars that contain ': ' or ' #' are quoted", () => {
     }
   }
 });
+
+test("R1 skills route delivery state through the ledger helper and one shared authorization table", () => {
+  const loop = read("skills", "task-doc-delivery-loop", "SKILL.md");
+  const address = read("skills", "address-review-findings", "SKILL.md");
+  const publish = read("skills", "publish-branch", "SKILL.md");
+  const monitor = read("skills", "monitor-pr-review", "SKILL.md");
+  const handoff = read("skills", "publish-branch", "references", "ledger-handoff.md");
+  const authorization = read("skills", "task-doc-delivery-loop", "references", "authorization.md");
+
+  assert.ok(fs.existsSync(path.join(root, "skills", "task-doc-delivery-loop", "scripts", "delivery-ledger.mjs")));
+  assert.ok(fs.existsSync(path.join(root, "skills", "task-doc-delivery-loop", "references", "delivery-ledger.schema.json")));
+  for (const skill of [loop, address, publish, monitor]) assert.match(skill, /references\/authorization\.md/);
+  assert.match(loop, /\]\(references\/delivery-ledger\.md\)/);
+  assert.match(loop, /One claim covers the whole owner session[\s\S]*never claim again/);
+  assert.match(loop, /`not_run` or `skipped`/);
+  assert.match(loop, /local-only work, never create a commit/i);
+  assert.match(loop, /`freeze` the final intended commit after hooks/);
+  assert.match(loop, /`next` is advice and authorizes nothing/);
+  assert.match(loop, /Do not launch another CLI, create a task or schedule a monitor/);
+  assert.match(loop, /Complete at that narrower endpoint only when the user's instruction permits it/);
+
+  assert.match(address, /\]\(\.\.\/task-doc-delivery-loop\/references\/delivery-ledger\.md\)/);
+  assert.match(address, /Never invent a task doc, silently initialize an incomplete delivery, or make ledger adoption a prerequisite/);
+  assert.match(address, /`ledger_unavailable`/);
+  assert.match(address, /never pair parallel arrays by position/);
+  assert.match(address, /prepared publication before the write and verified only after its read-back/);
+
+  assert.match(publish, /\]\(references\/ledger-handoff\.md\)/);
+  assert.match(handoff, /Never claim again, and never change the endpoint/);
+  assert.match(handoff, /`summary-body`[\s\S]*preserves every other byte/);
+  assert.match(handoff, /Without one, the normal standalone flow applies unchanged/);
+
+  assert.match(authorization, /## What A Repository May Override/);
+  assert.match(authorization, /cannot create authority to merge, monitor, post or resolve threads, force-push, bypass hooks/);
+  assert.match(authorization, /A ready PR does not authorize monitoring/);
+});
+
+test("R1 carries the accepted audit-delegation and fresh-reviewer wording with its corrections", () => {
+  const loop = read("skills", "task-doc-delivery-loop", "SKILL.md");
+  assert.match(loop, /available test personas and secure credential sources/);
+  assert.doesNotMatch(loop, /free personas/);
+  assert.match(loop, /If the runtime cannot select the role, perform the audit inline and record that limitation/);
+  assert.match(loop, /Where repo policy permits another delegated review, use a fresh reviewer with the remediation diff, original findings, claimed dispositions, affected requirements and candidate identity\. Otherwise verify remediation locally and state the independence limit\./);
+  assert.match(loop, /self-review is only ever supplementary/);
+});
+
+test("R1 validation guidance keeps evidence reuse and rejects a once-per-commit rerun rule", () => {
+  const validation = read("skills", "task-doc-delivery-loop", "references", "validation.md");
+  assert.match(validation, /There is no once-per-commit rerun rule/);
+  assert.match(validation, /run one required final gate per candidate and rerun only checks that are missing or invalidated/);
+  assert.match(validation, /Run pushes directly or redirect their output/);
+  assert.match(validation, /NUL-delimited Git output/);
+  assert.match(validation, /heavy-command wrapper[\s\S]*record that host-wide enforcement is unavailable/);
+});
+
+test("the delivery ledger reference documents every helper command", async () => {
+  const reference = read("skills", "task-doc-delivery-loop", "references", "delivery-ledger.md");
+  const helper = read("skills", "task-doc-delivery-loop", "scripts", "delivery-ledger.mjs");
+  const commands = [...helper.split("const COMMANDS = {")[1].split("\n};")[0].matchAll(/^  (?:"([a-z-]+)"|([a-z]+)): \{/gm)].map((match) => match[1] ?? match[2]);
+  assert.ok(commands.length >= 20);
+  for (const command of commands) assert.match(reference, new RegExp("\\| `" + command + "[ `]"), command);
+  assert.match(reference, /\]\(delivery-ledger\.schema\.json\)/);
+});

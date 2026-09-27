@@ -11,7 +11,7 @@ Use `address-review-findings` for one current batch. Require affirmative user in
 
 ## Authorization And Ownership
 
-An explicit request to run this review/remediation skill authorizes scoped fixes, focused validation, commits/pushes, replies, and verified thread resolutions on the named PR. It does not authorize merging, closing/reopening, force-pushing, rewriting history, bypassing hooks, or unrelated CI fixes. Preserve any narrower user instruction.
+[Authorization](../task-doc-delivery-loop/references/authorization.md) is the shared endpoint, monitoring and merge table; observe-only and remediating watches are distinct grants. An explicit request to run this review/remediation skill authorizes scoped fixes, focused validation, commits/pushes, replies, and verified thread resolutions on the named PR. It does not authorize merging, closing/reopening, force-pushing, rewriting history, bypassing hooks, or unrelated CI fixes. Preserve any narrower user instruction.
 
 Run inline. Do not delegate the timer, ledger, GitHub mutations, or branch ownership. A bounded delivery-review-mode reviewer may assess material changes when authorized; it does not run duplicate validation or mutate anything.
 
