@@ -3399,6 +3399,81 @@ test("R1 follow-up: naming a dotted filename does not authorize its dirty prefix
   ok(run(initArgs(repo, { bootstrap: { decisions: [{ id: "dirty_scope", text: "include `src/config.json`; exclude `src/config`", source: "user scope" }] } })));
 });
 
+test("R1 review batch: snapshots must identify the reviewed commit and current PR head", () => {
+  const repo = makeRepo();
+  const { reviewer } = reviewRound(repo);
+  const oldHead = reviewer.ledger().candidate.baseline_oid;
+  const stale = batchFile(repo, reviewer, [], { head: oldHead });
+  refused(reviewer.append("reviews", review(reviewer, { batch: stale })), 4, "identity_mismatch", "old snapshot on the current review");
+  refused(reviewer.append("reviews", review(reviewer, { candidate_oid: oldHead, batch: stale })), 4, "identity_mismatch", "old snapshot and review on the current PR");
+  const current = batchFile(repo, reviewer, []);
+  refused(reviewer.append("reviews", review(reviewer, { mode: "doc", candidate_oid: null, batch: current })), 4, "identity_mismatch", "a batch must identify its reviewed commit");
+  ok(reviewer.append("reviews", review(reviewer, { batch: current })));
+});
+
+test("R1 review batch: a later round cannot reuse an earlier batch or its successors", () => {
+  const repo = makeRepo();
+  const { reviewer, delivered, batchReview } = reviewRound(repo);
+  const finish = (owner, reviewed) => owner.release("complete", {
+    next: null, blocker: null,
+    completion: completion(owner, [`validation:${delivered.gate.id}`, `reviews:${reviewed.id}`]),
+  });
+  ok(finish(reviewer, batchReview));
+  const next = new Session(repo, "codex");
+  ok(next.claim("review_round", { grantFile: input(repo, "grant", grant("review_round")) }));
+  refused(finish(next, batchReview), 2, "invariant_error", "a new grant needs its own findings batch");
+  const successor = { ...batchReview, id: randomUUID(), supersedes_id: batchReview.id };
+  ok(next.append("reviews", successor));
+  refused(finish(next, successor), 2, "invariant_error", "a new disposition cannot refresh the old snapshot");
+  const copied = { ...batchReview, id: randomUUID() };
+  ok(next.append("reviews", copied));
+  refused(finish(next, copied), 2, "invariant_error", "a new review ID cannot refresh the old batch");
+  const fresh = review(next, { batch: batchFile(repo, next, []) });
+  ok(next.append("reviews", fresh));
+  ok(finish(next, fresh), "a new complete empty snapshot is valid");
+});
+
+test("R1 review batch: unfinished rounds keep their batch across handoff, blocking and takeover", () => {
+  const repo = makeRepo();
+  const { reviewer, delivered, batchReview } = reviewRound(repo);
+  ok(reviewer.release("handoff", { next: nextStep("review_round", "review"), completion: null, blocker: null }));
+  const resumed = new Session(repo, "claude");
+  ok(resumed.claim("review_round"));
+  ok(resumed.release("blocked", {
+    next: nextStep("review_round", "review"), completion: null,
+    blocker: { reason: "GitHub unavailable", resume_phase: "review_round", resume_checkpoint: "review", required_action: "retry the read" },
+  }));
+  const unblocked = new Session(repo, "codex");
+  ok(unblocked.claim("review_round"));
+  const takeover = new Session(repo, "claude");
+  ok(takeover.claim("review_round", { force: true, grantFile: input(repo, "grant", grant("takeover")) }));
+  ok(takeover.release("complete", {
+    next: null, blocker: null,
+    completion: completion(takeover, [`validation:${delivered.gate.id}`, `reviews:${batchReview.id}`]),
+  }));
+});
+
+test("R1 review batch: disposition successors retain the reviewed head after a fix is pushed", () => {
+  const repo = makeRepo();
+  const { reviewer, delivered, batchReview } = reviewRound(repo, { dispositions: ["pending", "rejected"] });
+  ok(reviewer.owned("begin-change"));
+  const fixedOid = deliverToFrozen(repo, reviewer, { "src/app.js": "export const v = 3;\n" });
+  const gate = recordGate(repo, reviewer, ["src/app.js"]);
+  pushCandidate(repo, reviewer, { precondition: delivered.oid });
+  const pr = prRecord(repo, reviewer);
+  ghPull(repo, pr);
+  ok(reviewer.recordContext({ pr }));
+  const successor = {
+    ...batchReview, id: randomUUID(), supersedes_id: batchReview.id,
+    findings: batchReview.findings.map((item) => item.disposition === "pending" ? { ...item, disposition: "fixed", fix_oid: fixedOid } : item),
+  };
+  ok(reviewer.append("reviews", successor), "the original snapshot remains valid for dispositions");
+  ok(reviewer.release("complete", {
+    next: null, blocker: null,
+    completion: completion(reviewer, [`validation:${gate.id}`, `reviews:${successor.id}`]),
+  }));
+});
+
 describe("delivery ledger R1 acceptance", { concurrency: Math.max(2, Math.min(6, os.availableParallelism?.() ?? 4)) }, () => {
   for (const { name, fn } of suite) serialTest(name, fn);
 });

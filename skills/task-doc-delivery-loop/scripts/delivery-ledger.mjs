@@ -2439,6 +2439,14 @@ function appendReviewChecks(ctx, ledger, item) {
   }
   if (item.batch) {
     const snapshot = readBatchSnapshot(item.batch);
+    if (snapshot.head !== item.candidate_oid) {
+      fail("identity_mismatch", "the batch snapshot must name the review's candidate_oid", { expected: item.candidate_oid, observed: snapshot.head });
+    }
+    // A new review observes the recorded PR head. A disposition successor
+    // retains that original head, even after its fixes have been pushed.
+    if (!item.supersedes_id && ledger.pr && snapshot.head !== ledger.pr.head) {
+      fail("identity_mismatch", "a new review batch must observe the recorded PR head", { expected: ledger.pr.head, observed: snapshot.head });
+    }
     if (ledger.pr && isObject(snapshot.pr)) {
       if (snapshot.pr.repository !== ledger.pr.repository || snapshot.pr.number !== ledger.pr.number) fail("identity_mismatch", "the batch snapshot is for another PR");
     }
@@ -3120,6 +3128,15 @@ function reviewApplies(ctx, ledger, review, completion) {
   return null;
 }
 
+function batchRecordedInReviewRound(ledger, batchId) {
+  // A handoff, blocked resume or takeover changes the owner, not the round.
+  // The claim that left done is the boundary for the newly authorized batch.
+  const start = [...ledger.history].reverse().find((event) => event.operation === "claim" && event.phase === "review_round" && event.detail.from_phase === "done");
+  const firstReview = ledger.reviews.find((review) => review.batch?.id === batchId);
+  const recorded = ledger.history.find((event) => event.operation === "append reviews" && event.detail.id === firstReview?.id);
+  return Boolean(start && recorded && recorded.revision > start.revision);
+}
+
 function completeChecks(ctx, ledger, completion) {
   const { authorization, candidate, owner } = ledger;
   if (completion.endpoint !== authorization.endpoint) {
@@ -3216,9 +3233,12 @@ function completeChecks(ctx, ledger, completion) {
     if (!independent) fail("invariant_error", "a required independent review is blocked; report the blocked gate instead of completing", { observed: blockedIndependence.map((run) => run.id) });
   }
   if (owner.phase === "review_round") {
-    const batches = reviews.filter((review) => review.batch !== null);
+    const batches = reviews.filter((review) => review.mode !== "spec" && review.batch !== null);
     if (batches.length === 0 || batches.some((review) => !readBatchSnapshot(review.batch).complete)) {
       fail("invariant_error", "a review round completes with a complete batch's dispositions; an incomplete snapshot is unavailable, never empty");
+    }
+    if (!batches.some((review) => batchRecordedInReviewRound(ledger, review.batch.id))) {
+      fail("invariant_error", "a review round needs a batch first recorded during this round; an earlier batch or its successors cannot satisfy a new request");
     }
   }
 }
