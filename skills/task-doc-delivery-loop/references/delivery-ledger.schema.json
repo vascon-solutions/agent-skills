@@ -106,7 +106,7 @@
       "required": ["id", "scope", "endpoint", "wording", "source", "at", "additional_cycles"],
       "properties": {
         "id": { "$ref": "#/$defs/Id" },
-        "scope": { "enum": ["endpoint", "review_round", "monitor_observe", "monitor_remediate", "merge", "takeover", "reconcile"] },
+        "scope": { "enum": ["endpoint", "review_round", "review_waiver", "monitor_observe", "monitor_remediate", "merge", "takeover", "reconcile"] },
         "endpoint": { "enum": ["local", "commit", "push", "draft_pr", "ready_pr", null] },
         "wording": { "$ref": "#/$defs/NonEmptyText" },
         "source": { "$ref": "#/$defs/NonEmptyText" },

@@ -7,6 +7,7 @@ The shared rules for how far a delivery, review round or monitor may go. `task-d
 | Endpoint | a pushed branch and draft PR (`draft_pr`) | a ready PR (`ready_pr`); a narrower endpoint (`local`, `commit`, `push`); any change of endpoint mid-delivery | `authorization.endpoint`; an `endpoint` grant to change it |
 | Publication limits | stop at the authorized endpoint | none | a `limitations` entry; a missing remote or GitHub never widens or silently narrows the endpoint |
 | Review findings | none | addressing a batch of PR findings, which covers the fixes, replies and eligible resolutions for that one batch | a `review_round` grant, consumed by one claim |
+| Review waiver | PR delivery requires applicable review evidence | an explicit waiver permitted by repository policy | a `review_waiver` grant; it never clears failed reviews, pending findings or a required independence gate |
 | Monitoring | `none` | `observe` (read and report only) or `remediate` (fix and publish within the delivery's scope) | `authorization.monitoring`; a `monitor_observe` or `monitor_remediate` grant per watch |
 | Merge | never | an explicit merge request | `authorization.merge` through a `merge` grant; recording it performs nothing |
 | Takeover | never | the user's statement that the other session has stopped | a `takeover` grant plus `--force --reason` |

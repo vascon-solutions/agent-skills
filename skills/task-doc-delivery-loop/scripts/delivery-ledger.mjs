@@ -479,6 +479,10 @@ const OWNED_REQUIRED = ["runtime", "session", "claim-id", "expected-revision"];
 
 const COMMANDS = {
   path: { flags: SELECTION },
+  "prepare-init": {
+    flags: { repo: "string", branch: "string", endpoint: "string", brief: "string", "output-dir": "string", remote: "string", "no-remote": "boolean", "github-host": "string", instruction: "repeat", "skill-source": "repeat", "same-session": "boolean" },
+    required: ["repo", "endpoint", "brief", "output-dir"],
+  },
   init: {
     flags: {
       repo: "string",
@@ -522,7 +526,7 @@ const COMMANDS = {
   "begin-change": { flags: { ...SELECTION, ...OWNED }, required: OWNED_REQUIRED },
   freeze: { flags: { ...SELECTION, ...OWNED, oid: "string", "evidence-file": "string" }, required: [...OWNED_REQUIRED, "oid", "evidence-file"] },
   reconcile: { flags: { ...SELECTION, ...OWNED, "evidence-file": "string" }, required: [...OWNED_REQUIRED, "evidence-file"] },
-  "content-manifest": { flags: { ...SELECTION, "manifest-file": "string" }, required: ["manifest-file"] },
+  "content-manifest": { flags: { ...SELECTION, "manifest-file": "string", "output-file": "string", "exclude-path": "repeat", "inputs-file": "string" } },
   measure: { flags: { ...SELECTION, ...OWNED }, required: OWNED_REQUIRED },
   release: { flags: { ...SELECTION, ...OWNED, outcome: "string", "release-file": "string" }, required: [...OWNED_REQUIRED, "outcome", "release-file"] },
   "recover-lock": {
@@ -623,6 +627,14 @@ export function parseArgs(argv) {
     if (options.force && !options.reason) fail("argument_error", "--force requires --reason with the user's quoted statement");
     if (options.reason && !options.force) fail("argument_error", "--reason applies only to --force");
   }
+  if (command === "prepare-init") {
+    requireAbsolute(options["output-dir"], "--output-dir");
+    if (Boolean(options.remote) === Boolean(options["no-remote"])) fail("argument_error", "choose --remote NAME or --no-remote explicitly");
+  }
+  if (command === "content-manifest") {
+    if (Boolean(options["manifest-file"]) === Boolean(options["output-file"])) fail("argument_error", "choose --manifest-file to verify or --output-file to generate a manifest");
+    if (options["manifest-file"] && (options["exclude-path"] || options["inputs-file"])) fail("argument_error", "exclusions and inputs apply only when generating a manifest");
+  }
   if (command === "append") {
     const field = positionals[0];
     if (![...COLLECTIONS, "decisions"].includes(field)) {
@@ -637,7 +649,7 @@ export function parseArgs(argv) {
     if (name.endsWith("-file")) requireAbsolute(value, `--${name}`);
   }
   if (hasOwn(options, "ledger")) requireAbsolute(options.ledger, "--ledger");
-  for (const name of ["task-doc", "spec"]) {
+  for (const name of ["task-doc", "spec", "instruction", "skill-source"]) {
     for (const value of options[name] ?? []) requireAbsolute(value, `--${name}`);
   }
   return { command, options };
@@ -1810,6 +1822,75 @@ function verifyPolicy(policy) {
   for (const source of policy.skill_sources) verifySourceHash(source, "skill source");
 }
 
+// Generated inputs belong outside the checkout. Resolve the parent so a
+// symlink cannot redirect evidence writes into the worktree or Git metadata.
+function externalOutputPath(ctx, target) {
+  requireAbsolute(target, "output path");
+  const parent = realpathOr(path.dirname(target), "io_error", "the output parent directory must exist");
+  const resolved = path.join(parent, path.basename(target));
+  for (const protectedDir of [ctx.worktree, ctx.common]) {
+    const relative = path.relative(protectedDir, resolved);
+    if (relative === "" || (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative))) {
+      fail("argument_error", "generated inputs must be outside the worktree and common Git directory", { path: resolved });
+    }
+  }
+  return resolved;
+}
+
+function writeInputFile(ctx, file, value) {
+  const output = externalOutputPath(ctx, file);
+  try {
+    fs.writeFileSync(output, `${JSON.stringify(value, null, 2)}\n`, { flag: "wx", mode: 0o600 });
+  } catch (error) {
+    fail("io_error", `cannot create input file without overwriting: ${error.code}`, { path: output });
+  }
+  return sourceFor(output);
+}
+
+function commandPrepareInit(options) {
+  const ctx = resolveContext(options, { mutation: false });
+  const remoteName = options.remote ?? null;
+  const remoteUrl = remoteName === null ? null : configuredRemoteUrl(ctx.worktree, remoteName);
+  if (remoteName !== null && remoteUrl === null) fail("environment_error", "the named remote is not configured", { observed: remoteName });
+  const parsedRemote = remoteUrl === null ? null : parseGitHubUrl(remoteUrl);
+  if (options["github-host"] && parsedRemote?.host !== options["github-host"]) fail("argument_error", "--github-host must match the selected remote host");
+  const github = parsedRemote && (parsedRemote.host === "github.com" || parsedRemote.host === options["github-host"]) ? parsedRemote : null;
+  const skillFiles = [...new Set([
+    path.join(SCRIPT_DIR, "delivery-ledger.mjs"), SCHEMA_PATH,
+    path.join(SCRIPT_DIR, "..", "SKILL.md"),
+    path.join(SCRIPT_DIR, "..", "references", "authorization.md"),
+    path.join(SCRIPT_DIR, "..", "references", "delivery-ledger.md"),
+    ...(options["skill-source"] ?? []),
+  ])];
+  const authorization = { endpoint: options.endpoint, merge: false, monitoring: "none", notes: "", repo_overrides: [], grants: [] };
+  const bootstrap = {
+    brief: options.brief,
+    instructions: (options.instruction ?? []).map(sourceFor),
+    decisions: [],
+    spec_check: { verdict: "not_run", report: null, source_hashes: [], checked_at: null, reason: "no pre-delivery spec check supplied" },
+    policy: { skill_pack_oid: resolveCommit(SCRIPT_DIR, "HEAD"), skill_sources: skillFiles.map(sourceFor), session_mode: options["same-session"] ? "same_session" : "fresh" },
+    dependencies: [], remote_name: remoteName, github,
+    pr: null, remote_baseline: null,
+    audit_policy: { required: false, state: "not_requested", reason: "no live audit requested" },
+  };
+  requireShape(authorization, "AuthorizationObject", "authorization");
+  requireShape(bootstrap, "BootstrapInput", "bootstrap");
+  const output = externalOutputPath(ctx, options["output-dir"]);
+  try {
+    fs.mkdirSync(output, { mode: 0o700 });
+  } catch (error) {
+    fail("io_error", `use a new output directory: ${error.code}`, { path: output });
+  }
+  const authorizationFile = writeInputFile(ctx, path.join(output, "authorization.json"), authorization);
+  const bootstrapFile = writeInputFile(ctx, path.join(output, "bootstrap.json"), bootstrap);
+  const status = summarizeStatus(ctx.worktree);
+  return envelope("prepare-init", true, null, {
+    authorization_file: authorizationFile.path, bootstrap_file: bootstrapFile.path,
+    dirty_paths: [...new Set([...status.tracked, ...status.untracked])].sort(utf8Compare),
+    note: "Inputs only; no ledger, claim or authority was created. Fill existing grants, source decisions, dependencies, audit policy and any verified PR/remote adoption before init.",
+  });
+}
+
 function commandInit(options) {
   const ctx = resolveContext({ repo: options.repo, branch: options.branch }, { mutation: true });
   const authorization = readJsonFile(options["authorization-file"], "--authorization-file");
@@ -1978,7 +2059,7 @@ function commandInit(options) {
 }
 
 function mentionsPath(text, file) {
-  const boundary = (char) => char === undefined || /[\s`"'(),;:]/.test(char) || char === ".";
+  const boundary = (char) => char === undefined || /[\s`"'(),;:]/.test(char);
   for (let index = text.indexOf(file); index !== -1; index = text.indexOf(file, index + 1)) {
     if (boundary(text[index - 1]) && boundary(text[index + file.length])) return true;
   }
@@ -2336,6 +2417,11 @@ function readBatchSnapshot(batch) {
   const snapshot = parseJson(bytes.toString("utf8"), batch.path);
   if (!isObject(snapshot) || !Array.isArray(snapshot.threads)) fail("schema_error", "a review batch snapshot has a threads array");
   for (const thread of snapshot.threads) {
+    // GitHub's databaseId is numeric; keep the persisted snapshot's bytes
+    // unchanged while normalizing the representation used for comparisons.
+    if (isObject(thread) && Number.isSafeInteger(thread.root_comment_database_id) && thread.root_comment_database_id > 0) {
+      thread.root_comment_database_id = String(thread.root_comment_database_id);
+    }
     if (!isObject(thread) || typeof thread.thread_graphql_id !== "string" || typeof thread.root_comment_database_id !== "string" || !thread.thread_graphql_id || !thread.root_comment_database_id) {
       fail("schema_error", "each snapshot thread names thread_graphql_id and root_comment_database_id as nonempty strings");
     }
@@ -2640,6 +2726,10 @@ function currentValidationRefs(ledger) {
   return currentItems(ledger.validation).map((entry) => `validation:${entry.id}`);
 }
 
+function currentInputEvidenceRefs(ledger) {
+  return [...currentValidationRefs(ledger), ...["reviews", "audits"].flatMap((collection) => currentItems(ledger[collection]).map((item) => `${collection}:${item.id}`))];
+}
+
 function commandRecordContext(options) {
   const ctx = resolveContext(options, { mutation: true });
   const payload = readJsonFile(options["context-file"], "--context-file");
@@ -2683,7 +2773,7 @@ function commandRecordContext(options) {
       before.dependencies = ledger.candidate.dependencies;
       draft.candidate.dependencies = payload.dependencies;
       after.dependencies = payload.dependencies;
-      if (!isDeepStrictEqual(payload.dependencies, ledger.candidate.dependencies)) invalidated = currentValidationRefs(ledger);
+      if (!isDeepStrictEqual(payload.dependencies, ledger.candidate.dependencies)) invalidated = currentInputEvidenceRefs(ledger);
     }
     if (hasOwn(payload, "pr")) {
       verifyPrObservation(ledger, payload.pr);
@@ -2868,7 +2958,7 @@ function commandReconcile(options) {
         verifyDependencies(observed.dependencies);
         if (candidate.state === "frozen") beginChangeTransition(draft, ledger);
         draft.candidate.dependencies = observed.dependencies;
-        detail.invalidated_evidence = [...currentValidationRefs(ledger), ...currentItems(ledger.audits).map((audit) => `audits:${audit.id}`)];
+        detail.invalidated_evidence = currentInputEvidenceRefs(ledger);
         break;
       }
       default:
@@ -2891,10 +2981,31 @@ function commandReconcile(options) {
 function commandContentManifest(options) {
   const ctx = resolveContext(options, { mutation: false });
   const ledger = readLedger(ctx);
-  const source = sourceFor(options["manifest-file"]);
+  let source;
+  if (options["output-file"]) {
+    const excluded = options["exclude-path"] ?? [];
+    for (const file of excluded) {
+      if (!ledger.sources.decisions.some((decision) => mentionsPath(decision.text, file))) {
+        fail("invariant_error", "record a scope decision before excluding a changed path", { observed: file });
+      }
+    }
+    const inputs = options["inputs-file"] ? readJsonFile(options["inputs-file"], "--inputs-file") : [];
+    const manifest = {
+      version: 1, baseline_oid: ledger.candidate.baseline_oid,
+      files: [...actualChanges(ctx.worktree, ledger.candidate.baseline_oid, "worktree")]
+        .filter(([file]) => !excluded.includes(file))
+        .map(([file, entry]) => ({ path: file, ...entry })).sort((a, b) => utf8Compare(a.path, b.path)),
+      excluded_paths: [...excluded].sort(utf8Compare), inputs,
+    };
+    manifestStructure(manifest, ledger);
+    verifyManifestContent(ctx.worktree, manifest, "worktree");
+    source = writeInputFile(ctx, options["output-file"], manifest);
+  } else {
+    source = sourceFor(options["manifest-file"]);
+  }
   const { manifest, digest } = loadManifest(source, ledger);
   verifyManifestContent(ctx.worktree, manifest, "worktree");
-  return envelope("content-manifest", false, ledger.revision, { content_id: `sha256:${digest}`, input_fingerprint: digest, manifest: source, files: manifest.files.length });
+  return envelope("content-manifest", Boolean(options["output-file"]), ledger.revision, { content_id: `sha256:${digest}`, input_fingerprint: digest, manifest: source, files: manifest.files.length });
 }
 
 function commandMeasure(options) {
@@ -2974,20 +3085,35 @@ function validationApplies(ctx, ledger, entry, completion) {
   return null;
 }
 
-function identityApplies(item, completion, oidField) {
-  return completion.endpoint === "local" ? item.content_id === completion.content_id : item[oidField] === completion.candidate_oid;
+function contentApplies(ctx, ledger, contentId, manifestSource, completion) {
+  if (contentId === null || !manifestSource) return false;
+  const manifest = checkContentIdentity(ledger, contentId, manifestSource, "completion evidence");
+  if (completion.endpoint === "local") return contentId === completion.content_id;
+  try {
+    verifyManifestContent(ctx.worktree, manifest, completion.candidate_oid);
+    return true;
+  } catch (error) {
+    if (error instanceof LedgerError && error.code === "identity_mismatch") return false;
+    throw error;
+  }
 }
 
-function reviewApplies(ctx, review, completion) {
+function identityApplies(ctx, ledger, item, completion, oidField) {
+  if (item.content_id !== null) return contentApplies(ctx, ledger, item.content_id, item.content_manifest, completion);
+  return completion.endpoint !== "local" && item[oidField] === completion.candidate_oid;
+}
+
+function reviewApplies(ctx, ledger, review, completion) {
   if (review.verdict === "fail") return `review ${review.id} failed; a failing review never satisfies completion`;
-  if (identityApplies(review, completion, "candidate_oid")) {
+  if (identityApplies(ctx, ledger, review, completion, "candidate_oid")) {
     const pending = review.findings.filter((finding) => finding.disposition === "pending");
     return pending.length === 0 ? null : `review ${review.id} has pending findings`;
   }
   for (const finding of review.findings) {
     if (finding.disposition === "pending") return `review ${review.id} has pending findings`;
     if (finding.disposition !== "fixed") continue;
-    const fixed = completion.endpoint === "local" ? finding.fix_content_id === completion.content_id : finding.fix_oid !== null && isAncestor(ctx.worktree, finding.fix_oid, completion.candidate_oid);
+    const fixed = contentApplies(ctx, ledger, finding.fix_content_id, finding.fix_content_manifest, completion)
+      || (completion.endpoint !== "local" && finding.fix_oid !== null && isAncestor(ctx.worktree, finding.fix_oid, completion.candidate_oid));
     if (!fixed) return `review ${review.id} finding ${finding.id} is not fixed in the completed candidate`;
   }
   if (!review.findings.some((finding) => finding.disposition === "fixed")) return `review ${review.id} reviewed another candidate and no fix chain reaches this one`;
@@ -3056,24 +3182,45 @@ function completeChecks(ctx, ledger, completion) {
   }
   for (const audit of byCollection("audits")) {
     if (audit.verdict !== "PASS") fail("invariant_error", `audit ${audit.id} is ${audit.verdict}; a failed or blocked audit is never accepted as a role failure`);
-    if (!identityApplies(audit, completion, "oid")) fail("invariant_error", `audit ${audit.id} observed another candidate`);
+    if (!identityApplies(ctx, ledger, audit, completion, "oid")) fail("invariant_error", `audit ${audit.id} observed another candidate`);
   }
   if (ledger.audit_policy.required && !watchObservation) {
     if (ledger.audit_policy.state !== "complete" || byCollection("audits").length === 0) fail("invariant_error", "a required audit needs its passing result cited and audit_policy complete");
   }
   if (ledger.audit_policy.state === "blocked") fail("invariant_error", "the audit gate is blocked");
   const reviews = byCollection("reviews");
+  // A caller chooses supporting evidence, not which unresolved findings
+  // exist. Historical reviews remain readable; disposition them through a
+  // successor instead of dropping their references to obtain completion.
+  if (!watchObservation) {
+    for (const review of currentItems(ledger.reviews)) {
+      if (review.mode === "spec") continue;
+      if (review.verdict === "fail" || review.findings.some((finding) => finding.disposition === "pending")) {
+        fail("invariant_error", `review ${review.id} has a failing verdict or pending findings; omission from completion evidence does not resolve it`);
+      }
+    }
+    if (owner.phase === "delivery" && PR_ENDPOINTS.has(completion.endpoint)
+        && !reviews.some((review) => review.mode !== "spec")
+        && !authorization.grants.some((grant) => grant.scope === "review_waiver")) {
+      fail("invariant_error", "a PR delivery needs an applicable review or an explicit review_waiver grant permitted by repository policy");
+    }
+  }
   for (const review of reviews) {
     if (review.mode === "spec") continue;
-    const problem = reviewApplies(ctx, review, completion);
+    const problem = reviewApplies(ctx, ledger, review, completion);
     if (problem) fail("invariant_error", problem);
   }
   const blockedIndependence = currentItems(ledger.role_runs).filter((run) => run.fallback_reason === INDEPENDENCE_REQUIRED && run.status === "blocked");
   if (blockedIndependence.length > 0) {
-    const independent = reviews.some((review) => review.mode === "implementation" && INDEPENDENT_REVIEW_SOURCES.has(review.source) && identityApplies(review, completion, "candidate_oid"));
+    const independent = reviews.some((review) => review.mode === "implementation" && INDEPENDENT_REVIEW_SOURCES.has(review.source) && identityApplies(ctx, ledger, review, completion, "candidate_oid"));
     if (!independent) fail("invariant_error", "a required independent review is blocked; report the blocked gate instead of completing", { observed: blockedIndependence.map((run) => run.id) });
   }
-  if (owner.phase === "review_round" && !reviews.some((review) => review.batch !== null)) fail("invariant_error", "a review round completes with its batch's dispositions cited");
+  if (owner.phase === "review_round") {
+    const batches = reviews.filter((review) => review.batch !== null);
+    if (batches.length === 0 || batches.some((review) => !readBatchSnapshot(review.batch).complete)) {
+      fail("invariant_error", "a review round completes with a complete batch's dispositions; an incomplete snapshot is unavailable, never empty");
+    }
+  }
 }
 
 function nextProblems(ledger, next, outcome) {
@@ -3208,6 +3355,7 @@ function commandSummaryBody(options) {
 
 const HANDLERS = {
   path: commandPath,
+  "prepare-init": commandPrepareInit,
   init: commandInit,
   show: commandShow,
   validate: commandValidate,

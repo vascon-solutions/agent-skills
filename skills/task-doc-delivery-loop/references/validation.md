@@ -20,6 +20,8 @@ Reuse the repository's existing heavy-command wrapper when there is one, and fol
 
 After remediation, rerun affected checks. An unrelated documentation edit does not require a full application suite. A failed check needs a rerun after its cause is addressed. A tracked-file mutation by formatting or commit/push hooks can invalidate earlier evidence; inspect what changed and rerun what it affects.
 
+For reviews and audits performed before committing, retain the content manifest and cite the original record at completion. The ledger compares its content to the final commit. Do not repeat a passing review or audit just to obtain a commit-based record. A dependency refresh invalidates affected evidence even when repository file bytes are unchanged.
+
 ## Report Honestly
 
 Read the actual result before claiming success. Distinguish passing, failed, skipped, unavailable, and pending checks. Do not extrapolate focused coverage into 'all tests pass.' Verify remote head and PR base/state for publication claims; old local test results do not establish current CI status.

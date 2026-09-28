@@ -4,6 +4,8 @@ One machine-readable record per delivery branch, so any phase can resume in a fr
 
 The ledger records decisions, identities and evidence paths. It never replaces reading the code, the current repository instructions, or remote state.
 
+Start with the [worked examples](delivery-examples.md) for ordinary delivery, resuming, and one findings batch. This page is the command and state reference.
+
 ## Location
 
 - `<worktree>/.agent/deliveries/<SHA256(branch)>.json`, never committed. `path` prints it. Hashing is the only filename encoding: `feat/a` and `feat__a` must not collide.
@@ -18,7 +20,7 @@ node <skill-dir>/scripts/delivery-ledger.mjs <command> (--repo DIR [--branch NAM
 ```
 
 - Every mutation after `init` takes `--runtime claude|codex|gemini --session LABEL --claim-id ID --expected-revision N` (`claim` takes no claim ID unless it is a same-owner reclaim). The session label is any stable identifier the session reuses for all its writes; it is coordination, not authentication.
-- Flags ending in `-file` take an absolute path to one JSON value, never inline JSON. Only `update` and `append FIELD` read stdin; every other command refuses stdin input. Parsing is strict: unknown or duplicate flags, missing values, extra positionals and invalid enums are argument errors.
+- Flags ending in `-file` take absolute paths, never inline JSON. Input files hold one JSON value, except the Markdown files used by `summary-body`. `--output-file` creates a new manifest. Only `update` and `append FIELD` read stdin; every other command refuses stdin input. Parsing is strict: unknown or duplicate flags, missing values, extra positionals and invalid enums are argument errors.
 - Output is exactly one JSON line. Success: `{ok:true, command, changed, revision, data}`. Failure: `{ok:false, command, code, message, path, id, expected, observed}`, with no `data`. Diagnostics go to stderr.
 
 | Exit | Codes | Meaning |
@@ -34,6 +36,7 @@ node <skill-dir>/scripts/delivery-ledger.mjs <command> (--repo DIR [--branch NAM
 | Command | Does |
 | --- | --- |
 | `path` | Resolve the ledger path; `data.exists` says whether it exists. Creates nothing. |
+| `prepare-init --repo DIR --endpoint E --brief TEXT --output-dir DIR (--remote NAME \| --no-remote) [--github-host HOST] [--instruction PATH…] [--skill-source PATH…] [--same-session]` | Generate `authorization.json` and `bootstrap.json` in a new external directory. Hash supplied instructions and loaded ledger skill files; report dirty paths. Recognize github.com automatically; identify a known Enterprise host explicitly. Does not initialize, claim, inspect remote state or invent grants. Fill applicable decisions, dependencies, spec check, audit policy and verified PR adoption before `init`. |
 | `init --runtime R --session S [--model M] --task-doc PATH… [--spec PATH…] --base REF --endpoint E --authorization-file F --bootstrap-file F` | Create revision 0, unowned, with the bootstrap `next`. Refuses any existing ledger, even an identical one; continue it with `show` and `claim`. |
 | `show [--field /json/pointer]` | Read the validated ledger or one field. `~1` is `/`, `~0` is `~`; a missing field is an argument error, an existing `null` is a value. |
 | `validate` | Structural and local invariant validation; no network. |
@@ -47,7 +50,7 @@ node <skill-dir>/scripts/delivery-ledger.mjs <command> (--repo DIR [--branch NAM
 | `begin-change` | Return to `implement`; a frozen candidate becomes working at its OID. |
 | `freeze --oid OID --evidence-file F` | Adopt the owner's commit as the frozen candidate. |
 | `reconcile --evidence-file F` | One enumerated recovery case. |
-| `content-manifest --manifest-file F` | Read-only: check a manifest against the working content; returns `content_id` and `input_fingerprint`. |
+| `content-manifest (--manifest-file F \| --output-file F [--exclude-path PATH…] [--inputs-file F])` | Verify an existing manifest, or generate one from all baseline-to-working changes, including committed, staged, unstaged and untracked paths. Compute modes, hashes and identities. Generation needs a new external file; exclusions need a recorded scope decision. `--inputs-file` supplies the array of relevant dependency, policy, tool and environment identities. |
 | `measure` | Diff size of the frozen candidate against the recorded `diff_base_oid`. |
 | `release --outcome complete\|handoff\|blocked --release-file F` | Clear ownership and set `phase`, `next`, `blocker`, `completion`. |
 | `recover-lock --kind branch\|exclude (--operation-id ID \| --expected-lock-sha256 HASH) --reason TEXT` | Remove one confirmed-stale lock. Not a ledger mutation. |
@@ -55,6 +58,8 @@ node <skill-dir>/scripts/delivery-ledger.mjs <command> (--repo DIR [--branch NAM
 | `set-review-bound` | Refused in R1; `review_bound` stays `null` until R3. |
 
 No command stages, commits, pushes, installs, starts a runtime, or writes to GitHub. `check` is the only command that reads the network: `git ls-remote` for the destination ref and `gh api --method GET` for the PR.
+
+The two generators create input files only at explicit absolute destinations outside the worktree and common Git directory. They refuse existing destinations, including symlink aliases into those protected directories. Generated files are private (`0600`); the setup directory is `0700`. Keep evidence and input files in durable local storage for as long as the delivery can resume. Defaults describe a new delivery with no grants, dependencies, audit or prior PR; the owner must replace any default that conflicts with known context.
 
 ## Input Files
 
@@ -97,7 +102,7 @@ No command stages, commits, pushes, installs, starts a runtime, or writes to Git
 - Committed endpoints: the frozen, clean candidate, and a passing `scope: gate` validation for exactly that OID. The gate is a command whose manifest matches the committed tree, a receipt the adapter accepts, or an explicit reuse record. `skipped`, `unavailable`, `pending` and invalidated evidence never pass.
 - `push`, `draft_pr`, `ready_pr`: a verified push of the candidate to `refs/heads/<branch>`. For PR endpoints, also a recorded open PR at the candidate whose draft state matches the endpoint, and, in delivery, a verified PR body carrying the summary block.
 - Audits: a cited audit must be `PASS` for the final identity; a required audit also needs `audit_policy.state: complete`. A failed audit stays `FAIL` until a new audit passes, and an erroring role never turns it into a role failure. `update` cannot waive a required audit.
-- Reviews: no `fail` verdict and no pending findings. A review of an earlier candidate applies only through fixed findings whose `fix_oid` (or `fix_content_id`) reaches the final candidate.
+- Reviews: every current non-spec review must have no `fail` verdict or pending findings, even when omitted from completion evidence. Record dispositions through successors. PR delivery also needs a cited applicable review, unless an explicit `review_waiver` grant is permitted by repository policy. A waiver never clears recorded failures or required independence. A review of earlier content applies when its retained manifest matches the final commit, or through fixed findings whose `fix_oid` or `fix_content_id` reaches the final candidate. A review round must cite a complete batch; a failed or incomplete snapshot cannot establish an empty round.
 - Independence: a current `role_runs` record with `fallback_reason: independence_required` and `status: blocked` refuses completion until an independent (`delegated`, `codex-bot` or `human`) implementation review of the final candidate is cited. Self-review never substitutes for it, and a successor cannot change that run's `fallback_reason` or mark it complete.
 
 ## Candidate Identity
@@ -126,6 +131,7 @@ No command stages, commits, pushes, installs, starts a runtime, or writes to Git
 
 - **Content identity.** A `ContentManifest` is `{version: 1, baseline_oid, files, excluded_paths, inputs}`. It lists every path that differs between `candidate.baseline_oid` and the current content: committed since bootstrap, staged, unstaged or untracked. Each entry is `{path, mode, state, sha256}`; a symlink hashes its target bytes, and a deletion has `sha256: null` and its baseline mode. Unrelated changes go in `excluded_paths` explicitly, backed by a recorded scope decision. `inputs` names relevant dependency, lockfile, policy, tool or environment identities. `content_id` is `sha256:` plus the SHA-256 of the canonical form (the displayed key order, paths and input names sorted by UTF-8 bytes, compact `JSON.stringify`); reformatting the file changes its `Source.sha256` but not its `content_id`. Use `content-manifest` to check a manifest against the working tree.
 - **Validation.** A completed command execution records `exit_code`, `log`, the manifest, and `input_fingerprint` (the canonical digest). Focused and local-only runs carry `content_id`, and their manifest must describe the working content when recorded. Committed gates carry `oid` for the frozen candidate, run from a clean checkout. `skipped` and `unavailable` need a reason.
+- **Precommit reviews and audits.** Cite the original record after committing identical content. Completion verifies the retained manifest against the final commit without changing the record's original identity. Changed content, missing manifests or invalidated inputs refuse reuse. A recorded dependency refresh invalidates validation, review and audit evidence; obtain fresh evidence for the affected checks.
 - **Receipts.** Point at an existing receipt instead of restating it: `receipt: {path, sha256, adapter, identity}`. The `ncdmb-validation-receipt-v1` adapter reads the ncdmb UI receipt unchanged (`candidateOid, lane, lockfileHash, policyHash, baseOid, dependency, exitCode`). At completion it accepts only the current candidate, an `affected` or `required` lane, the current `pnpm-lock.yaml` and `.agent/delivery-policy.json` hashes, this delivery's base, and `dependency: null`. Anything else is unavailable evidence, never a pass.
 - **Reuse.** A new OID does not require rerunning unchanged checks. Append a reuse record: `reused_from` names the original passing execution, `reuse` holds `{source_id, source_oid, target_oid, unchanged_inputs, reason}`, and the target manifest is included. The record keeps the original command, log and exit code, and `input_fingerprint: null`. R1 accepts reuse only when the target manifest's canonical digest equals the original fingerprint and every `unchanged_inputs` hash still matches. Reuse is not an execution, and an old receipt never passes for a new OID.
 - **Counters.** `review_rounds` counts distinct non-null `cycle_id`s among current reviews. `validation_reruns` sums `executions − 1` per `(cwd, command, scope, input_fingerprint)` over current completed executions that are not reuse records. Retries, successors, receipts and reuse add nothing.
@@ -137,7 +143,7 @@ No command stages, commits, pushes, installs, starts a runtime, or writes to Git
 `publications` holds one event per step of an intended action, joined by `operation_id`: `prepared`, then any `uncertain`, `mismatch` or `failed` observations, ending in `verified` or `failed`. Every step keeps the prepared `candidate_oid`, `kind`, `target`, `intended`, `precondition` and `batch_id`. `verified` means the specific remote object was read back and matched, not that a request returned success.
 
 - **Prepared** is recorded before the external write and requires the frozen candidate, a passing frozen-stage local identity check, and the authorized endpoint. A push goes only to the delivery branch ref. `push` needs `push` or a PR endpoint; `pr_create`/`pr_body`/`pr_state` need a PR endpoint; `draft: false` needs `ready_pr`; `reply` and `resolve` need a `review_round` or a remediating watch. The target must be this delivery's remote, repository and PR. For a push to the destination, `precondition.head_oid` is the expected remote state: `null` only when the ref is expected absent, the adopted OID before the first recorded push. Other GitHub writes take the expected PR head, so an incoming push stops them. While the same action has an unresolved operation, a new one is refused: inspect remote state and finish the existing operation.
-- **Replies** name the frozen batch (`Review.batch`). The snapshot is an external JSON file whose `threads` pair each `thread_graphql_id` with its `root_comment_database_id`. The reply's root and thread must be one entry of a complete snapshot, paired with a dispositioned finding. A thread with a verified reply in that batch never gets a second one. A resolution needs that reply verified, and a `fixed`, `duplicate` or `already_resolved` disposition. A fixed finding also needs its `fix_oid` at or behind the verified remote head. When resolution fails, retry only the resolution.
+- **Replies** name the frozen batch (`Review.batch`). The snapshot is an external JSON file whose `threads` pair each `thread_graphql_id` with its `root_comment_database_id`. Positive safe-integer database IDs from GitHub are normalized to strings in memory; snapshot bytes and hashes remain unchanged. Publication targets use strings. The reply's root and thread must be one entry of a complete snapshot, paired with a dispositioned finding. A thread with a verified reply in that batch never gets a second one. A resolution needs that reply verified, and a `fixed`, `duplicate` or `already_resolved` disposition. A fixed finding also needs its `fix_oid` at or behind the verified remote head. When resolution fails, retry only the resolution.
 - **Verified** checks per kind:
   - `push`: remote URL, ref and OID.
   - `pr_create`: repository, head repository and branch, base, head OID, draft, and body hash.

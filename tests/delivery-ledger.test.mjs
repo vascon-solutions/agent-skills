@@ -528,6 +528,9 @@ function deliverToFrozen(repo, owner, files = { "src/app.js": "export const v = 
 function draftPrDelivery(repo, owner) {
   const oid = deliverToFrozen(repo, owner);
   const gate = recordGate(repo, owner, ["src/app.js"]);
+  const implementation = review(owner);
+  ok(owner.append("reviews", implementation), "delivery implementation review");
+  repo.deliveryReviewId = implementation.id;
   const { pr, prepared, verified } = openPr(repo, owner);
   const pushes = owner.ledger().publications.filter((event) => event.kind === "push" && event.step === "verified");
   return { oid, gate, pr, prCreate: verified, push: pushes[pushes.length - 1] };
@@ -535,7 +538,11 @@ function draftPrDelivery(repo, owner) {
 
 function completion(owner, evidence, overrides = {}) {
   const ledger = owner.ledger();
-  return { endpoint: ledger.authorization.endpoint, reached_at: nowIso(), candidate_oid: ledger.candidate.oid, content_id: null, content_manifest: null, evidence_ids: evidence, limitations: [], ...overrides };
+  // Only the review created by draftPrDelivery is part of that shared fixture.
+  // Other tests choose their own evidence, including intentional omissions.
+  const implementation = ledger.reviews.find((item) => item.id === owner.repo.deliveryReviewId && item.candidate_oid === ledger.candidate.oid);
+  const references = [...new Set([...evidence, ...(implementation ? [`reviews:${implementation.id}`] : [])])];
+  return { endpoint: ledger.authorization.endpoint, reached_at: nowIso(), candidate_oid: ledger.candidate.oid, content_id: null, content_manifest: null, evidence_ids: references, limitations: [], ...overrides };
 }
 
 function nextStep(phase, checkpoint, overrides = {}) {
@@ -725,7 +732,7 @@ test("F13 slash/underscore branch names get distinct hashed ledger paths", () =>
 });
 
 test("F13 very long and Unicode branch names resolve to 64-hex keys and round-trip", () => {
-  const branch = `feat/${"ü".repeat(120)}-日本語-${"x".repeat(80)}`;
+  const branch = `feat/${"ü".repeat(100)}/日本語/${"x".repeat(120)}`;
   const repo = makeRepo({ branch });
   ok(run(initArgs(repo)));
   const ledger = JSON.parse(fs.readFileSync(repo.ledgerPath, "utf8"));
@@ -805,7 +812,8 @@ test("F13/N12 a tracked ledger path always fails, even when an ignore rule match
   refused(run(initArgs(repo)), 2, "invariant_error");
 });
 
-test("F13/N12 a permission error fails only when a needed exclusion write cannot be performed", () => {
+test("F13/N12 a permission error fails only when a needed exclusion write cannot be performed", (t) => {
+  if (process.getuid?.() === 0) return t.skip("root bypasses file-mode write restrictions");
   const needsWrite = makeRepo();
   const exclude = path.join(needsWrite.work, ".git", "info", "exclude");
   fs.chmodSync(exclude, 0o444);
@@ -1713,7 +1721,7 @@ test("N2/F5 import a spec report, instructions and dirty-bootstrap decisions bef
   const instructions = [{ path: agents, sha256: sha(fs.readFileSync(agents)) }];
   refused(run(initArgs(repo, { specs: [spec], bootstrap: { spec_check: specCheck, instructions } })), 2, "invariant_error", "dirty without a scope decision");
   refused(run(initArgs(repo, { specs: [spec], bootstrap: { spec_check: specCheck, instructions, decisions: [{ id: "dirty_scope", text: "Included: MY-AGENTS.md.bak only.", source: "owner" }] } })), 2, "invariant_error", "a substring is not a named path");
-  const decisions = [{ id: "dirty_scope", text: "Included: AGENTS.md. Excluded: nothing else is dirty.", source: "owner" }];
+  const decisions = [{ id: "dirty_scope", text: "Included: `AGENTS.md`. Excluded: nothing else is dirty.", source: "owner" }];
   refused(run(initArgs(repo, { specs: [spec], bootstrap: { spec_check: specCheck, instructions: [{ path: agents, sha256: "0".repeat(64) }], decisions } })), 4, "identity_mismatch");
   refused(run(initArgs(repo, { specs: [spec], bootstrap: { spec_check: { ...specCheck, verdict: "not_run", report: null, checked_at: null, reason: null }, instructions, decisions } })), 2, "invariant_error", "not_run needs a reason");
   ok(run(initArgs(repo, { specs: [spec], bootstrap: { spec_check: specCheck, instructions, decisions } })));
@@ -3174,10 +3182,11 @@ test("F15 local-only work and reply-only rounds make no commit: no helper comman
   assert.match(ghCallsInSource[0], /"--method", "GET"/);
 });
 
-test("V6 the R1 implementation diff is confined to section 13's file list", () => {
+test("V6 the R1 implementation and authorized usability follow-up stay within delivery files", () => {
   const allowed = [
     "skills/task-doc-delivery-loop/scripts/delivery-ledger.mjs",
     "skills/task-doc-delivery-loop/references/delivery-ledger.md",
+    "skills/task-doc-delivery-loop/references/delivery-examples.md",
     "skills/task-doc-delivery-loop/references/delivery-ledger.schema.json",
     "skills/task-doc-delivery-loop/references/authorization.md",
     "skills/task-doc-delivery-loop/references/validation.md",
@@ -3214,8 +3223,180 @@ test("V7 qualified completion references resolve only through their collection",
   refused(owner.release("complete", { next: null, completion: completion(owner, [shared]), blocker: null }), 2, "schema_error", "an unqualified reference");
   refused(owner.release("complete", { next: null, completion: completion(owner, [`audits:${shared}`]), blocker: null }), 2, "invariant_error", "a missing qualified reference");
   refused(owner.release("complete", { next: null, completion: completion(owner, [`reviews:${shared}`, `validation:${shared}`]), blocker: null }), 2, "invariant_error", "the review with pending findings is evaluated as a review");
-  ok(owner.release("complete", { next: null, completion: completion(owner, [`validation:${gate.id}`]), blocker: null }));
-  assert.deepEqual(owner.ledger().completion.evidence_ids, [`validation:${shared}`]);
+  refused(owner.release("complete", { next: null, completion: completion(owner, [`validation:${gate.id}`]), blocker: null }), 2, "invariant_error", "omitting the review does not resolve its pending findings");
+});
+
+test("R1 follow-up: generated initialization files are usable and never invent grants or overwrite files", () => {
+  const repo = makeRepo();
+  const before = git(repo.work, "status", "--porcelain");
+  const output = path.join(repo.inputs, "prepared");
+  const args = ["prepare-init", "--repo", repo.work, "--endpoint", "commit", "--brief", "Implement the approved task", "--remote", "origin", "--instruction", repo.taskDoc, "--output-dir", output];
+  const prepared = ok(run(args)).data;
+  const bootstrap = JSON.parse(fs.readFileSync(prepared.bootstrap_file));
+  assert.equal(bootstrap.instructions[0].sha256, sha(fs.readFileSync(repo.taskDoc)));
+  assert.ok(bootstrap.policy.skill_sources.length >= 5);
+  assert.deepEqual(JSON.parse(fs.readFileSync(prepared.authorization_file)).grants, []);
+  assert.equal(fs.existsSync(repo.ledgerPath), false);
+  assert.equal(git(repo.work, "status", "--porcelain"), before);
+  refused(run(args), 1, "io_error");
+  ok(run(["init", "--repo", repo.work, "--runtime", "codex", "--session", "generated", "--task-doc", repo.taskDoc, "--base", repo.base, "--endpoint", "commit", "--authorization-file", prepared.authorization_file, "--bootstrap-file", prepared.bootstrap_file]));
+  const local = makeRepo({ remote: null });
+  const localOutput = ok(run(["prepare-init", "--repo", local.work, "--endpoint", "local", "--brief", "Local task", "--no-remote", "--same-session", "--output-dir", path.join(local.inputs, "prepared")])).data;
+  const localBootstrap = JSON.parse(fs.readFileSync(localOutput.bootstrap_file));
+  assert.equal(localBootstrap.remote_name, null);
+  assert.equal(localBootstrap.policy.session_mode, "same_session");
+  assert.equal(localBootstrap.github, null);
+  git(local.work, "remote", "add", "origin", "https://gitlab.example/acme/widget.git");
+  const otherHost = ok(run(["prepare-init", "--repo", local.work, "--endpoint", "push", "--brief", "Push task", "--remote", "origin", "--output-dir", path.join(local.inputs, "other-host")])).data;
+  assert.equal(JSON.parse(fs.readFileSync(otherHost.bootstrap_file)).github, null, "a Git-shaped URL alone does not identify GitHub");
+  refused(run(["prepare-init", "--repo", local.work, "--endpoint", "local", "--brief", "Local task", "--no-remote", "--output-dir", path.join(local.work, "generated")]), 1, "argument_error");
+});
+
+test("R1 follow-up: generated manifests cover committed, dirty, deleted, executable and symlink content", () => {
+  const repo = makeRepo();
+  const owner = initDelivery(repo, { endpoint: "local" });
+  commit(repo, { "src/app.js": "export const v = 2;\n" });
+  fs.rmSync(path.join(repo.work, "README.md"));
+  fs.writeFileSync(path.join(repo.work, "run task\nü.sh"), "#!/bin/sh\n", { mode: 0o755 });
+  fs.symlinkSync("src/app.js", path.join(repo.work, "shortcut"));
+  fs.writeFileSync(path.join(repo.work, "unrelated.txt"), "leave untouched");
+  const file = path.join(repo.inputs, "generated-manifest.json");
+  const args = ["content-manifest", "--repo", repo.work, "--output-file", file, "--exclude-path", "unrelated.txt"];
+  refused(run(args), 2, "invariant_error");
+  ok(owner.append("decisions", { id: "scope", text: "exclude `unrelated.txt`", source: "user scope" }));
+  const before = owner.ledger().revision;
+  const result = ok(run(args)).data;
+  const manifest = JSON.parse(fs.readFileSync(file));
+  assert.deepEqual(manifest.files.map((entry) => entry.path).sort(), ["README.md", "run task\nü.sh", "shortcut", "src/app.js"].sort());
+  assert.equal(manifest.files.find((entry) => entry.path === "README.md").state, "deleted");
+  assert.equal(manifest.files.find((entry) => entry.path === "shortcut").mode, "120000");
+  assert.equal(manifest.files.find((entry) => entry.path.startsWith("run task")).mode, "100755");
+  const checked = ok(run(["content-manifest", "--repo", repo.work, "--manifest-file", file])).data;
+  assert.deepEqual(result, checked);
+  assert.equal(owner.ledger().revision, before);
+  refused(run(args), 1, "io_error");
+  refused(run(["content-manifest", "--repo", repo.work, "--output-file", path.join(repo.work, "new.json")]), 1, "argument_error");
+  const alias = path.join(repo.inputs, "repo-alias");
+  fs.symlinkSync(repo.work, alias);
+  refused(run(["content-manifest", "--repo", repo.work, "--output-file", path.join(alias, "new.json")]), 1, "argument_error");
+});
+
+test("R1 follow-up: failed and pending reviews block completion even when omitted, until dispositioned", () => {
+  const repo = makeRepo();
+  const owner = initDelivery(repo);
+  const { gate, push, prCreate } = draftPrDelivery(repo, owner);
+  const failed = review(owner, { verdict: "fail", findings: [finding()] });
+  ok(owner.append("reviews", failed));
+  const release = () => owner.release("complete", { next: null, blocker: null, completion: completion(owner, [`validation:${gate.id}`, `publications:${push.id}`, `publications:${prCreate.id}`]) });
+  refused(release(), 2, "invariant_error");
+  const pending = { ...failed, id: randomUUID(), supersedes_id: failed.id, verdict: "pass-with-fixes" };
+  ok(owner.append("reviews", pending));
+  refused(release(), 2, "invariant_error");
+  ok(owner.append("reviews", { ...pending, id: randomUUID(), supersedes_id: pending.id, findings: pending.findings.map((item) => ({ ...item, disposition: "rejected", classification: "invalid", reason: "verified against the approved requirement" })) }));
+  ok(release());
+});
+
+test("R1 follow-up: a PR delivery requires cited review evidence or an explicit waiver", () => {
+  const repo = makeRepo();
+  const owner = initDelivery(repo);
+  const { gate, push, prCreate } = draftPrDelivery(repo, owner);
+  const evidence = [`validation:${gate.id}`, `publications:${push.id}`, `publications:${prCreate.id}`];
+  const release = () => owner.release("complete", { next: null, blocker: null, completion: completion(owner, evidence, { evidence_ids: evidence }) });
+  refused(release(), 2, "invariant_error");
+  ok(owner.authorize(grant("review_waiver", { wording: "Skip implementation review for this delivery; repository policy permits this exception." })));
+  ok(release());
+});
+
+test("R1 follow-up: precommit review and audit apply to identical committed content", () => {
+  const repo = makeRepo();
+  const owner = initDelivery(repo, { endpoint: "commit", bootstrap: { audit_policy: { required: true, state: "pending", reason: "requested" } } });
+  fs.writeFileSync(path.join(repo.work, "src/app.js"), "export const v = 2;\n");
+  const manifest = manifestFile(repo, owner, [entry(repo, "src/app.js")]);
+  const identity = contentId(repo, manifest);
+  const reviewed = review(owner, { content_id: identity.content_id, content_manifest: manifest.source });
+  const audit = { id: randomUUID(), mode: "ui", runtime: "codex", model: null, verdict: "PASS", report: "verified UI", oid: null, content_id: identity.content_id, content_manifest: manifest.source, at: nowIso(), role_run_id: null };
+  ok(owner.append("reviews", reviewed));
+  ok(owner.append("audits", audit));
+  ok(owner.update({ audit_policy: { required: true, state: "complete", reason: "audit passed" } }));
+  const oid = commit(repo, { "src/app.js": "export const v = 2;\n" });
+  ok(owner.freeze(oid));
+  const gate = recordGate(repo, owner, ["src/app.js"]);
+  ok(owner.release("complete", { next: null, blocker: null, completion: completion(owner, [`validation:${gate.id}`, `reviews:${reviewed.id}`, `audits:${audit.id}`]) }));
+  assert.equal(owner.ledger().reviews[0].candidate_oid, null, "the original review identity is retained");
+});
+
+test("R1 follow-up: content changes and missing manifests cannot reuse a precommit review", () => {
+  const repo = makeRepo();
+  const owner = initDelivery(repo, { endpoint: "commit" });
+  fs.writeFileSync(path.join(repo.work, "src/app.js"), "export const v = 2;\n");
+  const manifest = manifestFile(repo, owner, [entry(repo, "src/app.js")]);
+  const identity = contentId(repo, manifest);
+  const reviewed = review(owner, { content_id: identity.content_id, content_manifest: manifest.source });
+  ok(owner.append("reviews", reviewed));
+  deliverToFrozen(repo, owner, { "src/app.js": "export const v = 3;\n" });
+  const gate = recordGate(repo, owner, ["src/app.js"]);
+  const release = () => owner.release("complete", { next: null, blocker: null, completion: completion(owner, [`validation:${gate.id}`, `reviews:${reviewed.id}`]) });
+  refused(release(), 2, "invariant_error");
+  fs.rmSync(manifest.file);
+  refused(release(), 1, "io_error");
+});
+
+test("R1 follow-up: dependency refresh invalidates precommit review and audit evidence", () => {
+  const repo = makeRepo();
+  const owner = initDelivery(repo, { endpoint: "commit" });
+  fs.writeFileSync(path.join(repo.work, "src/app.js"), "export const v = 2;\n");
+  const manifest = manifestFile(repo, owner, [entry(repo, "src/app.js")]);
+  const identity = contentId(repo, manifest);
+  const reviewed = review(owner, { content_id: identity.content_id, content_manifest: manifest.source });
+  const audit = { id: randomUUID(), mode: "ui", runtime: "codex", model: null, verdict: "PASS", report: "verified UI", oid: null, content_id: identity.content_id, content_manifest: manifest.source, at: nowIso(), role_run_id: null };
+  ok(owner.append("reviews", reviewed));
+  ok(owner.append("audits", audit));
+  const dependency = dependencyRepo(repo);
+  ok(owner.recordContext({ dependencies: [dependencyRecord(dependency)] }));
+  deliverToFrozen(repo, owner);
+  const gate = recordGate(repo, owner, ["src/app.js"]);
+  for (const ref of [`reviews:${reviewed.id}`, `audits:${audit.id}`]) {
+    const result = owner.release("complete", { next: null, blocker: null, completion: completion(owner, [`validation:${gate.id}`, ref]) });
+    const error = refused(result, 2, "invariant_error");
+    assert.match(error.message, /invalidated/);
+  }
+});
+
+test("R1 follow-up: incomplete empty batches cannot complete a reply-free review round", () => {
+  const repo = makeRepo();
+  const owner = initDelivery(repo);
+  const { delivered, result } = completeDelivery(repo, owner);
+  ok(result);
+  const reviewer = new Session(repo, "codex");
+  ok(reviewer.claim("review_round", { grantFile: input(repo, "grant", grant("review_round")) }));
+  const batch = batchFile(repo, reviewer, [], { complete: false });
+  const reviewed = review(reviewer, { batch });
+  ok(reviewer.append("reviews", reviewed));
+  refused(reviewer.release("complete", { next: null, blocker: null, completion: completion(reviewer, [`validation:${delivered.gate.id}`, `reviews:${reviewed.id}`]) }), 2, "invariant_error");
+});
+
+test("R1 follow-up: numeric GitHub root IDs are normalized without rewriting the batch", () => {
+  const repo = makeRepo();
+  const owner = initDelivery(repo);
+  ok(completeDelivery(repo, owner).result);
+  const reviewer = new Session(repo, "codex");
+  ok(reviewer.claim("review_round", { grantFile: input(repo, "grant", grant("review_round")) }));
+  const batch = batchFile(repo, reviewer, [{ thread_graphql_id: "thread-1", root_comment_database_id: 12345 }]);
+  ok(reviewer.append("reviews", review(reviewer, { batch, findings: [finding({ thread_id: "thread-1", classification: "invalid", disposition: "rejected", reason: "not a defect" })] })));
+  const bodyFile = path.join(repo.inputs, "numeric-reply.md");
+  fs.writeFileSync(bodyFile, "The behavior matches the requirement.");
+  const body = { file: bodyFile, sha256: sha(fs.readFileSync(bodyFile)) };
+  ok(reviewer.append("publications", replyEvent(repo, reviewer, batch, { thread_graphql_id: "thread-1", root_comment_database_id: "12345" }, body)));
+  assert.equal(sha(fs.readFileSync(batch.path)), batch.sha256);
+  assert.equal(JSON.parse(fs.readFileSync(batch.path)).threads[0].root_comment_database_id, 12345);
+});
+
+test("R1 follow-up: naming a dotted filename does not authorize its dirty prefix", () => {
+  const repo = makeRepo();
+  fs.writeFileSync(path.join(repo.work, "src/config"), "unrelated");
+  fs.writeFileSync(path.join(repo.work, "src/config.json"), "{}");
+  refused(run(initArgs(repo, { bootstrap: { decisions: [{ id: "dirty_scope", text: "include src/config.json", source: "user scope" }] } })), 2, "invariant_error");
+  ok(run(initArgs(repo, { bootstrap: { decisions: [{ id: "dirty_scope", text: "include `src/config.json`; exclude `src/config`", source: "user scope" }] } })));
 });
 
 describe("delivery ledger R1 acceptance", { concurrency: Math.max(2, Math.min(6, os.availableParallelism?.() ?? 4)) }, () => {
