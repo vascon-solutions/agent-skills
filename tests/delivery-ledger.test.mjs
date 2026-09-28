@@ -3474,6 +3474,106 @@ test("R1 review batch: disposition successors retain the reviewed head after a f
   }));
 });
 
+test("R1 completion: PR body evidence must describe the final candidate", () => {
+  const repo = makeRepo();
+  const owner = initDelivery(repo);
+  const delivered = draftPrDelivery(repo, owner);
+  let currentBody = fs.readFileSync(delivered.prCreate.intended.body_file, "utf8");
+  const prepareBody = (summary) => {
+    const pr = owner.ledger().pr;
+    const body = summaryBody(repo, owner, summary, currentBody);
+    const prepared = {
+      id: randomUUID(), operation_id: randomUUID(), step: "prepared", kind: "pr_body", at: nowIso(), candidate_oid: pr.head,
+      target: { host: pr.host, repository: pr.repository, pr_number: pr.number, pr_url: pr.url },
+      intended: { body_file: body.bodyFile, body_sha256: body.body_sha256 },
+      precondition: { head_oid: pr.head, body_sha256: body.current_body_sha256, state: "OPEN", observed_at: nowIso() },
+      batch_id: null, observed: null, error: null,
+    };
+    ok(owner.append("publications", prepared));
+    currentBody = body.body;
+    return prepared;
+  };
+  const verifyBody = (prepared) => {
+    const verified = step(prepared, "verified", { observed: observedFor(prepared, { oid: prepared.candidate_oid, body_sha256: prepared.intended.body_sha256 }) });
+    ok(owner.append("publications", verified));
+    return verified;
+  };
+  const oldBody = verifyBody(prepareBody("Candidate A passed validation."));
+  ok(owner.owned("begin-change"));
+  deliverToFrozen(repo, owner, { "src/app.js": "export const v = 3;\n" });
+  const gate = recordGate(repo, owner, ["src/app.js"]);
+  const reviewed = review(owner);
+  ok(owner.append("reviews", reviewed));
+  const pushed = pushCandidate(repo, owner, { precondition: delivered.oid });
+  const pr = prRecord(repo, owner);
+  ghPull(repo, pr);
+  ok(owner.recordContext({ pr }));
+  const finish = (body) => owner.release("complete", {
+    next: null, blocker: null,
+    completion: completion(owner, [`validation:${gate.id}`, `reviews:${reviewed.id}`, `publications:${pushed.id}`, `publications:${body.id}`]),
+  });
+  for (const stale of [delivered.prCreate, oldBody]) {
+    const error = refused(finish(stale), 2, "invariant_error", "a verified body for A cannot complete delivery of B");
+    assert.match(error.message, /PR body.*final candidate/);
+  }
+  const fresh = prepareBody("Candidate B passed validation.");
+  refused(finish(fresh), 2, "invariant_error", "the replacement body still requires verification");
+  verifyBody(fresh);
+  ok(finish(fresh), "a verified body for B completes the delivery");
+});
+
+test("R1 completion: each observe-only watch needs an observation from that watch", () => {
+  const repo = makeRepo();
+  const owner = initDelivery(repo);
+  const earlierSession = sessionRecord(owner);
+  ok(owner.append("sessions", earlierSession));
+  const { delivered, result } = completeDelivery(repo, owner);
+  ok(result);
+  const watcher = new Session(repo, "codex");
+  ok(watcher.claim("watch", { grantFile: input(repo, "grant", grant("monitor_observe")) }));
+  const finish = (actor, refs) => actor.release("complete", {
+    next: null, blocker: null, completion: completion(actor, refs, { limitations: ["user stop"] }),
+  });
+  for (const refs of [[], [`sessions:${earlierSession.id}`], [`validation:${delivered.gate.id}`]]) {
+    const error = refused(finish(watcher, refs), 2, "invariant_error", "delivery evidence does not establish that a watch ran");
+    assert.match(error.message, /observation.*current watch/);
+  }
+  const observation = sessionRecord(watcher, { phase: "watch" });
+  ok(watcher.append("sessions", observation));
+  ok(finish(watcher, [`sessions:${observation.id}`]));
+  const next = new Session(repo, "claude");
+  ok(next.claim("watch", { grantFile: input(repo, "grant", grant("monitor_observe")) }));
+  refused(finish(next, [`sessions:${observation.id}`]), 2, "invariant_error", "a completed watch does not supply the next watch's observation");
+  const fresh = sessionRecord(next, { phase: "watch" });
+  ok(next.append("sessions", fresh));
+  ok(finish(next, [`sessions:${fresh.id}`]));
+});
+
+test("R1 completion: an unfinished watch retains observations through owner changes", () => {
+  const repo = makeRepo();
+  const owner = initDelivery(repo);
+  ok(completeDelivery(repo, owner).result);
+  const watcher = new Session(repo, "codex");
+  ok(watcher.claim("watch", { grantFile: input(repo, "grant", grant("monitor_observe")) }));
+  const observation = sessionRecord(watcher, { phase: "watch" });
+  ok(watcher.append("sessions", observation));
+  ok(watcher.release("handoff", { next: nextStep("watch", null), completion: null, blocker: null }));
+  const resumed = new Session(repo, "claude");
+  ok(resumed.claim("watch"));
+  ok(resumed.release("blocked", {
+    next: nextStep("watch", null), completion: null,
+    blocker: { reason: "GitHub unavailable", resume_phase: "watch", resume_checkpoint: null, required_action: "retry the read" },
+  }));
+  const unblocked = new Session(repo, "codex");
+  ok(unblocked.claim("watch"));
+  const takeover = new Session(repo, "claude");
+  ok(takeover.claim("watch", { force: true, grantFile: input(repo, "grant", grant("takeover")) }));
+  ok(takeover.release("complete", {
+    next: null, blocker: null,
+    completion: completion(takeover, [`sessions:${observation.id}`], { limitations: ["user stop"] }),
+  }));
+});
+
 describe("delivery ledger R1 acceptance", { concurrency: Math.max(2, Math.min(6, os.availableParallelism?.() ?? 4)) }, () => {
   for (const { name, fn } of suite) serialTest(name, fn);
 });

@@ -3137,6 +3137,14 @@ function batchRecordedInReviewRound(ledger, batchId) {
   return Boolean(start && recorded && recorded.revision > start.revision);
 }
 
+function observationRecordedInWatch(ledger, evidence) {
+  // Resuming an unfinished watch preserves its observations. Only a new
+  // watch claimed from done requires observations after a new boundary.
+  const start = [...ledger.history].reverse().find((event) => event.operation === "claim" && event.phase === "watch" && event.detail.from_phase === "done");
+  return Boolean(start && evidence.some(({ collection, item }) => ledger.history.some((event) =>
+    event.operation === `append ${collection}` && event.detail.id === item.id && event.revision > start.revision)));
+}
+
 function completeChecks(ctx, ledger, completion) {
   const { authorization, candidate, owner } = ledger;
   if (completion.endpoint !== authorization.endpoint) {
@@ -3170,7 +3178,9 @@ function completeChecks(ctx, ledger, completion) {
     if (problem) fail("invariant_error", problem);
   }
   if (!watchObservation && validations.length === 0) fail("invariant_error", "complete needs an applicable passing validation gate for the final candidate");
-  if (watchObservation && evidence.length === 0) fail("invariant_error", "observation-only watch completion cites its final observation");
+  if (watchObservation && !observationRecordedInWatch(ledger, evidence)) {
+    fail("invariant_error", "observation-only watch completion cites an observation recorded during the current watch");
+  }
   const publications = byCollection("publications");
   const verifiedOps = new Map();
   for (const event of publications) {
@@ -3193,8 +3203,8 @@ function completeChecks(ctx, ledger, completion) {
     if (!pr || pr.head !== completion.candidate_oid || pr.state !== "OPEN" || pr.draft !== (completion.endpoint === "draft_pr")) {
       fail("invariant_error", `the endpoint needs a recorded open ${completion.endpoint === "draft_pr" ? "draft" : "ready"} PR at the final candidate`, { observed: pr });
     }
-    if (owner.phase === "delivery" && !verified.some((event) => ["pr_create", "pr_body"].includes(event.kind))) {
-      fail("invariant_error", "a PR delivery cites the verified PR body carrying its durable summary");
+    if (owner.phase === "delivery" && !verified.some((event) => ["pr_create", "pr_body"].includes(event.kind) && event.candidate_oid === completion.candidate_oid)) {
+      fail("invariant_error", "a PR delivery cites the verified PR body carrying its durable summary for the final candidate");
     }
   }
   for (const audit of byCollection("audits")) {
