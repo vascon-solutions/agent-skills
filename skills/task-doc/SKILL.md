@@ -25,6 +25,11 @@ Use [task template](references/task-template.md), adapting to an established rep
 - Prerequisites, likely inspection/write targets, and unresolved decisions.
 - Deliverables and observable completion verification, with checks proportional to risk.
 
+For implementation tasks, map each meaningful risk to its evidence, existing
+owner, and command or runtime scenario. Apply [test-audit](../test-audit/SKILL.md)
+when selecting permanent tests or rationalizing coverage. Record required runtime
+acceptance and its prerequisites separately, including when no new test is needed.
+
 File paths and symbols ground current-code claims; likely files are orientation, not orders to edit them all. Missing source information stays unknown rather than becoming invented architecture. Material unresolved decisions identify realistic options, implications, and who or what resolves them. They block affected implementation until resolved, not unrelated work.
 
 Do not turn the task into a line-by-line implementation recipe. Add dependent-phase ordering only when correctness needs it. Split only for independently shippable outcomes with materially distinct dependencies, risk, or verification, not for every component or test. Propose separate tasks unless the user already requested their creation.

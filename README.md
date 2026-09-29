@@ -14,6 +14,7 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 └── skills/
     ├── audit-api/
     ├── audit-ui/
+    ├── test-audit/
     ├── publish-branch/
     ├── prepare-frontend-handoff/
     ├── prepare-qa-handoff/
@@ -59,6 +60,7 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `audit-api`                 | Audit focused endpoints, dependent API journeys, role boundaries, OpenAPI/Swagger surfaces, or rollout readiness with Hurl-first execution, hardened curl fallback, compact redacted evidence, and a calibrated verdict                                                              |
 | `audit-ui`                  | Audit a focused running UI feature or end-to-end journey with service readiness checks, critical-page screenshots, functional evidence, a calibrated verdict, and prioritized UI/UX improvements                                                                                     |
+| `test-audit` | Evaluate permanent-test admission and rationalize authorized test scopes while preserving critical contracts |
 | `prepare-frontend-handoff`  | Prepare implementation handoff notes for frontend developers, including API contracts, screen behavior, route state, form mapping, query/cache behavior, UI states, migration steps, and retired dependencies                                                                        |
 | `prepare-qa-handoff`        | Prepare QA sign-off notes for features with lifecycle flows, endpoint touchpoints, expected behavior, negative coverage, and release validation scope                                                                                                                                |
 | `qa-triage-and-fix`         | Triage QA reports issue-by-issue, reproduce or contest findings with evidence, implement focused fixes, update authorized report fields, and record validation                                                                                                                       |
@@ -104,6 +106,23 @@ Use `brainstorm` for research and unsettled design, `task-doc-intake` for delive
 An approved task/spec satisfies discovery; one validation owner supplies reusable evidence to review and publication. Keep sequencing in the delivery ledger unless a separate durable plan is needed. Failure investigation uses the delivery skill's focused debugging reference. Core delivery has no Superpowers dependency. For skill authoring, use the host-provided `skill-creator` when available (it is not bundled in this pack), with focused checks and bounded scenario review when worthwhile.
 
 `brainstorm` saves substantial briefs/specs automatically: user path first, then existing repo spec convention, then `docs/specs/<topic>.md`; repo-independent research goes under `~/agent-artifacts/<topic>/markdown/`. Short exploration stays in chat. Saved specs are proposed until accepted; saving does not authorize commits or implementation.
+
+### Everyday Test Admission
+
+For direct coding requests that bypass task documents, put this rule in the
+agent's personal instructions or the project's existing instruction owner:
+
+> Before adding or materially changing permanent tests, apply the `test-audit`
+> admission criteria. Name the durable regression risk, check existing coverage,
+> and extend the smallest effective owner. Another layer needs a distinct failure
+> mode. Use runtime UI/API audits for acceptance where appropriate, without
+> replacing sole critical regression protection. Do not add presentation-only
+> tests or start unrelated suite cleanup. Briefly report the evidence used and
+> why any new permanent test was necessary.
+
+Use the criteria in the paragraph even when the skill is unavailable. Review
+should flag unnecessary tests and missing critical coverage. The rule applies to
+the changed scope; a full suite audit or pruning campaign needs its own request.
 
 ### Shared Pack Dependencies
 

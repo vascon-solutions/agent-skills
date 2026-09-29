@@ -108,6 +108,9 @@ These should be reviewable and map back to the source request.
 List inspectable completion checks.
 Prefer observable outcomes over vague statements like "works correctly".
 
+For implementation work, include the validation map defined in
+[task-doc](../SKILL.md#author), with executable checks and evidence locations.
+
 ## Approval Gates
 
 Only include specific unresolved decisions/actions requiring approval. Preserve existing authorization; a topic label alone does not introduce another gate.

@@ -17,6 +17,9 @@ Use risk-calibrated verification. A UI behavior claim may need rendered evidence
 
 Split only when outcomes are independently shippable and grouping makes scope, ownership, risk, or verification materially harder. Different files or UI concerns alone do not establish that split is needed. Preserve a coherent vertical change and its necessary dependencies.
 
+Check proposed tests against [test-audit](../test-audit/SKILL.md). Flag unnecessary
+test deliverables and evidence gaps in the task's validation map.
+
 ## Verdict
 
 - `accept`: executable with adequate scope and evidence; do not invent findings.

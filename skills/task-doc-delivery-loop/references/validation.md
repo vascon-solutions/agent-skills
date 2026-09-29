@@ -5,7 +5,7 @@ Use one validation owner per delivery or remediation batch. Reviewers and publis
 ## Choose Evidence For The Claim
 
 - Identify the behavior, contract, or requirement the check can actually prove. A typecheck is not a build; a mock-based unit test is not proof of a database constraint; a passing suite does not establish every acceptance criterion.
-- Use the smallest relevant check during implementation. Add a permanent regression test for a named durable risk, especially authorization, data integrity, lifecycle transitions, concurrency, recovery, or public contracts. Avoid tests that only mirror implementation details or fix ordinary wording/layout in place.
+- Use the smallest relevant check during implementation. Apply [test-audit](../../test-audit/SKILL.md) for permanent-test admission, removals, and the boundary between regression protection and runtime acceptance.
 - For a bug fix, reproduce the symptom before editing when practical. Confirm a regression test detects the original failure using a safe isolated baseline or equivalent evidence; do not revert unrelated changes just to demonstrate red-green.
 - For visual acceptance criteria, inspect the rendered behavior. A focused manual/browser check can prove the requested outcome without committing a presentation-only test. Preserve explicit user restrictions and report any resulting evidence gap.
 - Use repo-required checks and hooks for the final candidate. Deduplicate equivalent manual checks when hooks already prove the same claim against the same inputs. Never bypass a required gate to save a run.
@@ -23,6 +23,9 @@ After remediation, rerun affected checks. An unrelated documentation edit does n
 For reviews and audits performed before committing, retain the content manifest and cite the original record at completion. The ledger compares its content to the final commit. Do not repeat a passing review or audit just to obtain a commit-based record. A dependency refresh invalidates affected evidence even when repository file bytes are unchanged.
 
 ## Report Honestly
+
+In the normal completion report, state the evidence used and the admission
+rationale for new permanent tests, or why no new test was needed.
 
 Read the actual result before claiming success. Distinguish passing, failed, skipped, unavailable, and pending checks. Do not extrapolate focused coverage into 'all tests pass.' Verify remote head and PR base/state for publication claims; old local test results do not establish current CI status.
 

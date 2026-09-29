@@ -28,6 +28,10 @@ For each actionable finding include file:line or symbol, violated requirement or
 
 Do not inflate uncertainty into a confirmed defect or invent findings to justify the review. Preserve prior product decisions; flag new conflicting evidence rather than silently adding requirements.
 
+Apply [test-audit](../test-audit/SKILL.md) to test changes. Flag unnecessary tests
+and missing critical protection, and verify claimed survivors for removals.
+Keep review within the changed scope; do not start an unrelated suite audit.
+
 ## Output
 
 Report `pass`, `pass-with-fixes`, or `fail`, findings ordered by severity, and missing validation. Distinguish inspected evidence from checks you ran and note whether review was local or independent. A pass applies to the stated scope and evidence, not to unverified runtime behavior.
