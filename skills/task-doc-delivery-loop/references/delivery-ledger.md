@@ -55,7 +55,7 @@ node <skill-dir>/scripts/delivery-ledger.mjs <command> (--repo DIR [--branch NAM
 | `release --outcome complete\|handoff\|blocked --release-file F` | Clear ownership and set `phase`, `next`, `blocker`, `completion`. |
 | `recover-lock --kind branch\|exclude (--operation-id ID \| --expected-lock-sha256 HASH) --reason TEXT` | Remove one confirmed-stale lock. Not a ledger mutation. |
 | `summary-body --current-body-file F --summary-file F [--expected-current-sha256 H]` | Read-only, frozen candidate: return the PR body with this delivery's summary block appended or replaced. |
-| `set-review-bound` | Refused in R1; `review_bound` stays `null` until R3. |
+| `set-review-bound --bound-file F` | Owner-only: finalize the frozen candidate’s size-based review bound, referenced grants and derived counters. See [review policy](review-policy.md) for evidence, extensions, cycle accounting and legacy/local-only handling. |
 
 No command stages, commits, pushes, installs, starts a runtime, or writes to GitHub. `check` is the only command that reads the network: `git ls-remote` for the destination ref and `gh api --method GET` for the PR.
 

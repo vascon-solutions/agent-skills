@@ -37,12 +37,107 @@
     "limitations": { "type": "array", "items": { "$ref": "#/$defs/Limitation" } },
     "history": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/HistoryEvent" } },
     "audit_policy": { "$ref": "#/$defs/AuditPolicy" },
-    "review_bound": { "type": "null", "description": "R1 keeps this null; R3 installs the review bound." },
+    "review_bound": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/ReviewBound"}], "description": "Null until the provisional estimate is finalized on a frozen candidate; legacy/local-only records remain readable."},
     "pr": { "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/PR" }] },
     "measurements": { "$ref": "#/$defs/Measurements" },
     "updated_by": { "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/UpdatedBy" }] }
   },
   "$defs": {
+    "ReviewBoundBasis": {
+      "type": "object",
+      "required": [
+        "files",
+        "packages",
+        "workspace_decision",
+        "delegated_decision"
+      ],
+      "properties": {
+        "files": {
+          "$ref": "#/$defs/Counter"
+        },
+        "packages": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/StringArray"
+            }
+          ]
+        },
+        "workspace_decision": {
+          "$ref": "#/$defs/Id"
+        },
+        "delegated_decision": {
+          "$ref": "#/$defs/NullableText"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ReviewBound": {
+      "type": "object",
+      "required": [
+        "max_rounds",
+        "rounds_used",
+        "size",
+        "measured_oid",
+        "basis",
+        "delegated_limit",
+        "delegated_used",
+        "extension_rounds",
+        "overrides"
+      ],
+      "properties": {
+        "max_rounds": {
+          "enum": [
+            1,
+            2,
+            3
+          ]
+        },
+        "rounds_used": {
+          "$ref": "#/$defs/Counter"
+        },
+        "size": {
+          "enum": [
+            "small",
+            "medium",
+            "large",
+            "size_unknown"
+          ]
+        },
+        "measured_oid": {
+          "$ref": "#/$defs/OID"
+        },
+        "basis": {
+          "$ref": "#/$defs/ReviewBoundBasis"
+        },
+        "delegated_limit": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/Counter"
+            }
+          ]
+        },
+        "delegated_used": {
+          "$ref": "#/$defs/Counter"
+        },
+        "extension_rounds": {
+          "$ref": "#/$defs/Counter"
+        },
+        "overrides": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Grant"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+
     "Uuid": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
     "Id": { "type": "string", "minLength": 1 },
     "Text": { "type": "string" },

@@ -365,3 +365,31 @@ test("the delivery ledger reference documents every helper command", async () =>
   for (const command of commands) assert.match(reference, new RegExp("\\| `" + command + "[ `]"), command);
   assert.match(reference, /\]\(delivery-ledger\.schema\.json\)/);
 });
+
+test("R3 review routing preserves spec correctness, shape sweeps and explicit bounded authority", () => {
+  // These are executable workflow/authority contracts, not presentation copy.
+  const reviewer = read("skills", "review-implementation", "SKILL.md");
+  const risks = read("skills", "review-implementation", "references", "risk-classes.md");
+  const spec = read("skills", "review-task-docs", "SKILL.md");
+  const author = read("skills", "task-doc", "SKILL.md");
+  const loop = read("skills", "task-doc-delivery-loop", "SKILL.md");
+  const remediation = read("skills", "address-review-findings", "SKILL.md");
+  const policy = read("skills", "task-doc-delivery-loop", "references", "review-policy.md");
+  assert.match(reviewer, /references\/risk-classes\.md/);
+  for (const shape of ["identity-reset", "async-prerequisite", "version-conflict-recovery", "authorization-leak"]) assert.ok(risks.includes(shape));
+  assert.match(risks, /distinguish loading, failure and absence/);
+  assert.match(risks, /refresh and reset or explicitly reconcile/);
+  assert.match(risks, /server-enforced actor, tenant, and object scope/);
+  assert.match(risks, /stale-permission, wrong-actor, and denied-transition/);
+  assert.match(risks, /user acceptance and separate/);
+  assert.match(spec, /current code, upstream shared\/API contracts and repository\s+product rules, not against itself/);
+  assert.match(spec, /Implementation review and runtime evidence must still flag later contradictions/);
+  for (const verdict of ["revise", "split", "rewrite"]) assert.ok(author.includes('`'+verdict+'`'));
+  assert.match(loop, /feature-grade task docs[\s\S]*spec-correctness/);
+  assert.match(loop, /zero diff does not permanently make a feature small/);
+  for (const text of [loop, remediation]) assert.doesNotMatch(text, /Continue beyond this bound for new critical|Beyond that, continue for critical/);
+  assert.match(policy, /Small may\s+use permitted inline review/);
+  assert.match(policy, /A remediation\s+extension does not raise `delegated_limit`/);
+  assert.match(remediation, /whole intended candidate diff and named equivalent touched paths/);
+  assert.match(remediation, /without another permission request/);
+});

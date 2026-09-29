@@ -61,6 +61,8 @@ jq -n --slurpfile identity "$evidence/identity.json" \
 
 Ensure no tested input changed during the check. Supply relevant external input identities with `--inputs-file`. Use repeated `--exclude-path PATH` only for unrelated changes already explained in a scope decision. A failure needs investigation and a fresh record after remediation; do not turn it into a pass by editing its JSON.
 
+Local-only work records its provisional size and cycle allowance in source decisions, with an unmeasured limitation. Do not create a commit to use the frozen-candidate bound helper. Apply the same [review policy](review-policy.md) inline.
+
 Perform the implementation review against the task and this content. The following record is appropriate only after an actual passing review with no findings. Otherwise record the real verdict and findings using the schema's `Review` shape. Requested audits likewise need their actual result.
 
 ```sh
@@ -83,7 +85,7 @@ owned release --outcome complete --release-file "$evidence/release.json"
 
 Completion checks the current content again. No commit is needed for this endpoint. Include actual audit evidence and limitations when applicable. If the work cannot complete, use `handoff` or `blocked` with the real remaining step.
 
-For a commit or PR endpoint, use the same preparation with the authorized endpoint and remote. Commit the intended scope with hooks, then `freeze` with commit evidence. Reuse the original review and audit records when their retained manifests match the commit. Record the committed validation gate or an explicit reuse of the precommit gate. Pass the ledger and current claim to [publication](../../publish-branch/references/ledger-handoff.md). Cite the verified publication events and applicable review at completion. A missing remote does not silently turn a PR request into local-only completion.
+For a commit or PR endpoint, use the same preparation with the authorized endpoint and remote. Commit the intended scope with hooks, then `freeze` with commit evidence. Before the first implementation assessment, `measure` and finalize `set-review-bound` using the [review policy](review-policy.md). Record the assessment cycle and any delegated dispatch. Reuse applicable earlier review and audit records when their retained manifests match the commit; local verification of remediation adds no cycle. Record the committed validation gate or an explicit reuse of the precommit gate. Pass the ledger and current claim to [publication](../../publish-branch/references/ledger-handoff.md). Cite the verified publication events and applicable review at completion. A missing remote does not silently turn a PR request into local-only completion.
 
 ## Resume An Interrupted Delivery
 
