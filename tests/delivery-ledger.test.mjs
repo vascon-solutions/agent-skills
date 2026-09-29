@@ -2637,6 +2637,7 @@ test("F6 incoming head or body edits stop stale publication", () => {
 test("F6 Markdown with quotes, newlines, backticks and shell substitutions round-trips literally", () => {
   const repo = makeRepo();
   const owner = initDelivery(repo);
+  deliverToFrozen(repo, owner);
   const canary = path.join(repo.dir, "canary");
   const tick = "`";
   const text = `Said "quoted" and 'single'.\n\n${tick}code${tick} and ${tick.repeat(3)}\nblock\n${tick.repeat(3)}\n$(touch ${canary}) and ${tick}touch ${canary}${tick} and \${HOME}\n`;
@@ -2714,6 +2715,10 @@ test("N7 an incomplete snapshot cannot back publication", () => {
 test("N7/F15 summary markers: duplicated, unmatched or foreign blocks stop; bytes outside the block are preserved", () => {
   const repo = makeRepo();
   const owner = initDelivery(repo);
+  const empty = bodyFile(repo, "");
+  const prose = bodyFile(repo, "summary prose");
+  refused(run(["summary-body", "--repo", repo.work, "--current-body-file", empty.file, "--summary-file", prose.file]), 2, "invariant_error", "freeze before generating a summary");
+  const oid = deliverToFrozen(repo, owner);
   const id = owner.ledger().delivery_id;
   const start = `<!-- agent-delivery-summary:${id}:start -->`;
   const end = `<!-- agent-delivery-summary:${id}:end -->`;
@@ -2721,23 +2726,24 @@ test("N7/F15 summary markers: duplicated, unmatched or foreign blocks stop; byte
   const suffix = "\n\n## Reviewer notes\nkeep me exactly\n";
   const first = summaryBody(repo, owner, "v1 summary", `${prefix}${start}\nold\n${end}${suffix}`);
   assert.equal(first.action, "replaced");
-  assert.equal(first.body, `${prefix}${start}\nv1 summary\n${end}${suffix}`);
+  assert.equal(first.body, `${prefix}${start}\n<!-- agent-delivery-candidate:${oid} -->\nv1 summary\n${end}${suffix}`);
   const again = summaryBody(repo, owner, "v1 summary", first.body);
   assert.equal(again.body, first.body, "a stable update is idempotent");
   const appended = summaryBody(repo, owner, "fresh", "Human-written body.");
   assert.equal(appended.action, "appended");
   assert.ok(appended.body.startsWith(`Human-written body.\n\n${start}`));
-  const bad = (current) => {
+  const bad = (current, summary = "x") => {
     const currentFile = path.join(repo.inputs, `bad-${randomUUID()}.md`);
     fs.writeFileSync(currentFile, current);
     const summaryFile = path.join(repo.inputs, `s-${randomUUID()}.md`);
-    fs.writeFileSync(summaryFile, "x");
+    fs.writeFileSync(summaryFile, summary);
     return run(["summary-body", "--repo", repo.work, "--current-body-file", currentFile, "--summary-file", summaryFile]);
   };
   refused(bad(`${start}\na\n${end}\n${start}\nb\n${end}`), 2, "invariant_error", "duplicate pair");
   refused(bad(`${start}\nno end`), 2, "invariant_error", "unmatched start");
   refused(bad(`${end}\n${start}`), 2, "invariant_error", "reversed pair");
   refused(bad("<!-- agent-delivery-summary:other-delivery:start -->\nx\n<!-- agent-delivery-summary:other-delivery:end -->"), 2, "invariant_error", "another delivery's block");
+  refused(bad("", `<!-- agent-delivery-candidate:${oid} -->\nretained summary`), 2, "invariant_error", "the generator does not silently relabel a retained marker");
 });
 
 test("N7 a non-GitHub push fabricates no GitHub identity", () => {
@@ -3671,6 +3677,144 @@ test("R1 boundaries: resuming a phase cannot consume a grant for a later phase",
       assert.equal(next.ledger().history.at(-1).detail.grant_id, futureGrant.id);
     }
   }
+});
+
+test("R1 evidence scope: excluded working dirt cannot enter a committed gate, review or audit", () => {
+  const repo = makeRepo();
+  const owner = initDelivery(repo, { endpoint: "commit" });
+  fs.writeFileSync(path.join(repo.work, "src/app.js"), "export const v = 2;\n");
+  fs.writeFileSync(path.join(repo.work, "README.md"), "unreviewed edit\n");
+  const manifest = manifestFile(repo, owner, [entry(repo, "src/app.js")], { excluded: ["README.md"] });
+  const identity = contentId(repo, manifest);
+  const reviewed = review(owner, { content_id: identity.content_id, content_manifest: manifest.source });
+  const audit = { id: randomUUID(), mode: "ui", runtime: "codex", model: null, verdict: "PASS", report: "checked app only", oid: null, content_id: identity.content_id, content_manifest: manifest.source, at: nowIso(), role_run_id: null };
+  ok(owner.append("reviews", reviewed));
+  ok(owner.append("audits", audit));
+  const oid = commit(repo, {});
+  ok(owner.freeze(oid, { intended: ["src", "README.md"] }));
+  const partialGate = commandValidation(repo, { oid, content_manifest: manifest.source, input_fingerprint: identity.input_fingerprint });
+  refused(owner.append("validation", partialGate), 4, "identity_mismatch", "an excluded committed file cannot bypass the validation gate");
+  const gate = recordGate(repo, owner, ["src/app.js", "README.md"]);
+  for (const ref of [`reviews:${reviewed.id}`, `audits:${audit.id}`]) {
+    refused(completeCommit(owner, [`validation:${gate.id}`, ref]), 2, "invariant_error", "precommit evidence must cover every committed change");
+  }
+  ok(completeCommit(owner, [`validation:${gate.id}`]));
+});
+
+test("R1 evidence scope: fresh delivery records cannot complete an observe-only watch", () => {
+  const repo = makeRepo();
+  const owner = initDelivery(repo);
+  const oldSession = sessionRecord(owner);
+  ok(owner.append("sessions", oldSession));
+  ok(completeDelivery(repo, owner).result);
+  const watcher = new Session(repo, "codex");
+  ok(watcher.claim("watch", { grantFile: input(repo, "grant", grant("monitor_observe")) }));
+  const finish = (actor, refs) => actor.release("complete", { next: null, blocker: null, completion: completion(actor, refs) });
+  const unrelated = [
+    ["sessions", sessionRecord(watcher)],
+    ["sessions", { ...oldSession, id: randomUUID(), supersedes_id: oldSession.id, ended_at: nowIso() }],
+    ["role_runs", roleRun(watcher)],
+    ["role_runs", roleRun(watcher, { phase: "watch" })],
+    ["reviews", review(watcher)],
+    ["sessions", sessionRecord(watcher, { phase: "watch", label: "another-session" })],
+  ];
+  for (const [field, item] of unrelated) {
+    ok(watcher.append(field, item));
+    refused(finish(watcher, [`${field}:${item.id}`]), 2, "invariant_error", `${field} is not an observation by this watch`);
+  }
+  const observation = sessionRecord(watcher, { phase: "watch" });
+  ok(watcher.append("sessions", observation));
+  ok(watcher.append("sessions", { ...observation, id: randomUUID(), supersedes_id: observation.id, ended_at: nowIso() }));
+  ok(finish(watcher, [`sessions:${observation.id}`]));
+  const next = new Session(repo, "claude");
+  ok(next.claim("watch", { grantFile: input(repo, "grant", grant("monitor_observe")) }));
+  const previous = next.ledger().sessions.at(-1);
+  const copied = { ...previous, id: randomUUID(), supersedes_id: previous.id, ended_at: nowIso() };
+  ok(next.append("sessions", copied));
+  refused(finish(next, [`sessions:${copied.id}`]), 2, "invariant_error", "updating an earlier watch's record does not create a new observation");
+  const fresh = sessionRecord(next, { phase: "watch" });
+  ok(next.append("sessions", fresh));
+  ok(finish(next, [`sessions:${fresh.id}`]));
+});
+
+test("R1 evidence scope: excluded dirt left out of the commit preserves evidence reuse", () => {
+  const repo = makeRepo();
+  const owner = initDelivery(repo, { endpoint: "commit" });
+  fs.writeFileSync(path.join(repo.work, "src/app.js"), "export const v = 2;\n");
+  fs.writeFileSync(path.join(repo.work, "README.md"), "unrelated edit\n");
+  const manifest = manifestFile(repo, owner, [entry(repo, "src/app.js")], { excluded: ["README.md"] });
+  const identity = contentId(repo, manifest);
+  const reviewed = review(owner, { content_id: identity.content_id, content_manifest: manifest.source });
+  ok(owner.append("reviews", reviewed));
+  git(repo.work, "add", "src/app.js");
+  git(repo.work, "commit", "-q", "-m", "app only");
+  git(repo.work, "restore", "--", "README.md");
+  const oid = git(repo.work, "rev-parse", "HEAD");
+  ok(owner.freeze(oid));
+  const gate = commandValidation(repo, { oid, content_manifest: manifest.source, input_fingerprint: identity.input_fingerprint });
+  ok(owner.append("validation", gate));
+  ok(completeCommit(owner, [`validation:${gate.id}`, `reviews:${reviewed.id}`]));
+});
+
+test("R1 evidence scope: PR creation rejects a summary for another candidate", () => {
+  const repo = makeRepo();
+  const owner = initDelivery(repo);
+  const oid = deliverToFrozen(repo, owner);
+  pushCandidate(repo, owner);
+  const body = summaryBody(repo, owner, "Validated candidate.");
+  const stale = bodyFile(repo, body.body.replace(`agent-delivery-candidate:${oid}`, `agent-delivery-candidate:${owner.ledger().candidate.baseline_oid}`));
+  const prepared = { id: randomUUID(), operation_id: randomUUID(), step: "prepared", kind: "pr_create", at: nowIso(), candidate_oid: oid,
+    target: { host: "github.com", repository: `${repo.github.owner}/${repo.github.name}`, pr_number: null, pr_url: null },
+    intended: { head_repository: { ...repo.github }, head_branch: repo.branch, base: "main", draft: true, body_file: stale.file, body_sha256: stale.sha256 },
+    precondition: { head_oid: oid, body_sha256: null, state: null, observed_at: nowIso() }, batch_id: null, observed: null, error: null };
+  refused(owner.append("publications", prepared), 4, "identity_mismatch");
+  ok(owner.append("publications", { ...prepared, intended: { ...prepared.intended, body_file: body.bodyFile, body_sha256: body.body_sha256 } }));
+});
+
+test("R1 evidence scope: PR body bytes must carry the final candidate inside the summary", () => {
+  const repo = makeRepo();
+  const owner = initDelivery(repo);
+  const delivered = draftPrDelivery(repo, owner);
+  const staleBody = fs.readFileSync(delivered.prCreate.intended.body_file, "utf8");
+  ok(owner.owned("begin-change"));
+  const oid = deliverToFrozen(repo, owner, { "src/app.js": "export const v = 3;\n" });
+  const gate = recordGate(repo, owner, ["src/app.js"]);
+  const reviewed = review(owner);
+  ok(owner.append("reviews", reviewed));
+  const pushed = pushCandidate(repo, owner, { precondition: delivered.oid });
+  const pr = prRecord(repo, owner);
+  ghPull(repo, pr);
+  ok(owner.recordContext({ pr }));
+  const prepare = (text) => {
+    const body = bodyFile(repo, text);
+    return { id: randomUUID(), operation_id: randomUUID(), step: "prepared", kind: "pr_body", at: nowIso(), candidate_oid: oid,
+      target: { host: pr.host, repository: pr.repository, pr_number: pr.number, pr_url: pr.url },
+      intended: { body_file: body.file, body_sha256: body.sha256 },
+      precondition: { head_oid: oid, body_sha256: sha(staleBody), state: "OPEN", observed_at: nowIso() }, batch_id: null, observed: null, error: null };
+  };
+  const marker = `<!-- agent-delivery-candidate:${oid} -->`;
+  const fresh = summaryBody(repo, owner, "Candidate B passed validation.", staleBody);
+  for (const text of [staleBody, `${marker}\n${staleBody}`, fresh.body.replace(marker, ""), fresh.body.replace(marker, `${marker}\n${marker}`)]) {
+    refused(owner.append("publications", prepare(text)), 4, "identity_mismatch", "missing, duplicate, outside-block and stale candidate markers refuse");
+  }
+  const prepared = prepare(fresh.body);
+  ok(owner.append("publications", prepared));
+  const verified = step(prepared, "verified", { observed: observedFor(prepared, { oid, body_sha256: prepared.intended.body_sha256 }) });
+  ok(owner.append("publications", verified));
+  const finish = () => owner.release("complete", { next: null, blocker: null,
+    completion: completion(owner, [`validation:${gate.id}`, `reviews:${reviewed.id}`, `publications:${pushed.id}`, `publications:${verified.id}`]) });
+  const validLedger = fs.readFileSync(repo.ledgerPath, "utf8");
+  const oldFile = bodyFile(repo, staleBody);
+  manualEdit(repo, (ledger) => {
+    for (const event of ledger.publications.filter((item) => item.operation_id === prepared.operation_id)) {
+      event.intended.body_file = oldFile.file;
+      event.intended.body_sha256 = oldFile.sha256;
+      if (event.observed) event.observed.body_sha256 = oldFile.sha256;
+    }
+  });
+  refused(finish(), 4, "identity_mismatch", "completion checks retained bytes for older prepared operations too");
+  fs.writeFileSync(repo.ledgerPath, validLedger);
+  ok(finish());
 });
 
 describe("delivery ledger R1 acceptance", { concurrency: Math.max(2, Math.min(6, os.availableParallelism?.() ?? 4)) }, () => {

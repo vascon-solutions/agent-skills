@@ -1448,7 +1448,10 @@ export function verifyManifestContent(worktree, manifest, target) {
   const excluded = new Set(manifest.excluded_paths);
   const problems = [];
   for (const [relPath, actual] of changes) {
-    if (excluded.has(relPath)) continue;
+    if (excluded.has(relPath)) {
+      if (target !== "worktree") problems.push({ path: relPath, problem: "an excluded path differs in the committed candidate", observed: actual });
+      continue;
+    }
     const entry = listed.get(relPath);
     if (!entry) {
       problems.push({ path: relPath, problem: "changed path is neither listed nor explicitly excluded", observed: actual });
@@ -1485,6 +1488,17 @@ function wellFormedBlock(body, deliveryId) {
     fail("invariant_error", "duplicate or unmatched agent-delivery-summary markers; stop and report", { observed: markers.map(({ kind, index }) => ({ kind, index })) });
   }
   return { start: starts[0], end: ends[0] };
+}
+
+function checkSummaryCandidate(body, deliveryId, candidateOid) {
+  const block = wellFormedBlock(body, deliveryId);
+  if (!block) fail("invariant_error", "the PR body carries this delivery's summary block");
+  const content = body.slice(block.start.end, block.end.index);
+  const markers = [...content.matchAll(/<!-- agent-delivery-candidate:([^>]*) -->/g)];
+  if (markers.length !== 1 || markers[0][1] !== candidateOid
+      || (content.match(/<!-- agent-delivery-candidate:/g) ?? []).length !== 1) {
+    fail("identity_mismatch", "the summary block must carry exactly one agent-delivery-candidate marker for the final candidate", { expected: candidateOid, observed: markers.map((match) => match[1]) });
+  }
 }
 
 export function applySummaryBlock(current, deliveryId, summary) {
@@ -2543,7 +2557,7 @@ function prepareChecks(ctx, ledger, item) {
         fail("identity_mismatch", "the PR must be opened from this delivery's branch onto its verified base", { expected: { head_repository: github, head_branch: candidate.branch, base: baseBranchName(ledger) }, observed: item.intended });
       }
       if (remoteHead !== item.candidate_oid || item.precondition.head_oid !== item.candidate_oid) fail("identity_mismatch", "push the candidate before opening its PR", { expected: item.candidate_oid, observed: remoteHead });
-      if (!wellFormedBlock(checkBody(item.intended.body_file, item.intended.body_sha256), ledger.delivery_id)) fail("invariant_error", "the PR body carries this delivery's summary block");
+      checkSummaryCandidate(checkBody(item.intended.body_file, item.intended.body_sha256), ledger.delivery_id, item.candidate_oid);
       break;
     }
     case "pr_body":
@@ -2557,7 +2571,7 @@ function prepareChecks(ctx, ledger, item) {
       }
       if (item.kind === "pr_body") {
         if (item.precondition.body_sha256 === null) fail("invariant_error", "a PR-body write records the current body hash it compared");
-        if (!wellFormedBlock(checkBody(item.intended.body_file, item.intended.body_sha256), ledger.delivery_id)) fail("invariant_error", "the PR body carries this delivery's summary block");
+        checkSummaryCandidate(checkBody(item.intended.body_file, item.intended.body_sha256), ledger.delivery_id, item.candidate_oid);
       }
       if (item.kind === "pr_state" && item.precondition.state !== "OPEN") fail("invariant_error", "a draft-state change needs an open PR");
       if (item.kind === "reply" || item.kind === "resolve") replyChecks(ctx, ledger, item, remoteHead);
@@ -3145,10 +3159,15 @@ function batchRecordedInReviewRound(ledger, batchId) {
 
 function observationRecordedInWatch(ledger, evidence) {
   // Resuming an unfinished watch preserves its observations. Only a new
-  // watch claimed from done requires observations after a new boundary.
+  // watch claimed from done requires a new watch session. Updating an old
+  // session or recording unrelated evidence does not establish a watch.
   const start = [...ledger.history].reverse().find((event) => event.operation === "claim" && event.phase === "watch" && event.detail.from_phase === "done");
-  return Boolean(start && evidence.some(({ collection, item }) => ledger.history.some((event) =>
-    event.operation === `append ${collection}` && event.detail.id === item.id && event.revision > start.revision)));
+  return Boolean(start && evidence.some(({ collection, item }) => {
+    if (collection !== "sessions" || item.phase !== "watch") return false;
+    const root = chainRoot(ledger.sessions, item);
+    return ledger.history.some((event) => event.operation === "append sessions" && event.detail.id === root.id
+      && event.revision > start.revision && event.phase === "watch" && event.session === root.label && event.runtime === root.runtime);
+  }));
 }
 
 function completeChecks(ctx, ledger, completion) {
@@ -3211,6 +3230,9 @@ function completeChecks(ctx, ledger, completion) {
     }
     if (owner.phase === "delivery" && !verified.some((event) => ["pr_create", "pr_body"].includes(event.kind) && event.candidate_oid === completion.candidate_oid)) {
       fail("invariant_error", "a PR delivery cites the verified PR body carrying its durable summary for the final candidate");
+    }
+    for (const event of verified.filter((item) => ["pr_create", "pr_body"].includes(item.kind) && item.candidate_oid === completion.candidate_oid)) {
+      checkSummaryCandidate(checkBody(event.intended.body_file, event.intended.body_sha256), ledger.delivery_id, completion.candidate_oid);
     }
   }
   for (const audit of byCollection("audits")) {
@@ -3373,6 +3395,7 @@ function commandRecoverLock(options) {
 function commandSummaryBody(options) {
   const ctx = resolveContext(options, { mutation: false });
   const ledger = readLedger(ctx);
+  if (ledger.candidate.state !== "frozen") fail("invariant_error", "freeze the candidate before generating its PR summary");
   const read = (file) => {
     try {
       return fs.readFileSync(file);
@@ -3385,7 +3408,10 @@ function commandSummaryBody(options) {
   if (options["expected-current-sha256"] && options["expected-current-sha256"] !== currentSha) {
     fail("identity_mismatch", "the PR body changed since it was read; re-read it and never overwrite another writer's edit", { expected: options["expected-current-sha256"], observed: currentSha });
   }
-  const result = applySummaryBlock(current.toString("utf8"), ledger.delivery_id, read(options["summary-file"]).toString("utf8"));
+  const summary = read(options["summary-file"]).toString("utf8");
+  if (summary.includes("<!-- agent-delivery-candidate:")) fail("invariant_error", "summary-body generates the candidate marker; supply summary prose without a retained marker");
+  const marked = `<!-- agent-delivery-candidate:${ledger.candidate.oid} -->\n${summary}`;
+  const result = applySummaryBlock(current.toString("utf8"), ledger.delivery_id, marked);
   return envelope("summary-body", false, ledger.revision, { action: result.action, body: result.body, body_sha256: sha256(Buffer.from(result.body, "utf8")), current_body_sha256: currentSha });
 }
 
