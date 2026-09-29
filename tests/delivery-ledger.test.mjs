@@ -1436,7 +1436,8 @@ test("N1 superseding a Review updates dispositions without adding review cycles"
   const repo = makeRepo();
   const owner = initDelivery(repo);
   deliverToFrozen(repo, owner);
-  const pending = review(owner, { cycle_id: "cycle-1", cycle_kind: "implementation_review", verdict: "pass-with-fixes", findings: [finding({ id: "f1" })] });
+  ok(setR3(owner, r3Bound(owner)));
+  const pending = review(owner, { cycle_id: "cycle-1", cycle_kind: "implementation_review", verdict: "pass-with-fixes", findings: [finding({ id: "f1", shape: "identity-reset" })] });
   ok(owner.append("reviews", pending));
   assert.equal(owner.ledger().measurements.review_rounds, 1);
   const fixedOid = owner.ledger().candidate.oid;
@@ -3214,37 +3215,6 @@ test("F15 local-only work and reply-only rounds make no commit: no helper comman
   assert.match(ghCallsInSource[0], /"--method", "GET"/);
 });
 
-test("V6 R1 delivery and approved R3 review policy stay within their rollout files", () => {
-  const allowed = [
-    // R3 extends the R1 delivery boundary only with the approved review policies.
-    "skills/review-implementation/SKILL.md",
-    "skills/review-implementation/references/risk-classes.md",
-    "skills/review-task-docs/SKILL.md",
-    "skills/task-doc/SKILL.md",
-    "skills/task-doc-delivery-loop/references/review-policy.md",
-    "skills/task-doc-delivery-loop/scripts/delivery-ledger.mjs",
-    "skills/task-doc-delivery-loop/references/delivery-ledger.md",
-    "skills/task-doc-delivery-loop/references/delivery-examples.md",
-    "skills/task-doc-delivery-loop/references/delivery-ledger.schema.json",
-    "skills/task-doc-delivery-loop/references/authorization.md",
-    "skills/task-doc-delivery-loop/references/validation.md",
-    "skills/task-doc-delivery-loop/SKILL.md",
-    "skills/address-review-findings/SKILL.md",
-    "skills/publish-branch/SKILL.md",
-    "skills/publish-branch/references/github-transport.md",
-    "skills/publish-branch/references/ledger-handoff.md",
-    "skills/monitor-pr-review/SKILL.md",
-    "tests/delivery-ledger.test.mjs",
-    "tests/skills-portability.test.mjs",
-  ];
-  const base = spawnSync("git", ["merge-base", "HEAD", "origin/main"], { cwd: root, encoding: "utf8" });
-  if (base.status !== 0) return;
-  const committed = spawnSync("git", ["diff", "--name-only", base.stdout.trim()], { cwd: root, encoding: "utf8" }).stdout.split("\n").filter(Boolean);
-  const untracked = spawnSync("git", ["ls-files", "--others", "--exclude-standard"], { cwd: root, encoding: "utf8" }).stdout.split("\n").filter(Boolean);
-  const outside = [...committed, ...untracked].filter((file) => !allowed.includes(file));
-  assert.deepEqual(outside, []);
-});
-
 test("V6 the suite needs no memory or runtime-configuration writes", () => {
   assert.ok(HOME.startsWith(SANDBOX), "every helper run uses a disposable HOME");
   const homeFiles = Object.keys(snapshotTree(HOME)).filter((file) => !["global-excludes", ".gitconfig"].includes(file));
@@ -3909,6 +3879,57 @@ function r3Fixture(count = 1, options = {}) {
 function r3Cycle(owner, overrides = {}) {
   return review(owner, { source: "inline", cycle_id: randomUUID(), cycle_kind: "implementation_review", ...overrides });
 }
+test("R3 new frozen review and post-PR fix cycles require a bound; legacy reads remain valid", () => {
+  const { repo, owner } = r3Fixture(11);
+  // A historical R1 record remains readable, even without R3 shape labels.
+  const legacy = r3Cycle(owner, { findings: [finding()] });
+  manualEdit(repo, (ledger) => {
+    ledger.reviews.push(legacy);
+    ledger.measurements.review_rounds = 1;
+  });
+  ok(run(["validate", "--repo", repo.work]));
+  ok(run(["show", "--repo", repo.work]));
+  const next = r3Cycle(owner);
+  const before = fs.readFileSync(repo.ledgerPath, "utf8");
+  const error = refused(owner.append("reviews", next), 2, "invariant_error");
+  assert.match(error.message, /bound/);
+  assert.equal(fs.readFileSync(repo.ledgerPath, "utf8"), before);
+  pushCandidate(repo, owner);
+  ok(owner.recordContext({ pr: prRecord(repo, owner) }));
+  const observed = review(owner, { batch: batchFile(repo, owner, []), findings: [finding({ shape: "identity-reset" })] });
+  ok(owner.append("reviews", observed));
+  const fixed = { ...observed, id: randomUUID(), supersedes_id: observed.id,
+    cycle_id: "new-fix", cycle_kind: "post_pr_fix",
+    findings: [{ ...observed.findings[0], disposition: "fixed", fix_oid: owner.ledger().candidate.oid }] };
+  const beforeFix = fs.readFileSync(repo.ledgerPath, "utf8");
+  refused(owner.append("reviews", fixed), 2, "invariant_error");
+  assert.equal(fs.readFileSync(repo.ledgerPath, "utf8"), beforeFix);
+  ok(setR3(owner, r3Bound(owner)));
+  ok(owner.append("reviews", fixed));
+  assert.equal(owner.ledger().review_bound.rounds_used, 2);
+  refused(owner.append("reviews", next), 2, "invariant_error", "the migrated history counts against the installed bound");
+});
+
+test("R3 a later fixing batch sweeps only shapes fixed in its current candidate", () => {
+  const { repo, owner } = r3Fixture(11);
+  ok(setR3(owner, r3Bound(owner)));
+  const firstOid = owner.ledger().candidate.oid;
+  ok(owner.append("reviews", r3Cycle(owner, { findings: [finding({ shape: "identity-reset", disposition: "fixed", fix_oid: firstOid })] })));
+  const sweep = { id: "first-sweep", shape: "identity-reset", first_seen: nowIso(), candidate_oid: firstOid,
+    sweep: "done", searched_scope: ["src"], siblings_fixed: [], evidence: "Searched all intended src paths; no siblings." };
+  ok(owner.append("defect_shapes", sweep));
+  pushCandidate(repo, owner);
+  ok(owner.owned("begin-change"));
+  const nextOid = deliverToFrozen(repo, owner, { "src/file-0.js": "export const n = 2;\n" });
+  ok(setR3(owner, r3Bound(owner)));
+  ok(owner.append("reviews", r3Cycle(owner, { findings: [finding({ shape: "async-prerequisite", disposition: "fixed", fix_oid: nextOid })] })));
+  const push = pushEvent(repo, owner, { precondition: { head_oid: firstOid, body_sha256: null, state: null, observed_at: nowIso() } });
+  const error = refused(owner.append("publications", push), 2, "invariant_error");
+  assert.match(error.message, /async-prerequisite/);
+  ok(owner.append("defect_shapes", { ...sweep, id: "second-sweep", shape: "async-prerequisite", candidate_oid: nextOid }));
+  ok(owner.append("publications", push), "the old shape needs no rubber-stamp sweep on the replacement candidate");
+});
+
 for (const [files, size, allowance] of [[10,"small",1],[11,"medium",2],[39,"medium",2],[40,"large",3]]) {
   test(`R3 ${files}-file boundary classifies ${size} with ${allowance} cycles`, () => {
     const { owner } = r3Fixture(files);

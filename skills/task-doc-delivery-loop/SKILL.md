@@ -27,7 +27,7 @@ After resolving the task, checkout, target base and endpoint, use `prepare-init`
 
 For migrations, auth/permissions, broad refactors, or dependent phases, record order, prerequisites, irreversible boundaries, and recovery/validation checkpoints. Write a separate plan only when the sequencing needs a durable handoff or the user requests it. Do not prewrite the implementation as a second code document.
 
-Record a provisional review-size estimate in `sources.decisions` at bootstrap; a zero diff does not permanently make a feature small. Immediately before the first implementation review, freeze the candidate, `measure` against the recorded `diff_base_oid`, and use `set-review-bound` with the size/workspace evidence described in [review policy](references/review-policy.md). Recalculate for a larger replacement candidate before dispatch. Local-only work stays uncommitted; record the estimate and enforce the same policy inline with an explicit unmeasured limitation.
+Record a provisional review-size estimate in `sources.decisions` at bootstrap; a zero diff does not permanently make a feature small. Immediately before the first implementation review, freeze the candidate, `measure` against the recorded `diff_base_oid`, and use `set-review-bound` with the size/workspace evidence described in [review policy](references/review-policy.md). Recalculate for every replacement candidate before dispatch. Local-only work stays uncommitted; record the estimate and enforce the same policy inline with an explicit unmeasured limitation.
 
 ## 2. Implement And Validate
 

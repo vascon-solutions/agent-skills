@@ -2461,6 +2461,11 @@ function readBatchSnapshot(batch, ledger) {
 }
 
 function appendReviewChecks(ctx, ledger, item) {
+  // Historical R1 records remain readable. New frozen-candidate cycles must
+  // opt into R3 enforcement; local-only content reviews stay unmeasured.
+  if (!ledger.review_bound && item.cycle_id !== null && item.candidate_oid !== null) {
+    fail("invariant_error", "set the review bound before recording an implementation review or post-PR fix cycle");
+  }
   if (ledger.review_bound) {
     if (item.findings.some((finding) => !finding.shape?.trim())) fail("invariant_error", "every finding needs a defect shape");
     if (item.mode === "implementation" && !item.batch && item.cycle_id === null) {
@@ -3146,7 +3151,7 @@ function commandSetReviewBound(options) {
 }
 
 function requireShapeSweeps(ledger) {
-  const fixed = currentItems(ledger.reviews).flatMap((review) => review.findings).filter((finding) => finding.disposition === "fixed");
+  const fixed = currentItems(ledger.reviews).flatMap((review) => review.findings).filter((finding) => finding.disposition === "fixed" && finding.fix_oid === ledger.candidate.oid);
   for (const finding of fixed) {
     if (!finding.shape?.trim()) fail("invariant_error", "fixed findings need shape labels before publication");
     const sweep = currentItems(ledger.defect_shapes).find((item) => item.shape === finding.shape && item.candidate_oid === ledger.candidate.oid && item.sweep === "done");

@@ -3,7 +3,7 @@
 At bootstrap, record a provisional estimate as a source decision. Finalize it
 immediately before the first frozen-candidate implementation assessment. Use
 `measure`, then owner-only `set-review-bound --bound-file PATH` with the complete
-`ReviewBound` payload in the ledger schema. Repeat before assessing a larger
+`ReviewBound` payload in the ledger schema. Repeat before assessing every
 replacement candidate. The helper never commits to obtain an OID.
 
 The `basis` is `{files, packages, workspace_decision, delegated_decision}`.
