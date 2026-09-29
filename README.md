@@ -14,6 +14,7 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 └── skills/
     ├── audit-api/
     ├── audit-ui/
+    ├── test-audit/
     ├── publish-branch/
     ├── prepare-frontend-handoff/
     ├── prepare-qa-handoff/
@@ -54,6 +55,8 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 ```
 
 ## Skills
+
+`test-audit` evaluates new-test value and audits or prunes existing suites. Invoke it with a named project/scope and whether to report or apply cleanup; optional reduction and coverage targets remain subordinate to preserving critical contracts.
 
 | Skill                       | Purpose                                                                                                                                                                                                                                                                              |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -99,11 +102,30 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 
 ## Workflow Ownership
 
+`test-audit` owns permanent-test admission and authorized suite rationalization: protect named risks, consolidate duplicate coverage, and measure requested reductions without sacrificing sole critical protection. `audit-ui` and `audit-api` provide runtime acceptance evidence without automatically creating permanent test files. Use the same distinction across projects, with repository-specific commands and baselines.
+
 Use `brainstorm` for research and unsettled design, `task-doc-intake` for delivery scope, `task-doc` for the durable task, and `task-doc-delivery-loop` for authorized execution. `review-task-docs` and `review-implementation` report findings; `address-review-findings` owns their authorized remediation. `publish-branch` owns publication. `monitor-pr-review` is explicitly requested ongoing work. `unslop` owns output readability: final reports, findings, PR bodies, and commit messages follow its surface shapes, and `unslop <target>` rewrites existing text.
 
 An approved task/spec satisfies discovery; one validation owner supplies reusable evidence to review and publication. Keep sequencing in the delivery ledger unless a separate durable plan is needed. Failure investigation uses the delivery skill's focused debugging reference. Core delivery has no Superpowers dependency. For skill authoring, use the host-provided `skill-creator` when available (it is not bundled in this pack), with focused checks and bounded scenario review when worthwhile.
 
 `brainstorm` saves substantial briefs/specs automatically: user path first, then existing repo spec convention, then `docs/specs/<topic>.md`; repo-independent research goes under `~/agent-artifacts/<topic>/markdown/`. Short exploration stays in chat. Saved specs are proposed until accepted; saving does not authorize commits or implementation.
+
+### Everyday Test Admission
+
+For direct coding requests that bypass task documents, put this rule in the
+agent's personal instructions or the project's existing instruction owner:
+
+> Before adding or materially changing permanent tests, apply the `test-audit`
+> admission criteria. Name the durable regression risk, check existing coverage,
+> and extend the smallest effective owner. Another layer needs a distinct failure
+> mode. Use runtime UI/API audits for acceptance where appropriate, without
+> replacing sole critical regression protection. Do not add presentation-only
+> tests or start unrelated suite cleanup. Briefly report the evidence used and
+> why any new permanent test was necessary.
+
+Use the criteria in the paragraph even when the skill is unavailable. Review
+should flag unnecessary tests and missing critical coverage. The rule applies to
+the changed scope; a full suite audit or pruning campaign needs its own request.
 
 ### Shared Pack Dependencies
 
