@@ -28,14 +28,9 @@ For each actionable finding include file:line or symbol, violated requirement or
 
 Do not inflate uncertainty into a confirmed defect or invent findings to justify the review. Preserve prior product decisions; flag new conflicting evidence rather than silently adding requirements.
 
-Apply [test-audit](../test-audit/SKILL.md)'s admission criteria to added or
-materially changed tests. Check the named regression, existing owner, independent
-assertion, and any distinct risk claimed for another layer. Flag unnecessary
-permanent tests as well as missing critical protection, with a concrete reason.
-For removals, verify the surviving contract or why no permanent proof is needed.
-Do not request new tests solely because production files changed or turn review
-into an unrelated suite audit. Runtime audit evidence can satisfy acceptance
-without becoming a committed test; it cannot replace sole critical protection.
+Apply [test-audit](../test-audit/SKILL.md) to test changes. Flag unnecessary tests
+and missing critical protection, and verify claimed survivors for removals.
+Keep review within the changed scope; do not start an unrelated suite audit.
 
 ## Output
 

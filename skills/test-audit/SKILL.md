@@ -147,10 +147,3 @@ support separately), actual checks and runtime-audit links, coverage comparabili
 or gaps, and unresolved candidates. Distinguish tests moved from tests removed.
 For a cross-project request, finish/report each named project against its own
 policy; do not propagate deletions or CI changes from one project to another.
-
-## Reference
-
-Reviewed against [OpenClaw test-audit](https://github.com/openclaw/openclaw/blob/main/.agents/skills/test-audit/SKILL.md)
-and its campaign reference on 2026-09-29. This local workflow follows Dee's
-focused-test policy and owned runtime audits; OpenClaw's repository tools,
-mandatory campaign reviews, and publishing flow do not apply.

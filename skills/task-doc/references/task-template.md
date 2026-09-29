@@ -108,16 +108,8 @@ These should be reviewable and map back to the source request.
 List inspectable completion checks.
 Prefer observable outcomes over vague statements like "works correctly".
 
-For implementation work, map each meaningful risk to the smallest sufficient
-evidence: existing focused coverage, a justified regression test, a runtime
-`audit-ui`/`audit-api` scenario, or one-time inspection. Record the owner and
-command/scenario, reuse valid evidence, and state required repository gates.
-Do not require a new test for every deliverable or permanent tests for ordinary
-presentation details. Name the durable risk for any new permanent test and why
-existing coverage cannot own it. A runtime audit does not replace sole critical
-regression coverage. For test removal, identify the surviving contract owner or
-why permanent protection is unnecessary; coverage percentages alone do not prove
-equivalence.
+For implementation work, include the validation map defined in
+[task-doc](../SKILL.md#author), with executable checks and evidence locations.
 
 ## Approval Gates
 

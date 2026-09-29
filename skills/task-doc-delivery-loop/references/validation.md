@@ -5,10 +5,9 @@ Use one validation owner per delivery or remediation batch. Reviewers and publis
 ## Choose Evidence For The Claim
 
 - Identify the behavior, contract, or requirement the check can actually prove. A typecheck is not a build; a mock-based unit test is not proof of a database constraint; a passing suite does not establish every acceptance criterion.
-- Use the smallest relevant check during implementation. Add a permanent regression test for a named durable risk, especially authorization, data integrity, lifecycle transitions, concurrency, recovery, or public contracts. Avoid tests that only mirror implementation details or fix ordinary wording/layout in place.
+- Use the smallest relevant check during implementation. Apply [test-audit](../../test-audit/SKILL.md) for permanent-test admission, removals, and the boundary between regression protection and runtime acceptance.
 - For a bug fix, reproduce the symptom before editing when practical. Confirm a regression test detects the original failure using a safe isolated baseline or equivalent evidence; do not revert unrelated changes just to demonstrate red-green.
 - For visual acceptance criteria, inspect the rendered behavior. A focused manual/browser check can prove the requested outcome without committing a presentation-only test. Preserve explicit user restrictions and report any resulting evidence gap.
-- Use [test-audit](../../test-audit/SKILL.md) when deciding whether tests add distinct value or rationalizing existing coverage. Prefer the existing contract owner; justify another layer by a different failure mode. Use `audit-ui`/`audit-api` for required live acceptance without automatically committing their scenarios as tests. One-time runtime evidence does not replace sole critical regression protection.
 - Use repo-required checks and hooks for the final candidate. Deduplicate equivalent manual checks when hooks already prove the same claim against the same inputs. Never bypass a required gate to save a run.
 
 ## Reuse And Invalidation
@@ -21,10 +20,8 @@ After remediation, rerun affected checks. An unrelated documentation edit does n
 
 ## Report Honestly
 
-Briefly state the evidence used and the distinct risk protected by any new
-permanent test. When no new test is justified, say why existing coverage or
-one-time acceptance is sufficient. Keep this in the normal completion report;
-do not create an extra report or demand a test for every changed file.
+In the normal completion report, state the evidence used and the admission
+rationale for new permanent tests, or why no new test was needed.
 
 Read the actual result before claiming success. Distinguish passing, failed, skipped, unavailable, and pending checks. Do not extrapolate focused coverage into 'all tests pass.' Verify remote head and PR base/state for publication claims; old local test results do not establish current CI status.
 

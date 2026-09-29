@@ -56,12 +56,11 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 
 ## Skills
 
-`test-audit` evaluates new-test value and audits or prunes existing suites. Invoke it with a named project/scope and whether to report or apply cleanup; optional reduction and coverage targets remain subordinate to preserving critical contracts.
-
 | Skill                       | Purpose                                                                                                                                                                                                                                                                              |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `audit-api`                 | Audit focused endpoints, dependent API journeys, role boundaries, OpenAPI/Swagger surfaces, or rollout readiness with Hurl-first execution, hardened curl fallback, compact redacted evidence, and a calibrated verdict                                                              |
 | `audit-ui`                  | Audit a focused running UI feature or end-to-end journey with service readiness checks, critical-page screenshots, functional evidence, a calibrated verdict, and prioritized UI/UX improvements                                                                                     |
+| `test-audit` | Evaluate permanent-test admission and rationalize authorized test scopes while preserving critical contracts |
 | `prepare-frontend-handoff`  | Prepare implementation handoff notes for frontend developers, including API contracts, screen behavior, route state, form mapping, query/cache behavior, UI states, migration steps, and retired dependencies                                                                        |
 | `prepare-qa-handoff`        | Prepare QA sign-off notes for features with lifecycle flows, endpoint touchpoints, expected behavior, negative coverage, and release validation scope                                                                                                                                |
 | `qa-triage-and-fix`         | Triage QA reports issue-by-issue, reproduce or contest findings with evidence, implement focused fixes, update authorized report fields, and record validation                                                                                                                       |
@@ -101,8 +100,6 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 | `publish-artifact`          | Publish a `~/agent-artifacts/<slug>/` workspace to S3, GitHub Wikis, ClickUp Docs, native Google Docs, or raw Google Drive folders with explicit destination flags. Explicit command only                                                                                            |
 
 ## Workflow Ownership
-
-`test-audit` owns permanent-test admission and authorized suite rationalization: protect named risks, consolidate duplicate coverage, and measure requested reductions without sacrificing sole critical protection. `audit-ui` and `audit-api` provide runtime acceptance evidence without automatically creating permanent test files. Use the same distinction across projects, with repository-specific commands and baselines.
 
 Use `brainstorm` for research and unsettled design, `task-doc-intake` for delivery scope, `task-doc` for the durable task, and `task-doc-delivery-loop` for authorized execution. `review-task-docs` and `review-implementation` report findings; `address-review-findings` owns their authorized remediation. `publish-branch` owns publication. `monitor-pr-review` is explicitly requested ongoing work. `unslop` owns output readability: final reports, findings, PR bodies, and commit messages follow its surface shapes, and `unslop <target>` rewrites existing text.
 

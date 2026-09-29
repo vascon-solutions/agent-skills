@@ -25,18 +25,10 @@ Use [task template](references/task-template.md), adapting to an established rep
 - Prerequisites, likely inspection/write targets, and unresolved decisions.
 - Deliverables and observable completion verification, with checks proportional to risk.
 
-For implementation tasks, make a compact validation map: changed behavior or
-contract → smallest sufficient evidence → existing owner/command or runtime
-scenario. Reuse existing checks where they already protect the risk. A permanent
-test needs a named durable regression; another test needs a reason the existing
-owner is insufficient.
-Ordinary copy, styling, and structural changes do not create a test deliverable.
-Use [test-audit](../test-audit/SKILL.md) when admission or redundant coverage needs
-evaluation, and for test-rationalization tasks. Plan `audit-ui` or `audit-api`
-when real browser/API acceptance is needed, specifying the outcome and relevant
-environment prerequisites; audit evidence does not automatically become a
-committed test suite. Preserve critical permanent coverage and repository gates.
-State when no new permanent test is justified instead of filling a test quota.
+For implementation tasks, map each meaningful risk to its evidence, existing
+owner, and command or runtime scenario. Apply [test-audit](../test-audit/SKILL.md)
+when selecting permanent tests or rationalizing coverage. Record required runtime
+acceptance and its prerequisites separately, including when no new test is needed.
 
 File paths and symbols ground current-code claims; likely files are orientation, not orders to edit them all. Missing source information stays unknown rather than becoming invented architecture. Material unresolved decisions identify realistic options, implications, and who or what resolves them. They block affected implementation until resolved, not unrelated work.
 
