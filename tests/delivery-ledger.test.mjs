@@ -2405,6 +2405,11 @@ test("N4 local-only review, fixed disposition and a requested audit validate wit
   ok(owner.append("audits", audit));
   ok(owner.update({ audit_policy: { state: "complete" } }));
   const done = { endpoint: "local", reached_at: nowIso(), candidate_oid: null, content_id: final.content_id, content_manifest: final.manifest.source, evidence_ids: ["validation:" + final.item.id, "reviews:" + reviewed.id, "audits:" + audit.id], limitations: ["local-only endpoint: no commit, push or PR"] };
+  ok(owner.append("audits", { ...audit, id: "audit-local-fail", verdict: "FAIL" }));
+  refused(owner.release("complete", { next: null, completion: done, blocker: null }), 2, "invariant_error", "local completion cannot hide a later failure for the same content");
+  const recheck = { ...audit, id: "audit-local-recheck" };
+  ok(owner.append("audits", recheck));
+  done.evidence_ids = done.evidence_ids.map((ref) => ref === `audits:${audit.id}` ? `audits:${recheck.id}` : ref);
   ok(owner.release("complete", { next: null, completion: done, blocker: null }));
   assert.equal(git(repo.work, "rev-parse", "HEAD"), head);
   assert.equal(owner.ledger().candidate.oid, null);
@@ -3135,6 +3140,8 @@ test("F7 a failed audit is never accepted as merely a role failure", () => {
   const auditRun = roleRun(owner, { role: "auditor", mode: "ui", execution: "delegated", fallback_reason: null, status: "error", result_summary: "the auditor crashed after reporting" });
   ok(owner.append("role_runs", auditRun));
   const failed = { id: "audit-fail", mode: "ui", runtime: "codex", model: null, verdict: "FAIL", report: "/tmp/audit/report.md", oid: owner.ledger().candidate.oid, content_id: null, content_manifest: null, at: nowIso(), role_run_id: auditRun.id };
+  const earlierPass = { ...failed, id: "audit-earlier-pass", verdict: "PASS" };
+  ok(owner.append("audits", earlierPass));
   ok(owner.append("audits", failed));
   refused(owner.append("audits", { ...failed, id: "audit-relabel", supersedes_id: failed.id, verdict: "BLOCKED" }), 2, "invariant_error");
   refused(owner.update({ audit_policy: { required: false, reason: "skip it" } }), 2, "invariant_error", "a required audit is not waived by patch");
@@ -3142,6 +3149,20 @@ test("F7 a failed audit is never accepted as merely a role failure", () => {
   const gate = recordGate(repo, owner, ["src/app.js"]);
   refused(owner.release("complete", { next: null, completion: completion(owner, [`validation:${gate.id}`, `audits:${failed.id}`]), blocker: null }), 2, "invariant_error");
   refused(owner.release("complete", { next: null, completion: completion(owner, [`validation:${gate.id}`]), blocker: null }), 2, "invariant_error", "a required audit needs its PASS cited");
+  const finish = (audits) => owner.release("complete", { next: null, blocker: null, completion: completion(owner, [`validation:${gate.id}`, ...audits.map((audit) => `audits:${audit.id}`)]) });
+  refused(finish([earlierPass]), 2, "invariant_error", "an earlier PASS cannot hide the later FAIL");
+  const copiedPass = { ...earlierPass, id: "audit-pass-correction", supersedes_id: earlierPass.id, at: nowIso() };
+  ok(owner.append("audits", copiedPass));
+  refused(finish([copiedPass]), 2, "invariant_error", "a correction to old evidence is not a recheck");
+  const apiPass = { ...earlierPass, id: "audit-api-pass", mode: "api" };
+  ok(owner.append("audits", apiPass));
+  refused(finish([apiPass]), 2, "invariant_error", "an API pass does not clear a UI failure");
+  ok(owner.append("audits", { ...earlierPass, id: "audit-ui-blocked", verdict: "BLOCKED" }));
+  const rechecked = { ...earlierPass, id: "audit-rechecked", at: "2000-01-01T00:00:00.000Z" };
+  ok(owner.append("audits", rechecked));
+  refused(finish([copiedPass]), 2, "invariant_error", "cite the passing recheck, not the old pass");
+  ok(owner.append("audits", { ...failed, id: "audit-other-candidate", oid: owner.ledger().candidate.baseline_oid }));
+  ok(finish([rechecked]), "the same-mode recheck clears the applicable failure; append order controls chronology");
 });
 
 test("N8 no heavy-command wrapper means a recorded limitation, not an installation", () => {
@@ -3332,7 +3353,12 @@ test("R1 follow-up: precommit review and audit apply to identical committed cont
   const oid = commit(repo, { "src/app.js": "export const v = 2;\n" });
   ok(owner.freeze(oid));
   const gate = recordGate(repo, owner, ["src/app.js"]);
-  ok(owner.release("complete", { next: null, blocker: null, completion: completion(owner, [`validation:${gate.id}`, `reviews:${reviewed.id}`, `audits:${audit.id}`]) }));
+  ok(owner.append("audits", { ...audit, id: "audit-precommit-fail", verdict: "FAIL" }));
+  const finish = (item) => owner.release("complete", { next: null, blocker: null, completion: completion(owner, [`validation:${gate.id}`, `reviews:${reviewed.id}`, `audits:${item.id}`]) });
+  refused(finish(audit), 2, "invariant_error", "a content-based failure still applies after the identical commit");
+  const recheck = { ...audit, id: "audit-committed-recheck", oid, content_id: null, content_manifest: null };
+  ok(owner.append("audits", recheck));
+  ok(finish(recheck));
   assert.equal(owner.ledger().reviews[0].candidate_oid, null, "the original review identity is retained");
 });
 
@@ -3410,16 +3436,29 @@ test("R1 follow-up: naming a dotted filename does not authorize its dirty prefix
   ok(run(initArgs(repo, { bootstrap: { decisions: [{ id: "dirty_scope", text: "include `src/config.json`; exclude `src/config`", source: "user scope" }] } })));
 });
 
-test("R1 review batch: snapshots must identify the reviewed commit and current PR head", () => {
+test("R1 review batch: snapshots must identify the reviewed commit and current PR", () => {
   const repo = makeRepo();
-  const { reviewer } = reviewRound(repo);
+  const { reviewer, delivered, batchReview, threads } = reviewRound(repo);
   const oldHead = reviewer.ledger().candidate.baseline_oid;
   const stale = batchFile(repo, reviewer, [], { head: oldHead });
   refused(reviewer.append("reviews", review(reviewer, { batch: stale })), 4, "identity_mismatch", "old snapshot on the current review");
   refused(reviewer.append("reviews", review(reviewer, { candidate_oid: oldHead, batch: stale })), 4, "identity_mismatch", "old snapshot and review on the current PR");
   const current = batchFile(repo, reviewer, []);
   refused(reviewer.append("reviews", review(reviewer, { mode: "doc", candidate_oid: null, batch: current })), 4, "identity_mismatch", "a batch must identify its reviewed commit");
+  const correct = JSON.parse(fs.readFileSync(current.path, "utf8"));
+  for (const pr of [undefined, null, {}, { repository: correct.pr.repository }, { ...correct.pr, number: correct.pr.number + 1 }, { ...correct.pr, repository: "another/repository" }]) {
+    writeJson(current.path, { ...correct, pr });
+    const malformed = { ...current, sha256: sha(fs.readFileSync(current.path)) };
+    refused(reviewer.append("reviews", review(reviewer, { batch: malformed })), 4, "identity_mismatch", "a shared commit cannot substitute for PR identity");
+  }
+  writeJson(current.path, correct);
   ok(reviewer.append("reviews", review(reviewer, { batch: current })));
+  const legacy = JSON.parse(fs.readFileSync(batchReview.batch.path, "utf8"));
+  delete legacy.pr;
+  writeJson(batchReview.batch.path, legacy);
+  manualEdit(repo, (ledger) => { ledger.reviews.find((item) => item.id === batchReview.id).batch.sha256 = sha(fs.readFileSync(batchReview.batch.path)); });
+  refused(reviewer.append("publications", replyEvent(repo, reviewer, batchReview.batch, threads[0], bodyFile(repo, "Fixed."))), 4, "identity_mismatch", "previously recorded snapshots cannot back replies without PR identity");
+  refused(reviewer.release("complete", { next: null, blocker: null, completion: completion(reviewer, [`validation:${delivered.gate.id}`, `reviews:${batchReview.id}`]) }), 4, "identity_mismatch", "completion rechecks the retained snapshot's PR identity");
 });
 
 test("R1 review batch: a later round cannot reuse an earlier batch or its successors", () => {
@@ -3585,7 +3624,7 @@ test("R1 completion: an unfinished watch retains observations through owner chan
   }));
 });
 
-test("R1 boundaries: newly added requirements invalidate prior reviews while preserving validation", () => {
+test("R1 boundaries: added or changed requirements invalidate prior reviews while preserving validation", () => {
   const repo = makeRepo();
   const owner = initDelivery(repo);
   const delivered = draftPrDelivery(repo, owner);
@@ -3597,16 +3636,19 @@ test("R1 boundaries: newly added requirements invalidate prior reviews while pre
   for (const [index, kind] of ["task_doc", "spec", "instruction", "spec"].entries()) {
     const file = path.join(repo.inputs, `requirements-${index}.md`);
     fs.writeFileSync(file, `# Requirements ${index}\n`);
-    if (index === 3) {
-      const candidate = owner.ledger().candidate;
-      ok(owner.reconcile({
-        case: "source_refresh", reason: "new requirements", source: "user request", grant_id: null,
-        expected: { candidate_oid: candidate.oid, working_head_oid: candidate.working_head_oid },
-        observed: { kind, source: { path: file, sha256: sha(fs.readFileSync(file)) } }, evidence_paths: [],
-      }));
-    } else {
-      ok(owner.owned("source-add", ["--kind", kind, "--path", file, "--reason", "new requirements"]));
-    }
+    const refresh = () => {
+      if (index === 3) {
+        const candidate = owner.ledger().candidate;
+        ok(owner.reconcile({
+          case: "source_refresh", reason: "new requirements", source: "user request", grant_id: null,
+          expected: { candidate_oid: candidate.oid, working_head_oid: candidate.working_head_oid },
+          observed: { kind, source: { path: file, sha256: sha(fs.readFileSync(file)) } }, evidence_paths: [],
+        }));
+      } else {
+        ok(owner.owned("source-add", ["--kind", kind, "--path", file, "--reason", "new requirements"]));
+      }
+    };
+    refresh();
     const invalidated = owner.ledger().history.at(-1).detail.invalidated_evidence;
     assert.ok(invalidated.includes(`reviews:${reviewed.id}`));
     assert.ok(!invalidated.includes(`validation:${delivered.gate.id}`));
@@ -3617,6 +3659,16 @@ test("R1 boundaries: newly added requirements invalidate prior reviews while pre
     const revision = owner.revision;
     assert.equal(ok(owner.owned("source-add", ["--kind", kind, "--path", file, "--reason", "same requirements"])).changed, false);
     assert.equal(owner.revision, revision, "an unchanged source does not invalidate the fresh review");
+    const completeSources = reviewed;
+    reviewed = review(owner, { source_hashes: kind === "task_doc" ? [] : owner.ledger().sources.task_docs });
+    ok(owner.append("reviews", reviewed));
+    fs.appendFileSync(file, "Changed requirement.\n");
+    refresh();
+    assert.ok(owner.ledger().history.at(-1).detail.invalidated_evidence.includes(`reviews:${completeSources.id}`));
+    const changed = refused(finish(), 2, "invariant_error", "omitted source hashes cannot keep a stale review applicable");
+    assert.match(changed.message, /invalidated/);
+    reviewed = review(owner, { source_hashes: ["task_docs", "specs", "instructions"].flatMap((field) => owner.ledger().sources[field]) });
+    ok(owner.append("reviews", reviewed));
   }
   ok(finish(), "fresh review plus unchanged validation can complete");
 });

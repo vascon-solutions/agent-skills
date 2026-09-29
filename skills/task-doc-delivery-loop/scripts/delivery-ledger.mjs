@@ -2279,20 +2279,14 @@ function commandUpdate(options, stdin) {
 
 const SOURCE_FIELDS = { task_doc: "task_docs", spec: "specs", instruction: "instructions" };
 
-// New requirements expand the review scope. Changed sources invalidate
-// reviews that used their old hash; all records remain available as history.
-function reviewsInvalidatedBy(ledger, source, newlyAdded) {
-  return currentItems(ledger.reviews)
-    .filter((review) => newlyAdded || review.source_hashes.some((entry) => entry.path === source.path && entry.sha256 !== source.sha256))
-    .map((review) => `reviews:${review.id}`);
-}
-
 function addSource(draft, ledger, kind, source) {
   const field = SOURCE_FIELDS[kind];
   const latest = latestSources(ledger.sources[field]).find((entry) => entry.path === source.path);
   if (latest && latest.sha256 === source.sha256) return null;
   draft.sources[field].push(source);
-  return { previous_sha256: latest?.sha256 ?? null, invalidated_evidence: reviewsInvalidatedBy(ledger, source, !latest) };
+  // source_hashes may be incomplete. Any requirements change invalidates
+  // current reviews; unchanged sources above remain a no-op.
+  return { previous_sha256: latest?.sha256 ?? null, invalidated_evidence: currentItems(ledger.reviews).map((review) => `reviews:${review.id}`) };
 }
 
 function commandSourceAdd(options) {
@@ -2426,7 +2420,7 @@ function appendValidationChecks(ctx, ledger, item) {
   }
 }
 
-function readBatchSnapshot(batch) {
+function readBatchSnapshot(batch, ledger) {
   let bytes;
   try {
     bytes = fs.readFileSync(batch.path);
@@ -2436,6 +2430,9 @@ function readBatchSnapshot(batch) {
   if (sha256(bytes) !== batch.sha256) fail("identity_mismatch", "the review batch snapshot changed since it was frozen", { path: batch.path });
   const snapshot = parseJson(bytes.toString("utf8"), batch.path);
   if (!isObject(snapshot) || !Array.isArray(snapshot.threads)) fail("schema_error", "a review batch snapshot has a threads array");
+  if (!ledger.pr || !isObject(snapshot.pr) || snapshot.pr.repository !== ledger.pr.repository || snapshot.pr.number !== ledger.pr.number) {
+    fail("identity_mismatch", "the batch snapshot must identify the recorded repository and PR number", { expected: ledger.pr ? { repository: ledger.pr.repository, number: ledger.pr.number } : null, observed: snapshot.pr ?? null });
+  }
   for (const thread of snapshot.threads) {
     // GitHub's databaseId is numeric; keep the persisted snapshot's bytes
     // unchanged while normalizing the representation used for comparisons.
@@ -2458,7 +2455,7 @@ function appendReviewChecks(ctx, ledger, item) {
     if (finding.fix_oid !== null) requireCommit(ctx, finding.fix_oid, `finding ${finding.id} fix_oid`);
   }
   if (item.batch) {
-    const snapshot = readBatchSnapshot(item.batch);
+    const snapshot = readBatchSnapshot(item.batch, ledger);
     if (snapshot.head !== item.candidate_oid) {
       fail("identity_mismatch", "the batch snapshot must name the review's candidate_oid", { expected: item.candidate_oid, observed: snapshot.head });
     }
@@ -2466,9 +2463,6 @@ function appendReviewChecks(ctx, ledger, item) {
     // retains that original head, even after its fixes have been pushed.
     if (!item.supersedes_id && ledger.pr && snapshot.head !== ledger.pr.head) {
       fail("identity_mismatch", "a new review batch must observe the recorded PR head", { expected: ledger.pr.head, observed: snapshot.head });
-    }
-    if (ledger.pr && isObject(snapshot.pr)) {
-      if (snapshot.pr.repository !== ledger.pr.repository || snapshot.pr.number !== ledger.pr.number) fail("identity_mismatch", "the batch snapshot is for another PR");
     }
     const threads = new Set(snapshot.threads.map((thread) => thread.thread_graphql_id));
     for (const finding of item.findings) {
@@ -2592,7 +2586,7 @@ function prepareChecks(ctx, ledger, item) {
 
 function replyChecks(ctx, ledger, item, remoteHead) {
   const review = batchReview(ledger, item.batch_id);
-  const snapshot = readBatchSnapshot(review.batch);
+  const snapshot = readBatchSnapshot(review.batch, ledger);
   const thread = snapshot.threads.find((entry) => entry.thread_graphql_id === item.target.thread_graphql_id);
   if (!thread) fail("identity_mismatch", "the thread is not in the frozen batch", { observed: item.target.thread_graphql_id });
   const finding = review.findings.find((entry) => entry.thread_id === thread.thread_graphql_id);
@@ -3170,6 +3164,20 @@ function observationRecordedInWatch(ledger, evidence) {
   }));
 }
 
+function requireAuditRechecks(ctx, ledger, cited, completion, invalidated) {
+  // Corrections retain the original observation's position. Only a new
+  // audit can clear a failure, regardless of caller-supplied timestamps.
+  const position = (audit) => ledger.audits.indexOf(chainRoot(ledger.audits, audit));
+  const applicable = currentItems(ledger.audits).filter((audit) =>
+    !isInvalidated(ledger, invalidated, "audits", audit) && identityApplies(ctx, ledger, audit, completion, "oid"));
+  for (const audit of applicable) {
+    if (audit.verdict === "PASS") continue;
+    if (!cited.some((recheck) => recheck.mode === audit.mode && recheck.verdict === "PASS" && position(recheck) > position(audit))) {
+      fail("invariant_error", `audit ${audit.id} is ${audit.verdict}; cite a later passing ${audit.mode} recheck for the final identity`);
+    }
+  }
+}
+
 function completeChecks(ctx, ledger, completion) {
   const { authorization, candidate, owner } = ledger;
   if (completion.endpoint !== authorization.endpoint) {
@@ -3239,6 +3247,7 @@ function completeChecks(ctx, ledger, completion) {
     if (audit.verdict !== "PASS") fail("invariant_error", `audit ${audit.id} is ${audit.verdict}; a failed or blocked audit is never accepted as a role failure`);
     if (!identityApplies(ctx, ledger, audit, completion, "oid")) fail("invariant_error", `audit ${audit.id} observed another candidate`);
   }
+  if (!watchObservation) requireAuditRechecks(ctx, ledger, byCollection("audits"), completion, invalidated);
   if (ledger.audit_policy.required && !watchObservation) {
     if (ledger.audit_policy.state !== "complete" || byCollection("audits").length === 0) fail("invariant_error", "a required audit needs its passing result cited and audit_policy complete");
   }
@@ -3272,7 +3281,7 @@ function completeChecks(ctx, ledger, completion) {
   }
   if (owner.phase === "review_round") {
     const batches = reviews.filter((review) => review.mode !== "spec" && review.batch !== null);
-    if (batches.length === 0 || batches.some((review) => !readBatchSnapshot(review.batch).complete)) {
+    if (batches.length === 0 || batches.some((review) => !readBatchSnapshot(review.batch, ledger).complete)) {
       fail("invariant_error", "a review round completes with a complete batch's dispositions; an incomplete snapshot is unavailable, never empty");
     }
     if (!batches.some((review) => batchRecordedInReviewRound(ledger, review.batch.id))) {
