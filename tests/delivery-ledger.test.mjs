@@ -1395,21 +1395,26 @@ test("N1 restored scalars reject object, array and null where they are not nulla
   }
 });
 
-test("N1 a fork head repository survives round-trip", () => {
+test("N1 R1 boundaries: fork PR adoption is rejected before recording an unusable destination", () => {
   const repo = makeRepo();
   const head = git(repo.work, "rev-parse", "HEAD");
   git(repo.work, "push", "-q", "origin", `HEAD:refs/heads/${repo.branch}`);
   const fork = { host: "github.com", owner: "forker", name: repo.github.name };
   const pr = { host: "github.com", repository: `${repo.github.owner}/${repo.github.name}`, number: 12, url: `https://github.com/${repo.github.owner}/${repo.github.name}/pull/12`, head_branch: repo.branch, head, head_repository: fork, base: "main", draft: true, state: "OPEN", observed_at: nowIso() };
   const baseline = { remote_name: "origin", ref: `refs/heads/${repo.branch}`, oid: head, observed_at: nowIso() };
-  ok(run(initArgs(repo, { bootstrap: { pr, remote_baseline: baseline } })));
+  refused(run(initArgs(repo, { bootstrap: { pr, remote_baseline: baseline } })), 4, "identity_mismatch");
+  assert.equal(fs.existsSync(repo.ledgerPath), false, "failed adoption writes no ledger");
+  ok(run(initArgs(repo, { bootstrap: { remote_baseline: baseline } })));
   const owner = new Session(repo);
   ok(owner.claim());
-  assert.deepEqual(owner.ledger().pr.head_repository, fork);
-  ok(owner.recordContext({ pr: { ...pr, observed_at: nowIso() } }));
-  refused(owner.recordContext({ pr: { ...pr, head_repository: { ...repo.github }, observed_at: nowIso() } }), 4, "identity_mismatch");
-  ghPull(repo, pr);
+  refused(owner.recordContext({ pr }), 4, "identity_mismatch");
+  assert.equal(owner.ledger().pr, null);
+  const sameRepo = { ...pr, head_repository: { ...repo.github }, observed_at: nowIso() };
+  ok(owner.recordContext({ pr: sameRepo }));
+  ghPull(repo, sameRepo);
   ok(owner.check("working", { pr: true }));
+  manualEdit(repo, (ledger) => { ledger.pr.head_repository = fork; });
+  refused(run(["validate", "--repo", repo.work]), 2, "invariant_error", "an older fork ledger cannot silently continue");
 });
 
 test("N1 a same-collection successor succeeds; missing, cross-collection and branched successors fail", () => {
@@ -3572,6 +3577,100 @@ test("R1 completion: an unfinished watch retains observations through owner chan
     next: null, blocker: null,
     completion: completion(takeover, [`sessions:${observation.id}`], { limitations: ["user stop"] }),
   }));
+});
+
+test("R1 boundaries: newly added requirements invalidate prior reviews while preserving validation", () => {
+  const repo = makeRepo();
+  const owner = initDelivery(repo);
+  const delivered = draftPrDelivery(repo, owner);
+  let reviewed = owner.ledger().reviews.find((item) => item.id === repo.deliveryReviewId);
+  const finish = () => owner.release("complete", {
+    next: null, blocker: null,
+    completion: completion(owner, [], { evidence_ids: [`validation:${delivered.gate.id}`, `publications:${delivered.push.id}`, `publications:${delivered.prCreate.id}`, `reviews:${reviewed.id}`] }),
+  });
+  for (const [index, kind] of ["task_doc", "spec", "instruction", "spec"].entries()) {
+    const file = path.join(repo.inputs, `requirements-${index}.md`);
+    fs.writeFileSync(file, `# Requirements ${index}\n`);
+    if (index === 3) {
+      const candidate = owner.ledger().candidate;
+      ok(owner.reconcile({
+        case: "source_refresh", reason: "new requirements", source: "user request", grant_id: null,
+        expected: { candidate_oid: candidate.oid, working_head_oid: candidate.working_head_oid },
+        observed: { kind, source: { path: file, sha256: sha(fs.readFileSync(file)) } }, evidence_paths: [],
+      }));
+    } else {
+      ok(owner.owned("source-add", ["--kind", kind, "--path", file, "--reason", "new requirements"]));
+    }
+    const invalidated = owner.ledger().history.at(-1).detail.invalidated_evidence;
+    assert.ok(invalidated.includes(`reviews:${reviewed.id}`));
+    assert.ok(!invalidated.includes(`validation:${delivered.gate.id}`));
+    const error = refused(finish(), 2, "invariant_error", "an unchanged commit still needs review against new requirements");
+    assert.match(error.message, /invalidated/);
+    reviewed = review(owner, { source_hashes: ["task_docs", "specs", "instructions"].flatMap((field) => owner.ledger().sources[field]) });
+    ok(owner.append("reviews", reviewed));
+    const revision = owner.revision;
+    assert.equal(ok(owner.owned("source-add", ["--kind", kind, "--path", file, "--reason", "same requirements"])).changed, false);
+    assert.equal(owner.revision, revision, "an unchanged source does not invalidate the fresh review");
+  }
+  ok(finish(), "fresh review plus unchanged validation can complete");
+});
+
+test("R1 boundaries: remote-adoption recovery also rejects fork PRs atomically", () => {
+  const repo = makeRepo();
+  const owner = initDelivery(repo);
+  const head = owner.ledger().candidate.baseline_oid;
+  git(repo.work, "push", "-q", "origin", `HEAD:refs/heads/${repo.branch}`);
+  const pr = prRecord(repo, owner, { head, headRepository: { ...repo.github, owner: "forker" } });
+  const payload = {
+    case: "remote_adoption", reason: "adopt the existing PR", source: "verified PR", grant_id: null,
+    expected: { candidate_oid: null, working_head_oid: head },
+    observed: { remote_baseline: { remote_name: "origin", ref: `refs/heads/${repo.branch}`, oid: head, observed_at: nowIso() }, pr }, evidence_paths: [],
+  };
+  const before = fs.readFileSync(repo.ledgerPath, "utf8");
+  refused(owner.reconcile(payload), 4, "identity_mismatch");
+  assert.equal(fs.readFileSync(repo.ledgerPath, "utf8"), before);
+  const sameRepo = { ...pr, head_repository: { ...repo.github } };
+  ghPull(repo, sameRepo);
+  ok(owner.reconcile({ ...payload, observed: { ...payload.observed, pr: sameRepo } }));
+  ok(owner.check("working", { pr: true }));
+});
+
+test("R1 boundaries: resuming a phase cannot consume a grant for a later phase", () => {
+  for (const phase of ["review_round", "watch"]) {
+    for (const outcome of ["handoff", "blocked"]) {
+      const repo = makeRepo();
+      let actor, refs;
+      if (phase === "review_round") {
+        const { reviewer, delivered, batchReview } = reviewRound(repo);
+        actor = reviewer;
+        refs = [`validation:${delivered.gate.id}`, `reviews:${batchReview.id}`];
+      } else {
+        const owner = initDelivery(repo);
+        ok(completeDelivery(repo, owner).result);
+        actor = new Session(repo, "codex");
+        ok(actor.claim("watch", { grantFile: input(repo, "grant", grant("monitor_observe")) }));
+        const observation = sessionRecord(actor, { phase: "watch" });
+        ok(actor.append("sessions", observation));
+        refs = [`sessions:${observation.id}`];
+      }
+      const checkpoint = actor.ledger().checkpoint;
+      ok(actor.release(outcome, {
+        next: nextStep(phase, checkpoint), completion: null,
+        blocker: outcome === "blocked" ? { reason: "interrupted", resume_phase: phase, resume_checkpoint: checkpoint, required_action: "resume" } : null,
+      }));
+      const futureGrant = grant(phase === "review_round" ? "review_round" : outcome === "blocked" ? "monitor_remediate" : "monitor_observe");
+      const grantFile = input(repo, "future-grant", futureGrant);
+      const resumed = new Session(repo, "claude");
+      const before = fs.readFileSync(repo.ledgerPath, "utf8");
+      refused(resumed.claim(phase, { grantFile }), 2, "invariant_error", `${phase} ${outcome} resumes without a fresh grant`);
+      assert.equal(fs.readFileSync(repo.ledgerPath, "utf8"), before, "neither the grant nor a claim is recorded on refusal");
+      ok(resumed.claim(phase));
+      ok(resumed.release("complete", { next: null, blocker: null, completion: completion(resumed, refs) }));
+      const next = new Session(repo, "codex");
+      ok(next.claim(phase, { grantFile }), "the same grant can start the later authorized work");
+      assert.equal(next.ledger().history.at(-1).detail.grant_id, futureGrant.id);
+    }
+  }
 });
 
 describe("delivery ledger R1 acceptance", { concurrency: Math.max(2, Math.min(6, os.availableParallelism?.() ?? 4)) }, () => {

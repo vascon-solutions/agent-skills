@@ -1270,6 +1270,9 @@ export function ledgerInvariants(ledger) {
     if ((grant.scope === "endpoint") !== (grant.endpoint !== null)) problems.push(`grant ${grant.id}: endpoint is set only on an endpoint grant`);
   }
   const { owner, phase, candidate } = ledger;
+  if (ledger.pr !== null && !isDeepStrictEqual(ledger.pr.head_repository, ledger.repo.github)) {
+    problems.push("R1 does not support fork PRs; the PR head must use the configured repository remote");
+  }
   if (owner) {
     if (owner.phase !== phase) problems.push("owner.phase must equal phase while owned");
     if (ledger.next !== null) problems.push("next is consumed (null) while a phase is owned");
@@ -1755,8 +1758,8 @@ function parseGitHubUrl(url) {
   return null;
 }
 
-// First PR observation for this delivery: base repository, branch and base
-// must match; a fork head repository is kept as observed.
+// R1 has one publishing remote. Both sides of an adopted PR must use that
+// repository; a fork needs a separate authorized remote that R1 cannot record.
 function verifyNewPr(ledger, pr) {
   const github = ledger.repo.github;
   if (!github) fail("invariant_error", "a PR needs a GitHub repository identity for this delivery");
@@ -1770,7 +1773,9 @@ function verifyNewPr(ledger, pr) {
   for (const [field, value] of Object.entries(expected)) {
     if (pr[field] !== value) fail("identity_mismatch", `the PR's ${field} does not match this delivery`, { expected: value, observed: pr[field] });
   }
-  if (pr.head_repository.host !== github.host) fail("identity_mismatch", "the PR head repository is on another host", { expected: github.host, observed: pr.head_repository.host });
+  if (!isDeepStrictEqual(pr.head_repository, github)) {
+    fail("identity_mismatch", "R1 does not support fork PRs; the PR head must use the configured repository remote", { expected: github, observed: pr.head_repository });
+  }
 }
 
 function verifyPrObservation(ledger, pr) {
@@ -2129,6 +2134,7 @@ function phaseGrant(ledger, phase, supplied, fresh) {
   }
   const scopes = phase === "review_round" ? ["review_round"] : ["monitor_observe", "monitor_remediate"];
   if (supplied) {
+    if (!fresh) fail("invariant_error", "resume the unfinished phase without --grant-file; a new phase grant is reserved for a later batch or watch");
     if (!scopes.includes(supplied.scope)) fail("invariant_error", `a ${phase} claim accepts a ${scopes.join(" or ")} grant`, { observed: supplied.scope });
     if (consumedGrantIds(ledger).has(supplied.id)) fail("invariant_error", "this grant already started a phase; a new batch or watch needs a new request", { id: supplied.id });
     return supplied;
@@ -2259,11 +2265,11 @@ function commandUpdate(options, stdin) {
 
 const SOURCE_FIELDS = { task_doc: "task_docs", spec: "specs", instruction: "instructions" };
 
-// Reviews that relied on an older identity of a changed source no longer
-// apply; they stay in the ledger as history.
-function reviewsInvalidatedBy(ledger, source) {
+// New requirements expand the review scope. Changed sources invalidate
+// reviews that used their old hash; all records remain available as history.
+function reviewsInvalidatedBy(ledger, source, newlyAdded) {
   return currentItems(ledger.reviews)
-    .filter((review) => review.source_hashes.some((entry) => entry.path === source.path && entry.sha256 !== source.sha256))
+    .filter((review) => newlyAdded || review.source_hashes.some((entry) => entry.path === source.path && entry.sha256 !== source.sha256))
     .map((review) => `reviews:${review.id}`);
 }
 
@@ -2272,7 +2278,7 @@ function addSource(draft, ledger, kind, source) {
   const latest = latestSources(ledger.sources[field]).find((entry) => entry.path === source.path);
   if (latest && latest.sha256 === source.sha256) return null;
   draft.sources[field].push(source);
-  return { previous_sha256: latest?.sha256 ?? null, invalidated_evidence: reviewsInvalidatedBy(ledger, source) };
+  return { previous_sha256: latest?.sha256 ?? null, invalidated_evidence: reviewsInvalidatedBy(ledger, source, !latest) };
 }
 
 function commandSourceAdd(options) {

@@ -43,7 +43,7 @@ node <skill-dir>/scripts/delivery-ledger.mjs <command> (--repo DIR [--branch NAM
 | `check --stage working\|frozen\|published [--pr]` | Read-only identity check (below). Never fetches or repairs refs. |
 | `claim --phase delivery\|review_round\|watch [--grant-file F] [--force --reason TEXT] [--recovery]` | Take ownership; returns `claim_id` and the consumed `next`. |
 | `update` (stdin) | Owner patch of `checkpoint` and `audit_policy` only. |
-| `source-add --kind task_doc\|spec\|instruction --path P --reason TEXT` | Append a source's current hash; reviews that used the old hash stop applying. |
+| `source-add --kind task_doc\|spec\|instruction --path P --reason TEXT` | Append a source's current hash; new sources invalidate current reviews, and changed sources invalidate reviews that used the old hash. |
 | `append FIELD` (stdin) | Append one item to `validation`, `audits`, `reviews`, `defect_shapes`, `publications`, `role_runs`, `sessions`, `limitations` or `decisions`. Same ID and content is a no-op; same ID with other content fails. |
 | `authorize --grant-file F` | Record one quoted user grant and apply only its declared effect. |
 | `record-context --context-file F --reason TEXT` | Replace `sources.spec_check`, `policy`, `candidate.dependencies` or `pr` after verification. Nothing else. |
@@ -70,6 +70,8 @@ The two generators create input files only at explicit absolute destinations out
 - **Release**. `{next, completion, blocker}`, exactly.
 - **Reconcile**. `{case, reason, source, grant_id, expected: {candidate_oid, working_head_oid}, observed, evidence_paths}`; `observed` depends on the case (below).
 
+R1 supports PRs whose base and head use the configured repository remote. It cannot record a separate authorized fork remote. `init`, `record-context` and remote-adoption recovery refuse fork PR adoption; existing fork records fail validation.
+
 ## Locks, Revisions And Ownership
 
 - Every mutation takes a short exclusive-create lock at `<common-git-dir>/agent-delivery-locks/<branch-key>.lock` (and `exclude.lock` while writing `info/exclude`), holding PID, host, time, worktree and a random operation ID. A held lock fails at once with exit 3 and the holder's identity. Locks never expire and are never stolen by age.
@@ -85,6 +87,7 @@ The two generators create input files only at explicit absolute destinations out
 
 - `init` sets `next = {phase: delivery, checkpoint: bootstrap, …}`.
 - A claim resumes the recorded `next` for the unfinished phase (same-phase handoff), the blocker's `resume_phase` for a blocked ledger, or, from `done`, a newly authorized phase. Wrong-phase reentry is refused.
+- Resume an unowned unfinished phase without `--grant-file`. Supplying a phase grant on resume is refused without recording or consuming it, preserving authorization for the later batch or watch.
 - A new `review_round` needs a `review_round` grant, and a new `watch` needs a `monitor_observe` or `monitor_remediate` grant (it sets `authorization.monitoring`). Supply the grant with `--grant-file` so it commits in the same revision as the claim, or record it earlier with `authorize`. A `delivery` claim takes no grant; record endpoint, merge and monitoring authority with `authorize`. A grant starts one batch or one watch: once a claim consumes it, it cannot start another. A suggested `next` with `authorization_required: true` is advice, never authority.
 - Drift refuses a normal claim or takeover. `--recovery` claims anyway and sets `candidate.recovery_required`. During recovery the owner may read, record evidence, `reconcile`, authorize a `reconcile` grant, and release as `handoff` or `blocked`. It cannot progress, freeze, `record-context`, `measure`, publish or complete.
 
@@ -130,6 +133,7 @@ The two generators create input files only at explicit absolute destinations out
 
 ## Evidence
 
+- **Requirements sources.** A newly added task doc, spec or instruction invalidates all current reviews, including reviews that never listed that path. This applies to `source-add` and `source_refresh` recovery. Obtain a fresh review against the expanded requirements; unchanged validation can remain applicable. Adding an identical source again is a no-op.
 - **Content identity.** A `ContentManifest` is `{version: 1, baseline_oid, files, excluded_paths, inputs}`. It lists every path that differs between `candidate.baseline_oid` and the current content: committed since bootstrap, staged, unstaged or untracked. Each entry is `{path, mode, state, sha256}`; a symlink hashes its target bytes, and a deletion has `sha256: null` and its baseline mode. Unrelated changes go in `excluded_paths` explicitly, backed by a recorded scope decision. `inputs` names relevant dependency, lockfile, policy, tool or environment identities. `content_id` is `sha256:` plus the SHA-256 of the canonical form (the displayed key order, paths and input names sorted by UTF-8 bytes, compact `JSON.stringify`); reformatting the file changes its `Source.sha256` but not its `content_id`. Use `content-manifest` to check a manifest against the working tree.
 - **Validation.** A completed command execution records `exit_code`, `log`, the manifest, and `input_fingerprint` (the canonical digest). Focused and local-only runs carry `content_id`, and their manifest must describe the working content when recorded. Committed gates carry `oid` for the frozen candidate, run from a clean checkout. `skipped` and `unavailable` need a reason.
 - **Precommit reviews and audits.** Cite the original record after committing identical content. Completion verifies the retained manifest against the final commit without changing the record's original identity. Changed content, missing manifests or invalidated inputs refuse reuse. A recorded dependency refresh invalidates validation, review and audit evidence; obtain fresh evidence for the affected checks.
