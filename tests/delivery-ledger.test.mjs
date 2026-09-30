@@ -4028,7 +4028,8 @@ test("R3 exhausted small bound refuses a new assessment and dispatch, while loca
   ok(owner.append("role_runs", dispatch));
   refused(owner.append("role_runs", roleRun(owner, { execution: "delegated", fallback_reason: null, status: "running", result_summary: "" })), 2, "invariant_error", "an outstanding dispatch reserves the only cycle");
   ok(owner.append("role_runs", { ...dispatch, id: "dispatch-done", supersedes_id: dispatch.id, status: "complete", result_summary: "assessment" }));
-  const initial = r3Cycle(owner, { findings: [finding({ shape: "identity-reset", disposition: "fixed", fix_oid: owner.ledger().candidate.oid })] });
+  refused(owner.append("role_runs", roleRun(owner, { execution: "delegated", fallback_reason: null, status: "running", result_summary: "" })), 2, "invariant_error", "a completed dispatch stays reserved until its review is recorded");
+  const initial = r3Cycle(owner, { source: "delegated", findings: [finding({ shape: "identity-reset", disposition: "fixed", fix_oid: owner.ledger().candidate.oid })] });
   ok(owner.append("reviews", initial));
   ok(owner.append("reviews", initial));
   ok(owner.append("reviews", review(owner, { source: "inline" })));
@@ -4137,9 +4138,18 @@ test("R3 feature-grade spec check retains source evidence and consumes no implem
 
 test("R3 local remediation verification matches content identity, never two null OIDs", () => {
   const { repo, owner } = r3Fixture();
-  ok(setR3(owner, r3Bound(owner)));
   const firstManifest = manifestFile(repo, owner, [entry(repo, "src/file-0.js")]);
   const first = contentId(repo, firstManifest);
+  const contentFix = review(owner, { source: "inline", candidate_oid: null, content_id: first.content_id, content_manifest: firstManifest.source, findings: [finding({ shape: "identity-reset", disposition: "fixed", fix_content_id: first.content_id, fix_content_manifest: firstManifest.source })] });
+  ok(owner.append("reviews", contentFix), "an unmeasured content fix is recordable without a bound");
+  const push = pushEvent(repo, owner);
+  refused(owner.append("publications", push), 2, "invariant_error", "pushing a content-identified fix needs the bound");
+  ok(setR3(owner, r3Bound(owner)));
+  refused(owner.append("publications", push), 2, "invariant_error", "a content-identified fix needs a sweep on the pushed candidate");
+  ok(owner.append("defect_shapes", { id: "content-sweep", shape: "identity-reset", first_seen: nowIso(), candidate_oid: owner.ledger().candidate.oid, sweep: "done", searched_scope: ["src"], siblings_fixed: [], evidence: "Searched src; no siblings." }));
+  ok(owner.append("publications", push));
+  git(repo.work, "push", "-q", "origin", `HEAD:refs/heads/${repo.branch}`);
+  ok(owner.append("publications", step(push, "verified", { observed: observedFor(push, { oid: owner.ledger().candidate.oid }) })));
   ok(owner.append("reviews", r3Cycle(owner, { findings: [finding({ shape: "identity-reset", disposition: "fixed", fix_content_id: first.content_id, fix_content_manifest: firstManifest.source })] })));
   ok(owner.append("reviews", review(owner, { source: "inline", candidate_oid: null, content_id: first.content_id, content_manifest: firstManifest.source })));
   ok(owner.owned("begin-change"));
