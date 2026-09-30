@@ -5,3 +5,4 @@
 .env.local
 *.env.local
 skills/publish-artifact/.env
+node_modules/
