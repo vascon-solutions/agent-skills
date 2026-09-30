@@ -11,6 +11,7 @@ import { parse as parseToml } from "smol-toml";
 import { parse as parseYaml } from "yaml";
 import {
   applyPlan,
+  applyRepoPointer,
   buildPlan,
   claudeSessionDefinition,
   dispatchReference,
@@ -151,6 +152,21 @@ test("a repeated apply is a no-op with no backup, and a canonical change updates
   write(modifiedObsolete, `${installedWatcher}# local note\n`);
   assert.match(plan(home, { root: upgraded }).conflicts[0].reason, /removed role watcher was modified/);
   write(modifiedObsolete, installedWatcher);
+  for (const [runtime, extension] of [["claude", "md"], ["codex", "toml"]]) {
+    const file = path.join(home, `.${runtime}`, "agents", `watcher.${extension}`);
+    const original = read(file);
+    const target = path.join(home, "personal", `${runtime}-watcher`);
+    write(target, original);
+    fs.unlinkSync(file);
+    fs.symlinkSync(target, file);
+    const refused = plan(home, { root: upgraded });
+    assert.ok(refused.conflicts.some((item) => item.path === file && /symlink/.test(item.reason)));
+    expectCode(() => applyPlan(refused, { env: ENV }), "blocked");
+    assert.equal(fs.readlinkSync(file), target);
+    assert.equal(read(target), original);
+    fs.unlinkSync(file);
+    write(file, original);
+  }
   const result = install(home, { root: upgraded });
   assert.ok(!fs.existsSync(path.join(home, ".claude", "agents", "watcher.md")));
   assert.ok(!fs.existsSync(modifiedObsolete));
@@ -329,6 +345,22 @@ test("malformed config and unknown or unqualified client versions block installa
   write(path.join(malformed, ".codex", "config.toml"), "[agents\n");
   expectCode(() => plan(malformed), "malformed_toml");
   assert.deepEqual(plan(malformed, { runtimes: ["claude"] }).blocked, [], "a Claude-only plan ignores unrelated Codex configuration");
+  for (const selected of ["claude", "codex"]) {
+    const unused = selected === "claude" ? "codex" : "claude";
+    for (const aliasKind of ["directory", "dangling", ...(unused === "codex" ? ["config"] : [])]) {
+      const home = tempHome();
+      const outside = path.join(SANDBOX, `unused-${(counter += 1)}`);
+      fs.mkdirSync(outside);
+      write(path.join(outside, "config.toml"), "invalid unrelated config");
+      const alias = path.join(home, `.${unused}`, ...(aliasKind === "config" ? ["config.toml"] : []));
+      fs.rmSync(alias, { recursive: true, force: true });
+      const target = aliasKind === "config" ? path.join(outside, "config.toml") : aliasKind === "dangling" ? path.join(outside, "missing") : outside;
+      fs.symlinkSync(target, alias);
+      assert.equal(install(home, { runtimes: [selected] }).changed, true);
+      assert.equal(fs.readlinkSync(alias), target, "unselected aliases remain untouched");
+      assert.equal(read(path.join(outside, "config.toml")), "invalid unrelated config");
+    }
+  }
 
   const unknown = plan(tempHome(), { versions: { claude: "2.1.285", codex: "not-a-version" } });
   assert.equal(unknown.selections.codex.version, null);
@@ -356,6 +388,39 @@ test("a destination changed after the dry run refuses the apply without writing"
 });
 
 test("a failure or concurrent edit mid-install rolls back only this install's unchanged writes", () => {
+  for (const mutation of ["create", "update", "delete", "symlink", "parent"]) {
+    const home = tempHome();
+    if (mutation !== "create") install(home, { runtimes: ["codex"] });
+    const upgraded = path.join(SANDBOX, `concurrent-pack-${(counter += 1)}`);
+    fs.cpSync(path.join(root, "agents"), path.join(upgraded, "agents"), { recursive: true });
+    fs.symlinkSync(path.join(root, "skills"), path.join(upgraded, "skills"));
+    const role = mutation === "delete" ? "watcher" : "reviewer";
+    const sourceFile = path.join(upgraded, "agents", `${role}.md`);
+    if (mutation === "delete") fs.unlinkSync(sourceFile);
+    else write(sourceFile, read(sourceFile).replace("You never fix what you find.", "You never fix what you find, even when asked."));
+    const file = path.join(home, ".codex", "agents", `${role}.toml`);
+    let preserved;
+    const target = path.join(home, "user-role.toml");
+    expectCode(() => install(home, { runtimes: ["codex"], root: upgraded }, {
+      beforeWrite: (item) => {
+        if (item.path !== file) return;
+        preserved = mutation === "create" ? item.content : mutation === "symlink" || mutation === "parent" ? read(file) : "concurrent user edit\n";
+        if (mutation === "symlink") {
+          write(target, preserved);
+          fs.unlinkSync(file);
+          fs.symlinkSync(target, file);
+        } else if (mutation === "parent") {
+          const moved = path.join(home, "moved-agents");
+          fs.renameSync(path.dirname(file), moved);
+          fs.symlinkSync(moved, path.dirname(file));
+        } else write(file, preserved);
+      },
+    }), "concurrent_change");
+    assert.equal(read(file), preserved, `${mutation} preserves the newer user state`);
+    if (mutation === "symlink") assert.equal(fs.readlinkSync(file), target);
+    assert.ok(!fs.existsSync(path.join(home, ".agent-skills", "link-agents", "journal.json")), "an untouched prepared step needs no manual recovery");
+  }
+
   const concurrent = tempHome();
   const configFile = path.join(concurrent, ".codex", "config.toml");
   write(configFile, 'model = "x"\n');
@@ -393,6 +458,13 @@ test("a failure or concurrent edit mid-install rolls back only this install's un
   assert.throws(() => install(unrecorded, {}, { beforeManifest: () => { throw Object.assign(new Error("read-only state"), { code: "EROFS" }); } }), /rolled back: read-only state/);
   assert.deepEqual(Object.keys(snapshot(unrecorded)).filter((file) => !file.includes("/backups/")), Object.keys(unrecordedClean));
 
+  const manifestEdited = tempHome();
+  const manifestFile = path.join(manifestEdited, ".agent-skills", "link-agents", "manifest.json");
+  const userManifest = '{"user_change":true}\n';
+  expectCode(() => install(manifestEdited, {}, { beforeManifest: () => write(manifestFile, userManifest) }), "concurrent_change");
+  assert.equal(read(manifestFile), userManifest);
+  assert.deepEqual(fs.readdirSync(path.join(manifestEdited, ".codex", "agents")), []);
+
   const pilots = tempHome();
   const claudePilot = path.join(pilots, ".claude", "agents", "ui-auditor.md");
   write(claudePilot, "---\nname: ui-auditor\ndescription: pilot\n---\npilot\n");
@@ -427,6 +499,20 @@ test("a failure or concurrent edit mid-install rolls back only this install's un
   const journal = JSON.parse(read(path.join(edited, ".agent-skills", "link-agents", "journal.json")));
   assert.equal(journal.status, "recovery_required");
   assert.deepEqual(journal.unresolved, [userFile]);
+
+  const replaced = tempHome();
+  const replacement = path.join(replaced, "personal-auditor.md");
+  const replacedFile = path.join(replaced, ".claude", "agents", "auditor.md");
+  expectCode(() => install(replaced, {}, {
+    afterWrite: (item) => {
+      if (item.path !== replacedFile) return;
+      write(replacement, read(item.path));
+      fs.unlinkSync(item.path);
+      fs.symlinkSync(replacement, item.path);
+      throw new Error("later failure after the user's file-type change");
+    },
+  }), "rollback_incomplete");
+  assert.equal(fs.readlinkSync(replacedFile), replacement, "rollback preserves a user's equal-byte symlink replacement");
 });
 
 test("an interrupted install is recorded and blocks the next apply until resolved", () => {
@@ -552,5 +638,10 @@ test("repo pointers require AGENTS.md and only propose changes to hand-written f
   fs.rmSync(path.join(repo, "CLAUDE.md"));
   fs.symlinkSync(path.join(repo, "missing.md"), path.join(repo, "CLAUDE.md"));
   assert.equal(planRepoPointer(repo, root).op, "propose", "a dangling CLAUDE.md link is never replaced");
+  fs.unlinkSync(path.join(repo, "CLAUDE.md"));
+  const pendingPointer = planRepoPointer(repo, root);
+  fs.symlinkSync(path.join(repo, "missing.md"), path.join(repo, "CLAUDE.md"));
+  expectCode(() => applyRepoPointer(pendingPointer), "concurrent_change");
+  assert.equal(fs.readlinkSync(path.join(repo, "CLAUDE.md")), path.join(repo, "missing.md"));
   assert.match(proposal.diff, /^\+@AGENTS\.md$/m);
 });

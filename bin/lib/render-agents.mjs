@@ -562,9 +562,10 @@ export function buildPlan(options) {
     selections[runtime] = { adapter, version, version_source: versionSource, listed, qualified: listed && (versionSource === "detected" || layout.redirected) };
   }
 
-  for (const dir of [layout.claude, layout.codex, layout.state]) assertIsolated(layout, dir);
+  const runtimeDirs = Object.keys(selections).map((runtime) => layout[runtime]);
+  for (const dir of [...runtimeDirs, layout.state]) assertIsolated(layout, dir);
   const guard = (file) => {
-    const allowed = [layout.claude, layout.codex].filter((dir) => !layout.redirected || within(layout.base, dir));
+    const allowed = runtimeDirs.filter((dir) => !layout.redirected || within(layout.base, dir));
     if (!allowed.some((dir) => within(dir, file))) throw new RenderError("home_escape", `destination ${file} is outside the selected runtime directories${layout.redirected ? ` under ${layout.base}` : ""}`);
     assertIsolated(layout, file);
     return file;
@@ -607,7 +608,7 @@ export function buildPlan(options) {
 
   let configText = null;
   let registrationPrefix = null;
-  const configFile = guard(path.join(layout.codex, "config.toml"));
+  const configFile = selections.codex ? guard(path.join(layout.codex, "config.toml")) : null;
   if (selections.codex) {
     const { adapter } = selections.codex;
     const agentsDir = path.join(layout.codex, "agents");
@@ -699,6 +700,10 @@ export function buildPlan(options) {
     const desired = new Set(canonical.roles.map((role) => path.join(runtime === "claude" ? layout.claude : layout.codex, "agents", `${role.name}.${runtime === "claude" ? "md" : "toml"}`)));
     for (const [file, owned] of Object.entries(install.outputs ?? {})) {
       if (desired.has(file)) continue;
+      if (isLink(file)) {
+        conflicts.push({ path: file, reason: `generated output for removed role ${owned.role} is a symlink; preserve or remove the locally changed path by hand` });
+        continue;
+      }
       try {
         guard(file);
       } catch {
@@ -779,16 +784,43 @@ function writePrivate(file, content, mode = 0o600) {
   fs.writeFileSync(file, content, { mode, flag: "wx" });
 }
 
-function atomicWrite(file, content, fixedMode = null) {
+function destinationState(file) {
+  let stat = null;
+  try { stat = fs.lstatSync(file); } catch (error) { if (error.code !== "ENOENT") throw error; }
+  return {
+    hash: hashFile(file),
+    parent: resolvedPath(path.dirname(file)),
+    entry: stat ? { dev: stat.dev, ino: stat.ino, mode: stat.mode, link: stat.isSymbolicLink() ? fs.readlinkSync(file) : null } : null,
+  };
+}
+
+function assertUnchanged(layout, file, expected) {
+  if (layout) assertIsolated(layout, file);
+  if (!deepEqual(destinationState(file), expected)) throw new RenderError("concurrent_change", `${file} changed before mutation`);
+}
+
+function atomicWrite(file, content, fixedMode = null, beforeReplace = null) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
+  const parent = resolvedPath(path.dirname(file));
   const temp = path.join(path.dirname(file), `.${path.basename(file)}.link-agents-${randomUUID()}.tmp`);
   const mode = fixedMode ?? (exists(file) ? fs.statSync(file).mode & 0o777 : 0o644);
-  fs.writeFileSync(temp, content, { mode, flag: "wx" });
-  fs.chmodSync(temp, mode);
-  const handle = fs.openSync(temp, "r");
-  fs.fsyncSync(handle);
-  fs.closeSync(handle);
-  fs.renameSync(temp, file);
+  const handle = fs.openSync(temp, "wx", mode);
+  const identity = fs.fstatSync(handle);
+  try {
+    try {
+      fs.writeFileSync(handle, content);
+      fs.fchmodSync(handle, mode);
+      fs.fsyncSync(handle);
+    } finally { fs.closeSync(handle); }
+    beforeReplace?.();
+    fs.renameSync(temp, file);
+  } finally {
+    // A rejected replacement may leave staging output. Never clean up through a moved parent.
+    if (resolvedPath(path.dirname(temp)) === parent && exists(temp)) {
+      const current = fs.lstatSync(temp);
+      if (current.dev === identity.dev && current.ino === identity.ino) fs.unlinkSync(temp);
+    }
+  }
 }
 
 function validateContent(item) {
@@ -819,6 +851,8 @@ export function applyPlan(savedPlan, hooks = {}) {
 
   const changes = plan.actions.filter((item) => item.op !== "noop");
   const manifest = readManifest(layout);
+  const manifestFile = path.join(layout.state, "manifest.json");
+  const manifestState = destinationState(manifestFile);
   const id = `${new Date().toISOString().replace(/[:.]/g, "-")}-${randomUUID()}`;
   const backupDir = path.join(layout.state, "backups", id);
   const journal = { id, status: "in_progress", started_at: new Date().toISOString(), backup_dir: backupDir, steps: [] };
@@ -848,7 +882,8 @@ export function applyPlan(savedPlan, hooks = {}) {
   try {
     for (const item of ordered) {
       assertIsolated(layout, item.path);
-      const current = hashFile(item.path);
+      const before = destinationState(item.path);
+      const current = before.hash;
       if (current !== item.before_sha256) throw new RenderError("concurrent_change", `${item.path} changed after the plan was checked`);
       let backup = null;
       let mode = null;
@@ -861,12 +896,21 @@ export function applyPlan(savedPlan, hooks = {}) {
         mode = stat.mode & 0o7777;
         if (stat.isSymbolicLink()) link = fs.readlinkSync(item.path);
       }
-      journal.steps.push({ op: item.op, path: item.path, before_sha256: item.before_sha256, after_sha256: item.after_sha256, backup, mode, link, state: "started" });
+      const step = { op: item.op, path: item.path, before_sha256: item.before_sha256, after_sha256: item.after_sha256, backup, mode, link, state: "prepared" };
+      journal.steps.push(step);
       saveJournal();
       hooks.beforeWrite?.(item);
-      if (item.op === "delete") fs.unlinkSync(item.path);
-      else atomicWrite(item.path, item.content);
-      journal.steps.at(-1).state = "done";
+      const beforeMutation = () => {
+        assertUnchanged(layout, item.path, before);
+        step.state = "started";
+      };
+      assertUnchanged(layout, item.path, before);
+      if (item.op === "delete") {
+        beforeMutation();
+        fs.unlinkSync(item.path);
+      } else atomicWrite(item.path, item.content, null, beforeMutation);
+      step.state = "done";
+      step.after_state = destinationState(item.path);
       saveJournal();
       hooks.afterWrite?.(item);
     }
@@ -891,8 +935,8 @@ export function applyPlan(savedPlan, hooks = {}) {
       next.retired_pilots.push({ runtime: item.runtime, name: item.role, path: item.path, backup: step?.backup ?? null, at: new Date().toISOString() });
     }
     hooks.beforeManifest?.();
-    assertIsolated(layout, path.join(layout.state, "manifest.json"));
-    atomicWrite(path.join(layout.state, "manifest.json"), `${JSON.stringify(next, null, 2)}\n`);
+    assertUnchanged(layout, manifestFile, manifestState);
+    atomicWrite(manifestFile, `${JSON.stringify(next, null, 2)}\n`, null, () => assertUnchanged(layout, manifestFile, manifestState));
     finished = { changed: true, plan, manifest: next, backup_dir: journal.steps.some((step) => step.backup) ? backupDir : null };
   } catch (error) {
     if (error?.simulateCrash) throw error;
@@ -926,30 +970,40 @@ function ownershipRecorded(manifest, plan) {
 function rollback(journal, layout) {
   const unresolved = [];
   for (const step of [...journal.steps].reverse()) {
+    if (step.state === "prepared") continue;
     if (!isolated(layout, step.path) || (step.backup && !isolated(layout, step.backup))) {
       unresolved.push(step.path);
       continue;
     }
-    const current = hashFile(step.path);
+    const before = destinationState(step.path);
+    const current = before.hash;
+    const restoreCurrent = () => {
+      try { restore(step, layout, before); }
+      catch (error) {
+        if (!(error instanceof RenderError) || !["concurrent_change", "home_escape"].includes(error.code)) throw error;
+        unresolved.push(step.path);
+      }
+    };
     if (step.state !== "done") {
       if (current !== step.before_sha256 && current !== step.after_sha256) unresolved.push(step.path);
-      else if (current === step.after_sha256 && step.after_sha256 !== step.before_sha256) restore(step);
+      else if (current === step.after_sha256 && step.after_sha256 !== step.before_sha256) restoreCurrent();
       continue;
     }
-    if (current !== step.after_sha256) {
+    if (current !== step.after_sha256 || (step.after_state && !deepEqual(before, step.after_state))) {
       unresolved.push(step.path);
       continue;
     }
-    restore(step);
+    restoreCurrent();
   }
   return unresolved;
 }
 
-function restore(step) {
+function restore(step, layout, before) {
+  assertUnchanged(layout, step.path, before);
   if (step.link) {
     if (exists(step.path) || isLink(step.path)) fs.unlinkSync(step.path);
     fs.symlinkSync(step.link, step.path);
-  } else if (step.backup) atomicWrite(step.path, fs.readFileSync(step.backup), step.mode);
+  } else if (step.backup) atomicWrite(step.path, fs.readFileSync(step.backup), step.mode, () => assertUnchanged(layout, step.path, before));
   else if (exists(step.path)) fs.unlinkSync(step.path);
 }
 
@@ -985,8 +1039,9 @@ export function planRepoPointer(repoDir, root = DEFAULT_ROOT) {
 export function applyRepoPointer(pointer) {
   if (pointer.op === "propose") throw new RenderError("conflict", `${pointer.path} is not a generated pointer; apply the proposed diff by hand`);
   if (pointer.op === "noop") return false;
-  if (hashFile(pointer.path) !== (pointer.before_sha256 ?? null)) throw new RenderError("concurrent_change", `${pointer.path} changed after the plan was checked`);
-  atomicWrite(pointer.path, pointer.content);
+  const before = destinationState(pointer.path);
+  if (isLink(pointer.path) || before.hash !== (pointer.before_sha256 ?? null)) throw new RenderError("concurrent_change", `${pointer.path} changed after the plan was checked`);
+  atomicWrite(pointer.path, pointer.content, null, () => assertUnchanged(null, pointer.path, before));
   return true;
 }
 
