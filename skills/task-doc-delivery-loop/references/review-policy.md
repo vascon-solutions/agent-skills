@@ -41,9 +41,10 @@ from current delegated implementation dispatches. Duplicate retries and status
 successors add nothing. `delegated_limit` is independently enforced, with its
 policy cited by `basis.delegated_decision`. A repo's one-delegate rule wins even
 when the size bound permits three cycles. Before dispatch or remediation, check
-both limits. A queued or running delegated dispatch, including a failed run
-restarted by a successor, reserves a cycle; record its review before marking the
-run complete. At exhaustion stop ungranted work and report blockers.
+both limits. A delegated dispatch, including a failed run restarted by a
+successor, reserves a cycle until a `delegated` review cycle records its result,
+not merely until the run is marked complete. At exhaustion stop ungranted work
+and report blockers.
 
 `extension_rounds` starts at 0. `overrides` contains exact copies of recorded
 review/remediation grants, each with positive `additional_cycles`; their sum is
@@ -69,7 +70,9 @@ helper mutations enforce installed bounds atomically, not external agent actions
 Before pushing remediation, complete the [shape sweep](../../review-implementation/references/risk-classes.md).
 A done sweep is for the pushed candidate, names the search and result, and
 may report zero siblings. It covers every fix in the candidate's history that no
-verified push contains yet, including fixes carried into follow-up commits.
+verified push contains yet, including fixes carried into follow-up commits and
+content-identified fixes whose manifests match the candidate. A push that carries
+fixes needs the bound installed.
 Pending or earlier-candidate sweeps do not pass, and the helper rechecks sweeps
 when the push is verified. Recovery of an interrupted push records the observed
 remote outcome without that recheck; complete any reopened sweep before the next
