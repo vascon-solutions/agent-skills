@@ -141,6 +141,10 @@ test("a repeated apply is a no-op with no backup, and a canonical change updates
   fs.symlinkSync(path.join(root, "skills"), path.join(upgraded, "skills"));
   fs.rmSync(path.join(upgraded, "agents", "watcher.md"));
   write(path.join(upgraded, "agents", "reviewer.md"), read(path.join(upgraded, "agents", "reviewer.md")).replace("You never fix what you find.", "You never fix what you find, even when asked."));
+  const configFile = path.join(home, ".codex", "config.toml");
+  write(configFile, '[agents.mine]\ndescription = "mine"\nconfig_file = "agents/watcher.toml"\n');
+  assert.ok(plan(home, { root: upgraded }).conflicts.some((conflict) => /removed role watcher is still registered by agents\.mine/.test(conflict.reason)));
+  fs.rmSync(configFile);
   const modifiedObsolete = path.join(home, ".codex", "agents", "watcher.toml");
   const installedWatcher = read(modifiedObsolete);
   write(modifiedObsolete, `${installedWatcher}# local note\n`);
@@ -153,6 +157,17 @@ test("a repeated apply is a no-op with no backup, and a canonical change updates
   const upgradedManifest = JSON.parse(read(path.join(state, "manifest.json")));
   for (const runtime of ["claude", "codex"]) assert.ok(Object.values(upgradedManifest.installs[runtime].outputs).every((entry) => entry.role !== "watcher"));
   assert.equal(install(home, { root: upgraded }).changed, false);
+
+  const probeHome = tempHome();
+  install(probeHome, { versions: { claude: "9.9.9", codex: "0.146.0" } });
+  const qualifiedRoot = path.join(SANDBOX, `canonical-${(counter += 1)}`);
+  fs.cpSync(path.join(root, "agents"), path.join(qualifiedRoot, "agents"), { recursive: true });
+  fs.symlinkSync(path.join(root, "skills"), path.join(qualifiedRoot, "skills"));
+  write(path.join(qualifiedRoot, "agents", "runtimes.yaml"), read(path.join(qualifiedRoot, "agents", "runtimes.yaml")).replace('qualified: ["2.1.285"]', 'qualified: ["2.1.285", "9.9.9"]'));
+  assert.equal(install(probeHome, { root: qualifiedRoot, versions: { claude: "9.9.9", codex: "0.146.0" } }).changed, true, "metadata-only changes refresh the manifest");
+  const refreshed = JSON.parse(read(path.join(probeHome, ".agent-skills", "link-agents", "manifest.json")));
+  assert.equal(refreshed.installs.claude.qualified, true);
+  assert.equal(refreshed.source_hash, loadCanonical(qualifiedRoot).sourceHash);
 });
 
 test("standalone and registration adapters never leave both forms and preserve unrelated TOML bytes", () => {
@@ -176,6 +191,19 @@ test("standalone and registration adapters never leave both forms and preserve u
   install(home, { codexAdapter: "standalone" });
   assert.equal(read(configFile), original);
   assert.deepEqual(fs.readdirSync(path.join(home, ".codex", "agents")).sort(), ROLES.map((role) => `${role}.toml`));
+
+  const unterminated = tempHome();
+  const unterminatedConfig = path.join(unterminated, ".codex", "config.toml");
+  write(unterminatedConfig, 'model = "x"');
+  install(unterminated, { runtimes: ["codex"], codexAdapter: "registration" });
+  install(unterminated, { runtimes: ["codex"] });
+  assert.equal(read(unterminatedConfig), 'model = "x"', "a config without a final newline round-trips");
+
+  const large = tempHome();
+  write(path.join(large, ".codex", "config.toml"), Array.from({ length: 20000 }, (_, index) => `# line ${index}`).join("\n") + "\n");
+  const diff = plan(large, { runtimes: ["codex"], codexAdapter: "registration" }).actions.find((item) => item.kind === "config").diff;
+  assert.ok(diff.includes("[agents.auditor]"));
+  assert.ok(!diff.includes("# line 0\n"), "unchanged lines are not repeated in the diff");
 });
 
 test("unowned files, cross-form names and quoted registrations are conflicts, never overwritten", () => {
@@ -253,11 +281,21 @@ test("pilot retirement shows the diff, backs up, and removes only the pilot tabl
   assert.ok(!kept.actions.some((item) => item.path === sharedFile && item.op === "delete"));
   assert.match(kept.notes[0], /still registered by agents\.keeper/);
 
+  const aliased = tempHome();
+  const aliasTarget = path.join(aliased, ".codex", "agents", "shared.toml");
+  write(aliasTarget, 'developer_instructions = "shared"\n');
+  fs.mkdirSync(path.join(aliased, ".codex", "links"));
+  fs.symlinkSync(aliasTarget, path.join(aliased, ".codex", "links", "alias.toml"));
+  write(path.join(aliased, ".codex", "config.toml"), '[agents.ui-auditor]\ndescription = "pilot"\nconfig_file = "agents/shared.toml"\n\n[agents.keeper]\ndescription = "mine"\nconfig_file = "links/alias.toml"\n');
+  const aliasPlan = plan(aliased, { runtimes: ["codex"], retirePilots: ["codex:ui-auditor"] });
+  assert.ok(!aliasPlan.actions.some((item) => item.path === aliasTarget && item.op === "delete"), "a symlink alias keeps the shared file");
+  assert.match(aliasPlan.notes[0], /still registered by agents\.keeper/);
+
   const replacement = tempHome();
   install(replacement, { runtimes: ["codex"] });
   write(path.join(replacement, ".codex", "config.toml"), '[agents.ui-auditor]\ndescription = "pilot"\nconfig_file = "agents/auditor.toml"\n');
   const clash = plan(replacement, { runtimes: ["codex"], retirePilots: ["codex:ui-auditor"] });
-  assert.ok(clash.blocked.some((reason) => /auditor\.toml: planned for deletion and also as another action/.test(reason)));
+  assert.ok(clash.blocked.some((reason) => /pilot ui-auditor shares its file with installed role output .*auditor\.toml/.test(reason)));
 });
 
 test("malformed config and unknown or unqualified client versions block installation", () => {
@@ -402,6 +440,27 @@ test("the CLI defaults to a dry run, stays inside --home, and applies only a rev
   const linkedFile = tempHome();
   fs.symlinkSync(path.join(target, "config.toml"), path.join(linkedFile, ".codex", "config.toml"));
   expectCode(() => plan(linkedFile, { runtimes: ["codex"] }), "home_escape");
+  const recovering = tempHome();
+  const outsideAgents = path.join(SANDBOX, `outside-agents-${(counter += 1)}`);
+  fs.mkdirSync(outsideAgents);
+  let swappedOnce = false;
+  expectCode(() => install(recovering, { runtimes: ["codex"] }, {
+    afterWrite: (item) => {
+      if (swappedOnce) return;
+      swappedOnce = true;
+      fs.copyFileSync(item.path, path.join(outsideAgents, path.basename(item.path)));
+      fs.rmSync(path.dirname(item.path), { recursive: true });
+      fs.symlinkSync(outsideAgents, path.dirname(item.path));
+    },
+  }), "rollback_incomplete");
+  assert.deepEqual(fs.readdirSync(outsideAgents), ["auditor.toml"], "rollback never touches a file outside --home");
+  const outsideArchive = path.join(SANDBOX, `outside-archive-${(counter += 1)}`);
+  fs.mkdirSync(outsideArchive);
+  fs.symlinkSync(outsideArchive, path.join(recovering, ".agent-skills", "link-agents", "resolved"));
+  const pending = JSON.parse(read(path.join(recovering, ".agent-skills", "link-agents", "journal.json")));
+  expectCode(() => resolveInterrupted(recovering, pending.id, ENV), "home_escape");
+  assert.deepEqual(fs.readdirSync(outsideArchive), []);
+
   const swapped = tempHome();
   const swappedPlan = JSON.parse(JSON.stringify(plan(swapped, { runtimes: ["codex"] })));
   fs.rmSync(path.join(swapped, ".codex", "agents"), { recursive: true });

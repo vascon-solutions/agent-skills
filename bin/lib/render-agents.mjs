@@ -368,6 +368,25 @@ function assertIsolated(layout, file) {
   if (!within(base, resolvedPath(file))) throw new RenderError("home_escape", `${file} resolves outside ${layout.base}`);
 }
 
+function isolated(layout, file) {
+  try {
+    assertIsolated(layout, file);
+    return true;
+  } catch (error) {
+    if (error instanceof RenderError && error.code === "home_escape") return false;
+    throw error;
+  }
+}
+
+function sameFile(a, b) {
+  if (exists(a) && exists(b)) {
+    const left = fs.statSync(a);
+    const right = fs.statSync(b);
+    return left.dev === right.dev && left.ino === right.ino;
+  }
+  return resolvedPath(a) === resolvedPath(b);
+}
+
 function within(base, target) {
   const relative = path.relative(base, target);
   return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
@@ -416,14 +435,16 @@ function ownedOutput(manifest, runtime, file) {
   return manifest.installs?.[runtime]?.outputs?.[file] ?? null;
 }
 
-function findBlock(text) {
+function findBlock(text, prefix = null) {
   const marker = text.indexOf(`${BLOCK_START}\n`);
   if (marker === -1) return text.includes(BLOCK_END) ? { malformed: true } : null;
   const endMarker = text.indexOf(`${BLOCK_END}\n`, marker);
   if (endMarker === -1 || text.indexOf(`${BLOCK_START}\n`, marker + 1) !== -1) return { malformed: true };
   const end = endMarker + BLOCK_END.length + 1;
-  // The blank line written before the block belongs to it, so removal restores the original bytes.
-  const start = marker >= 1 && text[marker - 1] === "\n" && (marker === 1 || text[marker - 2] === "\n") ? marker - 1 : marker;
+  // The separator written before the block belongs to it, so removal restores the original bytes.
+  // The manifest records that separator; without it, a single blank line is assumed.
+  const owned = prefix !== null && marker >= prefix.length && text.slice(marker - prefix.length, marker) === prefix;
+  const start = owned ? marker - prefix.length : marker >= 1 && text[marker - 1] === "\n" && (marker === 1 || text[marker - 2] === "\n") ? marker - 1 : marker;
   return { start, end, text: text.slice(start, end) };
 }
 
@@ -464,8 +485,15 @@ function canonicalJson(value) {
 }
 
 function lineDiff(before, after) {
-  const a = before === null ? [] : before.split("\n");
-  const b = after === null ? [] : after.split("\n");
+  const full = { a: before === null ? [] : before.split("\n"), b: after === null ? [] : after.split("\n") };
+  let head = 0;
+  while (head < full.a.length && head < full.b.length && full.a[head] === full.b[head]) head += 1;
+  let tail = 0;
+  while (tail < full.a.length - head && tail < full.b.length - head && full.a[full.a.length - 1 - tail] === full.b[full.b.length - 1 - tail]) tail += 1;
+  const a = full.a.slice(head, full.a.length - tail);
+  const b = full.b.slice(head, full.b.length - tail);
+  // Unchanged lines are trimmed first; a still-large middle is shown as whole removal and addition to keep memory bounded.
+  if ((a.length + 1) * (b.length + 1) > 1_000_000) return [...a.map((line) => `-${line}`), ...b.map((line) => `+${line}`)].join("\n");
   const table = Array.from({ length: a.length + 1 }, () => new Uint32Array(b.length + 1));
   for (let i = a.length - 1; i >= 0; i -= 1) for (let j = b.length - 1; j >= 0; j -= 1) table[i][j] = a[i] === b[j] ? table[i + 1][j + 1] + 1 : Math.max(table[i + 1][j], table[i][j + 1]);
   const out = [];
@@ -547,34 +575,17 @@ export function buildPlan(options) {
     for (const role of canonical.roles) planFile("claude", role, path.join(agentsDir, `${role.name}.md`), renderClaude(role, canonical.tiers));
   }
 
-  for (const [runtime, install] of Object.entries(manifest.installs ?? {})) {
-    if (!selections[runtime]) continue;
-    const desired = new Set(canonical.roles.map((role) => path.join(runtime === "claude" ? layout.claude : layout.codex, "agents", `${role.name}.${runtime === "claude" ? "md" : "toml"}`)));
-    for (const [file, owned] of Object.entries(install.outputs ?? {})) {
-      if (desired.has(file)) continue;
-      try {
-        guard(file);
-      } catch {
-        conflicts.push({ path: file, reason: `recorded output for role ${owned.role} is outside the selected runtime directories; review it by hand` });
-        continue;
-      }
-      if (!exists(file)) continue;
-      const current = readText(file);
-      if (sha256(current) === owned.sha256) actions.push(action("delete", file, runtime, { role: owned.role, kind: "obsolete", diff: lineDiff(current, null) }));
-      else conflicts.push({ path: file, reason: `generated output for removed role ${owned.role} was modified after installation; remove or keep it by hand` });
-    }
-  }
-
   let configText = null;
+  let registrationPrefix = null;
   const configFile = guard(path.join(layout.codex, "config.toml"));
   if (selections.codex) {
     const { adapter } = selections.codex;
     const agentsDir = path.join(layout.codex, "agents");
     configText = exists(configFile) ? readText(configFile) : "";
     const config = strictToml(configText, configFile);
-    const block = findBlock(configText);
-    if (block?.malformed) throw new RenderError("malformed_config", `${configFile}: unmatched link-agents registration markers`);
     const ownedBlock = manifest.installs?.codex?.registration ?? null;
+    const block = findBlock(configText, ownedBlock?.prefix ?? null);
+    if (block?.malformed) throw new RenderError("malformed_config", `${configFile}: unmatched link-agents registration markers`);
     if (block && (!ownedBlock || ownedBlock.sha256 !== sha256(block.text))) conflicts.push({ path: configFile, reason: "link-agents registration block is not the recorded generated block" });
     if (!block && ownedBlock) conflicts.push({ path: configFile, reason: "recorded link-agents registration block is missing; review config.toml before reinstalling" });
     const blockRoles = block ? Object.keys(strictToml(block.text, `${configFile} generated block`).agents ?? {}) : [];
@@ -601,8 +612,8 @@ export function buildPlan(options) {
     let nextConfig = configText;
     if (block) nextConfig = nextConfig.slice(0, block.start) + nextConfig.slice(block.end);
     if (adapter === "registration") {
-      const terminator = nextConfig === "" || nextConfig.endsWith("\n") ? "" : "\n";
-      nextConfig = `${nextConfig}${terminator}\n${registrationBlock(canonical.roles, layout.codex)}`;
+      registrationPrefix = nextConfig === "" || nextConfig.endsWith("\n") ? "\n" : "\n\n";
+      nextConfig = `${nextConfig}${registrationPrefix}${registrationBlock(canonical.roles, layout.codex)}`;
     }
     configText = nextConfig;
   }
@@ -636,11 +647,40 @@ export function buildPlan(options) {
         else configText = removed;
       }
       const remaining = Object.entries(strictToml(configText ?? "", configFile).agents ?? {})
-        .filter(([other, value]) => other !== name && isPlainObject(value) && typeof value.config_file === "string" && path.resolve(layout.codex, value.config_file) === file)
+        .filter(([other, value]) => other !== name && isPlainObject(value) && typeof value.config_file === "string" && sameFile(path.resolve(layout.codex, value.config_file), file))
         .map(([other]) => other);
-      if (remaining.length) notes.push(`${file} kept: still registered by ${remaining.map((other) => `agents.${other}`).join(", ")}`);
+      const installed = canonical.roles.map((role) => path.join(layout.codex, "agents", `${role.name}.toml`)).filter((output) => exists(output) && exists(file) && sameFile(output, file));
+      if (installed.length) conflicts.push({ path: file, reason: `pilot ${name} shares its file with installed role output ${installed.join(", ")}` });
+      else if (remaining.length) notes.push(`${file} kept: still registered by ${remaining.map((other) => `agents.${other}`).join(", ")}`);
       else if (exists(file)) pilotActions.push(action("delete", file, runtime, { role: name, kind: "pilot", diff: lineDiff(readText(file), null) }));
       else if (entry === undefined) conflicts.push({ path: file, reason: `pilot ${name} not found` });
+    }
+  }
+
+  const finalConfig = strictToml(configText ?? (exists(configFile) ? readText(configFile) : ""), configFile);
+  const registrationsOf = (file, except = null) => Object.entries(finalConfig.agents ?? {})
+    .filter(([other, value]) => other !== except && isPlainObject(value) && typeof value.config_file === "string" && sameFile(path.resolve(layout.codex, value.config_file), file))
+    .map(([other]) => `agents.${other}`);
+  for (const [runtime, install] of Object.entries(manifest.installs ?? {})) {
+    if (!selections[runtime]) continue;
+    const desired = new Set(canonical.roles.map((role) => path.join(runtime === "claude" ? layout.claude : layout.codex, "agents", `${role.name}.${runtime === "claude" ? "md" : "toml"}`)));
+    for (const [file, owned] of Object.entries(install.outputs ?? {})) {
+      if (desired.has(file)) continue;
+      try {
+        guard(file);
+      } catch {
+        conflicts.push({ path: file, reason: `recorded output for role ${owned.role} is outside the selected runtime directories; review it by hand` });
+        continue;
+      }
+      if (!exists(file)) continue;
+      const users = registrationsOf(file);
+      if (users.length) {
+        conflicts.push({ path: file, reason: `generated output for removed role ${owned.role} is still registered by ${users.join(", ")}` });
+        continue;
+      }
+      const current = readText(file);
+      if (sha256(current) === owned.sha256) actions.push(action("delete", file, runtime, { role: owned.role, kind: "obsolete", diff: lineDiff(current, null) }));
+      else conflicts.push({ path: file, reason: `generated output for removed role ${owned.role} was modified after installation; remove or keep it by hand` });
     }
   }
 
@@ -671,6 +711,7 @@ export function buildPlan(options) {
     actions,
     conflicts,
     notes,
+    registration_prefix: registrationPrefix,
     blocked: blockedReasons(selections, conflicts, options.allowUnqualified, layout.redirected, retire),
     allow_unqualified: Boolean(options.allowUnqualified),
   };
@@ -745,6 +786,7 @@ export function applyPlan(savedPlan, hooks = {}) {
   const backupDir = path.join(layout.state, "backups", id);
   const journal = { id, status: "in_progress", started_at: new Date().toISOString(), backup_dir: backupDir, steps: [] };
   const saveJournal = () => {
+    assertIsolated(layout, journalFile);
     fs.mkdirSync(layout.state, { recursive: true, mode: 0o700 });
     atomicWrite(journalFile, `${JSON.stringify(journal, null, 2)}\n`, 0o600);
   };
@@ -798,8 +840,8 @@ export function applyPlan(savedPlan, hooks = {}) {
       next.installs[runtime] = { adapter: selection.adapter, runtime_version: selection.version, version_source: selection.version_source, qualified: selection.qualified, installed_at: new Date().toISOString(), outputs };
       if (runtime === "codex") {
         const configFile = path.join(layout.codex, "config.toml");
-        const block = exists(configFile) ? findBlock(readText(configFile)) : null;
-        next.installs.codex.registration = block && !block.malformed ? { path: configFile, sha256: sha256(block.text) } : null;
+        const block = exists(configFile) && plan.registration_prefix !== null ? findBlock(readText(configFile), plan.registration_prefix) : null;
+        next.installs.codex.registration = block && !block.malformed ? { path: configFile, sha256: sha256(block.text), prefix: plan.registration_prefix } : null;
       }
     }
     for (const item of plan.actions.filter((entry) => entry.kind === "pilot")) {
@@ -807,36 +849,45 @@ export function applyPlan(savedPlan, hooks = {}) {
       next.retired_pilots.push({ runtime: item.runtime, name: item.role, path: item.path, backup: step?.backup ?? null, at: new Date().toISOString() });
     }
     hooks.beforeManifest?.();
+    assertIsolated(layout, path.join(layout.state, "manifest.json"));
     atomicWrite(path.join(layout.state, "manifest.json"), `${JSON.stringify(next, null, 2)}\n`);
     finished = { changed: true, plan, manifest: next, backup_dir: journal.steps.some((step) => step.backup) ? backupDir : null };
   } catch (error) {
     if (error?.simulateCrash) throw error;
-    const unresolved = rollback(journal);
+    const unresolved = rollback(journal, layout);
     journal.status = unresolved.length ? "recovery_required" : "rolled_back";
     journal.unresolved = unresolved;
     journal.error = error.message;
-    if (unresolved.length) {
-      saveJournal();
-      throw new RenderError("rollback_incomplete", `install failed (${error.message}); manual recovery needed for ${unresolved.join(", ")}`, { journal: journalFile });
+    if (unresolved.length || !isolated(layout, journalFile)) {
+      if (isolated(layout, journalFile)) saveJournal();
+      throw new RenderError("rollback_incomplete", `install failed (${error.message}); manual recovery needed for ${unresolved.join(", ") || "the install journal"}`, { journal: journalFile });
     }
     fs.unlinkSync(journalFile);
     throw new RenderError(error.code ?? "apply_failed", `install failed and was rolled back: ${error.message}`, { backup_dir: backupDir });
   }
+  assertIsolated(layout, journalFile);
   fs.unlinkSync(journalFile);
   return finished;
 }
 
 function ownershipRecorded(manifest, plan) {
+  if (manifest.source_hash !== plan.source_hash || manifest.renderer_version !== plan.renderer_version) return false;
   return Object.entries(plan.selections).every(([runtime, selection]) => {
     const install = manifest.installs?.[runtime];
     if (!install || install.adapter !== selection.adapter || install.runtime_version !== selection.version) return false;
+    if (install.qualified !== selection.qualified || install.version_source !== selection.version_source) return false;
+    if (runtime === "codex" && (install.registration?.prefix ?? null) !== plan.registration_prefix) return false;
     return plan.actions.filter((item) => item.runtime === runtime && item.kind === "file").every((item) => install.outputs?.[item.path]?.sha256 === item.after_sha256);
   });
 }
 
-function rollback(journal) {
+function rollback(journal, layout) {
   const unresolved = [];
   for (const step of [...journal.steps].reverse()) {
+    if (!isolated(layout, step.path) || (step.backup && !isolated(layout, step.backup))) {
+      unresolved.push(step.path);
+      continue;
+    }
     const current = hashFile(step.path);
     if (step.state !== "done") {
       if (current !== step.before_sha256 && current !== step.after_sha256) unresolved.push(step.path);
@@ -865,6 +916,7 @@ export function resolveInterrupted(home, id, env) {
   const journal = JSON.parse(readText(journalFile));
   if (journal.id !== id) throw new RenderError("argument_error", `recorded interrupted install is ${journal.id}, not ${id}`);
   const archive = path.join(layout.state, "resolved", `${journal.id}.json`);
+  assertIsolated(layout, archive);
   writePrivate(archive, `${JSON.stringify({ ...journal, resolved_at: new Date().toISOString() }, null, 2)}\n`);
   fs.unlinkSync(journalFile);
   return { archived: archive, journal };
