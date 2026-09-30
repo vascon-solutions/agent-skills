@@ -572,11 +572,11 @@ export function buildPlan(options) {
 
   const planFile = (runtime, role, file, content) => {
     guard(file);
+    if (isLink(file)) return conflicts.push({ path: file, reason: "destination is a symlink (possibly dangling); replace it with a regular file or remove it before installing" });
     const before = exists(file) ? readText(file) : null;
     const owned = ownedOutput(manifest, runtime, file);
     const afterHash = sha256(content);
     if (before === null) return actions.push(action("create", file, runtime, { role: role.name, after_sha256: afterHash, content, diff: lineDiff(null, content) }));
-    if (isLink(file)) return conflicts.push({ path: file, reason: "destination is a symlink; replace it with a regular file or remove it before installing" });
     const beforeHash = sha256(before);
     if (beforeHash === afterHash) {
       if (!owned && !adopt.has(file)) return conflicts.push({ path: file, reason: "identical file is not recorded as a generated output; pass --adopt to take ownership of it" });
@@ -689,7 +689,8 @@ export function buildPlan(options) {
     }
   }
 
-  const finalConfig = strictToml(configText ?? (exists(configFile) ? readText(configFile) : ""), configFile);
+  const codexConfigInUse = Boolean(selections.codex) || retire.some((pilot) => pilot.startsWith("codex:"));
+  const finalConfig = codexConfigInUse ? strictToml(configText ?? (exists(configFile) ? readText(configFile) : ""), configFile) : {};
   const registrationsOf = (file, except = null) => Object.entries(finalConfig.agents ?? {})
     .filter(([other, value]) => other !== except && isPlainObject(value) && typeof value.config_file === "string" && sameFile(path.resolve(layout.codex, value.config_file), file))
     .map(([other]) => `agents.${other}`);
@@ -974,6 +975,7 @@ export function planRepoPointer(repoDir, root = DEFAULT_ROOT) {
   if (!match) throw new RenderError("schema_error", "agents/instruction-pointers.md has no Claude template");
   const content = `${POINTER_MARKER}\n${match[1]}`;
   const file = path.join(repo, "CLAUDE.md");
+  if (isLink(file)) return { op: "propose", path: file, diff: lineDiff(null, content), content };
   const before = exists(file) ? readText(file) : null;
   if (before === content) return { op: "noop", path: file, diff: "" };
   if (before !== null && !before.startsWith(POINTER_MARKER)) return { op: "propose", path: file, diff: lineDiff(before, content), content };

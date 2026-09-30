@@ -328,6 +328,7 @@ test("malformed config and unknown or unqualified client versions block installa
   const malformed = tempHome();
   write(path.join(malformed, ".codex", "config.toml"), "[agents\n");
   expectCode(() => plan(malformed), "malformed_toml");
+  assert.deepEqual(plan(malformed, { runtimes: ["claude"] }).blocked, [], "a Claude-only plan ignores unrelated Codex configuration");
 
   const unknown = plan(tempHome(), { versions: { claude: "2.1.285", codex: "not-a-version" } });
   assert.equal(unknown.selections.codex.version, null);
@@ -462,6 +463,13 @@ test("the CLI defaults to a dry run, stays inside --home, and applies only a rev
   assert.equal(applied.status, 0, applied.stderr);
   assert.equal(fs.readdirSync(path.join(home, ".claude", "agents")).length, 4);
 
+  const normalHome = path.join(SANDBOX, `normal-home-${(counter += 1)}`);
+  fs.mkdirSync(path.join(normalHome, ".claude", "agents"), { recursive: true });
+  fs.symlinkSync(path.join(normalHome, "missing-target.md"), path.join(normalHome, ".claude", "agents", "auditor.md"));
+  const dangling = spawnSync(CLI, ["--runtime", "claude", "--claude-version", "2.1.285"], { encoding: "utf8", env: { ...ENV, HOME: normalHome, CLAUDE_CONFIG_DIR: path.join(normalHome, ".claude"), CODEX_HOME: path.join(normalHome, ".codex") } });
+  assert.match(dangling.stdout, /auditor\.md: destination is a symlink \(possibly dangling\)/);
+  assert.equal(fs.readlinkSync(path.join(normalHome, ".claude", "agents", "auditor.md")), path.join(normalHome, "missing-target.md"));
+
   const bypass = cli(["--runtime", "claude", "--claude-version", "9.9.9", "--allow-unqualified"]);
   assert.equal(bypass.status, 2, "--allow-unqualified never applies to the real home");
   assert.match(bypass.stdout, /applies only to a redirected probe home/);
@@ -541,5 +549,8 @@ test("repo pointers require AGENTS.md and only propose changes to hand-written f
   write(path.join(repo, "CLAUDE.md"), "# Hand-written\n");
   const proposal = planRepoPointer(repo, root);
   assert.equal(proposal.op, "propose");
+  fs.rmSync(path.join(repo, "CLAUDE.md"));
+  fs.symlinkSync(path.join(repo, "missing.md"), path.join(repo, "CLAUDE.md"));
+  assert.equal(planRepoPointer(repo, root).op, "propose", "a dangling CLAUDE.md link is never replaced");
   assert.match(proposal.diff, /^\+@AGENTS\.md$/m);
 });
