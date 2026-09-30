@@ -29,7 +29,8 @@ UI check belongs to a browser tool.
 Resolve scope in this order:
 
 1. explicit user instructions
-2. supplied audit brief or acceptance criteria
+2. supplied audit brief or acceptance criteria, including a delivery role brief
+   derived from the ledger
 3. OpenAPI/Swagger contract
 4. authoritative repository docs and code
 5. observed runtime behavior
@@ -135,6 +136,12 @@ reusable tokens, or full unreviewed response dumps.
 - Stop only audit-started services unless asked to leave them running.
 - Confirm the tested repository matches its baseline and report any residue.
 - Return a concise verdict, highest-impact findings, and report path.
+- When a delivery role brief started the audit, reply with the
+  [role result envelope](../task-doc-delivery-loop/references/orchestration.md#result-envelope)
+  instead of a chat summary: verdict, every actionable finding with its evidence
+  path, unverified scenarios, cleanup state, and every heavy command you ran
+  (build, install, test suite or service start) with its evidence path. The
+  heavy-command count is the length of that list.
 
 ## Common Mistakes
 

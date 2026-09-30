@@ -87,6 +87,26 @@ Completion checks the current content again. No commit is needed for this endpoi
 
 For a commit or PR endpoint, use the same preparation with the authorized endpoint and remote. Commit the intended scope with hooks, then `freeze` with commit evidence. Before the first implementation assessment, `measure` and finalize `set-review-bound` using the [review policy](review-policy.md). Record the assessment cycle and any delegated dispatch. Reuse applicable earlier review and audit records when their retained manifests match the commit; local verification of remediation adds no cycle. Record the committed validation gate or an explicit reuse of the precommit gate. Pass the ledger and current claim to [publication](../../publish-branch/references/ledger-handoff.md). Cite the verified publication events and applicable review at completion. A missing remote does not silently turn a PR request into local-only completion.
 
+## Record A Support Dispatch
+
+Use this only after [orchestration](orchestration.md) selects a role. Direct work needs no role run. The example records a delegated implementation review after `freeze` and `set-review-bound`; `run.json` is the brief's identity plus the resolved settings, and `enforcement` comes from the [role dispatch defaults](role-dispatch.md).
+
+```sh
+jq -n --arg oid "$oid" --arg session "$session" --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  --slurpfile enforcement "$evidence/reviewer-enforcement.json" '
+  {id:"review-1-run", role:"reviewer", mode:"implementation", phase:"delivery",
+   candidate_oid:$oid, content_id:null, content_manifest:null, execution:"delegated",
+   runtime:"claude", runtime_version:"2.1.285", client:"claude-code", session_label:$session,
+   native_session_id:null, requested_tier:"deep", requested_model:null, requested_effort:null,
+   observed_model:null, observed_effort:null, config_hash:null, enforcement:$enforcement[0],
+   status:"running", block_reason:null, fallback_reason:null, parent_run_id:null,
+   result_report:null, result_summary:"", started_at:$at, ended_at:null, heavy_commands:[]}' \
+  > "$evidence/review-1-run.json"
+owned append role_runs < "$evidence/review-1-run.json"
+```
+
+The helper refuses the dispatch record when the bound has no cycle left; outstanding delegated runs reserve their cycles. After the role returns and its envelope checks out, append a successor with `supersedes_id: "review-1-run"`, the observed settings, `status`, `ended_at` and a `result_summary`, then the `reviews` record with `source: "delegated"` and the cycle it consumed. A role that is missing or returns a malformed result gets the successor with its real status, and any permitted inline replacement gets its own `execution: "inline"` run with the actual `fallback_reason`.
+
 ## Resume An Interrupted Delivery
 
 Resolve `ledger_path` from the prior continuation brief. A different session uses its own runtime and stable session label.

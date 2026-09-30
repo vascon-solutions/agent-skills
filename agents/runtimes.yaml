@@ -1,0 +1,17 @@
+# Adapter qualification (implementation spec section 10.2). List a client
+# version only after native load and spawn probes pass on it; documentation or
+# a generated file alone does not qualify an adapter.
+version: 1
+claude:
+  adapters:
+    agent-file:
+      # 2.1.285: all four roles and modes spawned from rendered files, 2026-09-30.
+      qualified: ["2.1.285"]
+codex:
+  adapters:
+    standalone:
+      # 0.146.0: all four roles and modes spawned from standalone files, 2026-09-30.
+      qualified: ["0.146.0"]
+    registration:
+      # 0.146.0: rendered roles spawned through config_file registrations, 2026-09-30.
+      qualified: ["0.146.0"]

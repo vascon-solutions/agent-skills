@@ -1,0 +1,21 @@
+# Provisional tier map (implementation spec section 9). Section 12 measurement
+# revisits these names; they imply no price or quality ranking.
+version: 1
+order: [fast, standard, deep]
+tiers:
+  fast:
+    claude: haiku
+    codex: gpt-5.6-luna
+    gemini: null
+  standard:
+    claude: sonnet
+    codex: gpt-5.6-terra
+    gemini: null
+  deep:
+    claude: opus
+    codex: gpt-5.6-sol
+    gemini: null
+effort_defaults:
+  claude: null
+  codex: medium
+  gemini: null

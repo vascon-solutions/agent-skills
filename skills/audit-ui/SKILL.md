@@ -29,7 +29,7 @@ not this skill.
 Read repository instructions and only relevant feature docs. Resolve in order:
 
 1. explicit user instructions
-2. supplied audit brief
+2. supplied audit brief, including a delivery role brief derived from the ledger
 3. authoritative repository docs
 4. visible application state
 5. bounded inference for minor gaps
@@ -125,6 +125,12 @@ Create mockups or annotated screenshots only when separately requested.
   failure and preserve evidence for failed or blocked audits.
 - Return a concise chat summary with verdict, highest-impact findings, and the
   report path.
+- When a delivery role brief started the audit, reply with the
+  [role result envelope](../task-doc-delivery-loop/references/orchestration.md#result-envelope)
+  instead of a chat summary: verdict, every actionable finding with its evidence
+  path, unverified scenarios, cleanup state, and every heavy command you ran
+  (build, install, test suite or service start) with its evidence path. The
+  heavy-command count is the length of that list.
 
 ## Common Mistakes
 

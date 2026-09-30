@@ -8,9 +8,12 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 ~/agent-skills/
 ├── README.md
 ├── .gitignore
+├── package.json          ← parser dependencies for link-agents.sh
+├── agents/               ← canonical support roles and tier map
 ├── bin/
 │   ├── install.sh        ← first-time install + link
-│   └── link-skills.sh    ← re-link after updates
+│   ├── link-skills.sh    ← re-link after updates
+│   └── link-agents.sh    ← render support roles (explicit, dry run first)
 └── skills/
     ├── audit-api/
     ├── audit-ui/
@@ -185,6 +188,26 @@ cd ~/agent-skills && git pull && bin/link-skills.sh
 ```
 
 The link script is idempotent — it skips symlinks that already point to the correct source and only adds new ones.
+
+## Support Roles
+
+`agents/` holds four canonical read-only support roles for task-doc delivery: `auditor`, `reviewer`, `scout` and `watcher`, with a shared tier map (`tiers.yaml`) and adapter qualification list (`runtimes.yaml`). The delivery loop's [orchestration reference](skills/task-doc-delivery-loop/references/orchestration.md) decides when a checkpoint uses one. `link-skills.sh` never installs roles.
+
+`bin/link-agents.sh` renders them into Claude Code (`~/.claude/agents/`) and Codex (`~/.codex/agents/`). It needs the declared parsers once: `npm ci`. The default is a dry run that shows every file and config diff; installation applies only a reviewed plan:
+
+```bash
+npm ci
+bin/link-agents.sh --runtime claude --runtime codex --codex-adapter standalone --plan-out /tmp/agents-plan.json
+bin/link-agents.sh --apply --plan /tmp/agents-plan.json
+```
+
+- Codex needs an explicit adapter: `standalone` role files, or `registration` (`[agents.<role>]` entries in `config.toml`). One role never gets both forms.
+- A client version must be listed as qualified for the selected adapter in `agents/runtimes.yaml`; list a version only after native load and spawn probes pass on it.
+- The renderer records ownership in `~/.agent-skills/link-agents/manifest.json`, never overwrites unowned or locally modified files, backs up every changed destination, and rolls back a failed install. An interrupted install blocks the next apply until `--resolve-interrupted ID` after manual review.
+- `--retire-pilot RUNTIME:NAME` removes an older role such as `ui-auditor` with a backup, only after its replacement is qualified.
+- `--home DIR` redirects every path for tests and probes. `--dispatch-reference` regenerates the delivery loop's `references/role-dispatch.md` after editing `agents/`.
+
+Run the pack's tests with `npm ci && npm test`.
 
 ## Typical Usage
 
