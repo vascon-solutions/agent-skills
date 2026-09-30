@@ -20,6 +20,21 @@ Split only when outcomes are independently shippable and grouping makes scope, o
 Check proposed tests against [test-audit](../test-audit/SKILL.md). Flag unnecessary
 test deliverables and evidence gaps in the task's validation map.
 
+## Spec-Correctness Mode
+
+Before delivery of a feature-grade task doc, run a spec-correctness pass. Small
+fixes may use it optionally; preserve an explicit request to skip it and record
+the reason. `reviewer`/`spec` names this behavior, not a requirement to install or
+select a canonical role. Use permitted inline review when a role is unavailable;
+required independence remains a blocked gate when it cannot be supplied.
+
+Check the spec against current code, upstream shared/API contracts and repository
+product rules, not against itself. Cite the actual sources and distinguish missing
+evidence from contradictions. Return `accept`, `revise`, `split` or `rewrite` to
+the doc author with source hashes, report path and checked time for
+`sources.spec_check`. This pass consumes no implementation review cycle.
+Implementation review and runtime evidence must still flag later contradictions.
+
 ## Verdict
 
 - `accept`: executable with adequate scope and evidence; do not invent findings.

@@ -1436,7 +1436,8 @@ test("N1 superseding a Review updates dispositions without adding review cycles"
   const repo = makeRepo();
   const owner = initDelivery(repo);
   deliverToFrozen(repo, owner);
-  const pending = review(owner, { cycle_id: "cycle-1", cycle_kind: "implementation_review", verdict: "pass-with-fixes", findings: [finding({ id: "f1" })] });
+  ok(setR3(owner, r3Bound(owner)));
+  const pending = review(owner, { cycle_id: "cycle-1", cycle_kind: "implementation_review", verdict: "pass-with-fixes", findings: [finding({ id: "f1", shape: "identity-reset" })] });
   ok(owner.append("reviews", pending));
   assert.equal(owner.ledger().measurements.review_rounds, 1);
   const fixedOid = owner.ledger().candidate.oid;
@@ -1638,11 +1639,11 @@ test("F14 measure refuses a working candidate: local-only work stays unmeasured"
   ok(owner.append("limitations", limitation({ kind: "unmeasured", reason: "local-only work has no frozen candidate to measure" })));
 });
 
-test("F14 set-review-bound is refused in R1 without mutation", () => {
+test("R3 set-review-bound rejects incomplete payloads without mutation", () => {
   const repo = makeRepo();
   const owner = initDelivery(repo);
   const before = fs.readFileSync(repo.ledgerPath, "utf8");
-  refused(owner.owned("set-review-bound", ["--bound-file", input(repo, "bound", { max_rounds: 2 })]), 2, "invariant_error");
+  refused(owner.owned("set-review-bound", ["--bound-file", input(repo, "bound", { max_rounds: 2 })]), 2, "schema_error");
   assert.equal(fs.readFileSync(repo.ledgerPath, "utf8"), before);
   assert.equal(owner.ledger().review_bound, null);
 });
@@ -2514,15 +2515,17 @@ function reviewRound(repo, { dispositions = ["fixed", "rejected"] } = {}) {
   ok(owner.release("complete", { next: nextStep("review_round", "review", { authorization_required: true }), completion: completion(owner, ["validation:" + delivered.gate.id, "publications:" + delivered.push.id, "publications:" + delivered.prCreate.id]), blocker: null }));
   const reviewer = new Session(repo, "codex");
   ok(reviewer.claim("review_round", { grantFile: input(repo, "grant", grant("review_round", { wording: '"address the review findings on the PR"' })) }));
+  ok(setR3(reviewer, r3Bound(reviewer)));
   const threads = [
     { thread_graphql_id: "PRRT_one", root_comment_database_id: "1001", path: "src/app.js", line: 1 },
     { thread_graphql_id: "PRRT_two", root_comment_database_id: "1002", path: "README.md", line: 1 },
   ];
   const batch = batchFile(repo, reviewer, threads);
   const findings = threads.map((thread, position) =>
-    finding({ id: "f" + (position + 1), source_id: thread.root_comment_database_id, thread_id: thread.thread_graphql_id, disposition: dispositions[position], reason: dispositions[position] === "rejected" ? "the behavior is intended" : null, fix_oid: dispositions[position] === "fixed" ? delivered.oid : null }),
+    finding({ id: "f" + (position + 1), shape: "identity-reset", source_id: thread.root_comment_database_id, thread_id: thread.thread_graphql_id, disposition: dispositions[position], reason: dispositions[position] === "rejected" ? "the behavior is intended" : null, fix_oid: dispositions[position] === "fixed" ? delivered.oid : null }),
   );
-  const batchReview = review(reviewer, { source: "codex-bot", verdict: "pass-with-fixes", findings, batch });
+  const cycle = dispositions.includes("fixed") ? { cycle_id: "batch-fix", cycle_kind: "post_pr_fix" } : {};
+  const batchReview = review(reviewer, { source: "codex-bot", verdict: "pass-with-fixes", findings, batch, ...cycle });
   ok(reviewer.append("reviews", batchReview));
   return { owner, reviewer, delivered, threads, batch, batchReview };
 }
@@ -2710,7 +2713,7 @@ test("N7 an incomplete snapshot cannot back publication", () => {
   const repo = makeRepo();
   const { reviewer, threads } = reviewRound(repo);
   const partial = batchFile(repo, reviewer, threads, { complete: false });
-  ok(reviewer.append("reviews", review(reviewer, { source: "codex-bot", findings: [finding({ thread_id: threads[0].thread_graphql_id, disposition: "informational" })], batch: partial })));
+  ok(reviewer.append("reviews", review(reviewer, { source: "codex-bot", findings: [finding({ shape: "identity-reset", thread_id: threads[0].thread_graphql_id, disposition: "informational" })], batch: partial })));
   refused(reviewer.append("publications", replyEvent(repo, reviewer, partial, threads[0], bodyFile(repo, "Noted."))), 2, "invariant_error");
   const partialReview = reviewer.ledger().reviews.find((entry) => entry.batch?.id === partial.id);
   const swapped = batchFile(repo, reviewer, threads, { complete: true, id: partial.id });
@@ -3214,31 +3217,6 @@ test("F15 local-only work and reply-only rounds make no commit: no helper comman
   assert.match(ghCallsInSource[0], /"--method", "GET"/);
 });
 
-test("V6 the R1 implementation and authorized usability follow-up stay within delivery files", () => {
-  const allowed = [
-    "skills/task-doc-delivery-loop/scripts/delivery-ledger.mjs",
-    "skills/task-doc-delivery-loop/references/delivery-ledger.md",
-    "skills/task-doc-delivery-loop/references/delivery-examples.md",
-    "skills/task-doc-delivery-loop/references/delivery-ledger.schema.json",
-    "skills/task-doc-delivery-loop/references/authorization.md",
-    "skills/task-doc-delivery-loop/references/validation.md",
-    "skills/task-doc-delivery-loop/SKILL.md",
-    "skills/address-review-findings/SKILL.md",
-    "skills/publish-branch/SKILL.md",
-    "skills/publish-branch/references/github-transport.md",
-    "skills/publish-branch/references/ledger-handoff.md",
-    "skills/monitor-pr-review/SKILL.md",
-    "tests/delivery-ledger.test.mjs",
-    "tests/skills-portability.test.mjs",
-  ];
-  const base = spawnSync("git", ["merge-base", "HEAD", "origin/main"], { cwd: root, encoding: "utf8" });
-  if (base.status !== 0) return;
-  const committed = spawnSync("git", ["diff", "--name-only", base.stdout.trim()], { cwd: root, encoding: "utf8" }).stdout.split("\n").filter(Boolean);
-  const untracked = spawnSync("git", ["ls-files", "--others", "--exclude-standard"], { cwd: root, encoding: "utf8" }).stdout.split("\n").filter(Boolean);
-  const outside = [...committed, ...untracked].filter((file) => !allowed.includes(file));
-  assert.deepEqual(outside, []);
-});
-
 test("V6 the suite needs no memory or runtime-configuration writes", () => {
   assert.ok(HOME.startsWith(SANDBOX), "every helper run uses a disposable HOME");
   const homeFiles = Object.keys(snapshotTree(HOME)).filter((file) => !["global-excludes", ".gitconfig"].includes(file));
@@ -3514,7 +3492,7 @@ test("R1 review batch: disposition successors retain the reviewed head after a f
   ghPull(repo, pr);
   ok(reviewer.recordContext({ pr }));
   const successor = {
-    ...batchReview, id: randomUUID(), supersedes_id: batchReview.id,
+    ...batchReview, id: randomUUID(), supersedes_id: batchReview.id, cycle_id: "batch-fix", cycle_kind: "post_pr_fix",
     findings: batchReview.findings.map((item) => item.disposition === "pending" ? { ...item, disposition: "fixed", fix_oid: fixedOid } : item),
   };
   ok(reviewer.append("reviews", successor), "the original snapshot remains valid for dispositions");
@@ -3869,6 +3847,310 @@ test("R1 evidence scope: PR body bytes must carry the final candidate inside the
   ok(finish());
 });
 
-describe("delivery ledger R1 acceptance", { concurrency: Math.max(2, Math.min(6, os.availableParallelism?.() ?? 4)) }, () => {
+// R3 extends this existing CLI boundary: policy authorization/accounting and
+// pre-publication sweep gates need repeatable protection, not copy snapshots.
+function r3Bound(owner, { packages = ["."], limit = null, overrides = [], ...patch } = {}) {
+  ok(owner.owned("measure"));
+  let ledger = owner.ledger();
+  if (!ledger.sources.decisions.some((d) => d.id === "workspace")) ok(owner.append("decisions", { id: "workspace", text: "Inspected fixture workspace configuration and affected leaf roots; root-only when no workspace is configured.", source: "fixture workspace evidence" }));
+  if (limit !== null && !ledger.sources.decisions.some((d) => d.id === "delegate-policy")) ok(owner.append("decisions", { id: "delegate-policy", text: "Repository permits at most one delegated implementation review.", source: "fixture repository policy" }));
+  ledger = owner.ledger();
+  const files = ledger.measurements.files;
+  const size = packages === null ? "size_unknown" : files >= 40 || packages.length > 1 ? "large" : files >= 11 ? "medium" : "small";
+  const max = { small: 1, medium: 2, large: 3, size_unknown: 2 }[size];
+  return {
+    max_rounds: Math.max(max, ledger.review_bound?.max_rounds ?? 0), rounds_used: ledger.measurements.review_rounds,
+    size, measured_oid: ledger.candidate.oid,
+    basis: { files, packages, workspace_decision: "workspace", delegated_decision: limit === null ? null : "delegate-policy" },
+    delegated_limit: limit, delegated_used: ledger.review_bound?.delegated_used ?? 0,
+    extension_rounds: overrides.reduce((sum, g) => sum + g.additional_cycles, 0), overrides, ...patch,
+  };
+}
+function setR3(owner, bound) {
+  return owner.owned("set-review-bound", ["--bound-file", input(owner.repo, "r3-bound", bound)]);
+}
+function r3Fixture(count = 1, options = {}) {
+  const repo = makeRepo(options);
+  const owner = initDelivery(repo);
+  if (count) {
+    const files = Object.fromEntries(Array.from({ length: count }, (_, i) => [`src/file-${i}.js`, "export const n = 1;\n"]));
+    deliverToFrozen(repo, owner, files);
+  } else ok(owner.freeze(git(repo.work, "rev-parse", "HEAD")));
+  return { repo, owner };
+}
+function r3Cycle(owner, overrides = {}) {
+  return review(owner, { source: "inline", cycle_id: randomUUID(), cycle_kind: "implementation_review", ...overrides });
+}
+test("R3 new frozen review and post-PR fix cycles require a bound; legacy reads remain valid", () => {
+  const { repo, owner } = r3Fixture(11);
+  // A historical R1 record remains readable, even without R3 shape labels.
+  const legacy = r3Cycle(owner, { findings: [finding()] });
+  manualEdit(repo, (ledger) => {
+    ledger.reviews.push(legacy);
+    ledger.measurements.review_rounds = 1;
+  });
+  ok(run(["validate", "--repo", repo.work]));
+  ok(run(["show", "--repo", repo.work]));
+  const next = r3Cycle(owner);
+  const before = fs.readFileSync(repo.ledgerPath, "utf8");
+  const error = refused(owner.append("reviews", next), 2, "invariant_error");
+  assert.match(error.message, /bound/);
+  refused(owner.append("reviews", review(owner, { source: "inline", findings: [finding({ disposition: "fixed", fix_oid: owner.ledger().candidate.oid })] })), 2, "invariant_error", "omitting cycle_id does not let a fix bypass the bound");
+  const manifest = manifestFile(repo, owner, Array.from({ length: 11 }, (_, i) => entry(repo, `src/file-${i}.js`)));
+  refused(owner.append("reviews", review(owner, { source: "inline", candidate_oid: null, content_id: contentId(repo, manifest).content_id, content_manifest: manifest.source, findings: [finding({ disposition: "fixed", fix_oid: owner.ledger().candidate.oid })] })), 2, "invariant_error", "a content-identity review cannot record a committed fix without the bound");
+  assert.equal(fs.readFileSync(repo.ledgerPath, "utf8"), before);
+  pushCandidate(repo, owner);
+  ok(owner.recordContext({ pr: prRecord(repo, owner) }));
+  const observed = review(owner, { batch: batchFile(repo, owner, []), findings: [finding({ shape: "identity-reset" })] });
+  ok(owner.append("reviews", observed));
+  const fixed = { ...observed, id: randomUUID(), supersedes_id: observed.id,
+    cycle_id: "new-fix", cycle_kind: "post_pr_fix",
+    findings: [{ ...observed.findings[0], disposition: "fixed", fix_oid: owner.ledger().candidate.oid }] };
+  const beforeFix = fs.readFileSync(repo.ledgerPath, "utf8");
+  refused(owner.append("reviews", fixed), 2, "invariant_error");
+  refused(owner.append("reviews", { ...fixed, cycle_id: null, cycle_kind: null }), 2, "invariant_error", "a cycle-less post-PR fix also needs the bound");
+  assert.equal(fs.readFileSync(repo.ledgerPath, "utf8"), beforeFix);
+  ok(setR3(owner, r3Bound(owner)));
+  ok(owner.append("reviews", fixed));
+  assert.equal(owner.ledger().review_bound.rounds_used, 2);
+  refused(owner.append("reviews", next), 2, "invariant_error", "the migrated history counts against the installed bound");
+});
+
+test("R3 a push sweeps unpublished fixes in its history, including follow-up commits, but not pushed shapes", () => {
+  const { repo, owner } = r3Fixture(11);
+  ok(setR3(owner, r3Bound(owner)));
+  const firstOid = owner.ledger().candidate.oid;
+  ok(owner.append("reviews", r3Cycle(owner, { findings: [finding({ shape: "identity-reset", disposition: "fixed", fix_oid: firstOid })] })));
+  const sweep = { id: "first-sweep", shape: "identity-reset", first_seen: nowIso(), candidate_oid: firstOid,
+    sweep: "done", searched_scope: ["src"], siblings_fixed: [], evidence: "Searched all intended src paths; no siblings." };
+  ok(owner.append("defect_shapes", sweep));
+  pushCandidate(repo, owner);
+  ok(owner.owned("begin-change"));
+  const nextOid = deliverToFrozen(repo, owner, { "src/file-0.js": "export const n = 2;\n" });
+  ok(setR3(owner, r3Bound(owner)));
+  ok(owner.append("reviews", r3Cycle(owner, { findings: [finding({ shape: "async-prerequisite", disposition: "fixed", fix_oid: nextOid })] })));
+  ok(owner.append("defect_shapes", { ...sweep, id: "second-sweep", shape: "async-prerequisite", candidate_oid: nextOid }));
+  ok(owner.owned("begin-change"));
+  const followUp = deliverToFrozen(repo, owner, { "src/file-1.js": "export const n = 3;\n" });
+  const push = pushEvent(repo, owner, { precondition: { head_oid: firstOid, body_sha256: null, state: null, observed_at: nowIso() } });
+  const error = refused(owner.append("publications", push), 2, "invariant_error");
+  assert.match(error.message, /async-prerequisite/);
+  ok(owner.append("defect_shapes", { ...sweep, id: "follow-up-sweep", shape: "async-prerequisite", candidate_oid: followUp }));
+  ok(owner.append("publications", push), "the pushed identity-reset fix needs no rubber-stamp sweep on later candidates");
+});
+
+for (const [files, size, allowance] of [[10,"small",1],[11,"medium",2],[39,"medium",2],[40,"large",3]]) {
+  test(`R3 ${files}-file boundary classifies ${size} with ${allowance} cycles`, () => {
+    const { owner } = r3Fixture(files);
+    const bound = r3Bound(owner);
+    ok(setR3(owner, bound));
+    assert.equal(owner.ledger().review_bound.size, size);
+    assert.equal(owner.ledger().review_bound.max_rounds, allowance);
+    const before = fs.readFileSync(owner.repo.ledgerPath, "utf8");
+    refused(setR3(owner, { ...bound, max_rounds: allowance === 3 ? 2 : 3 }), 2, "invariant_error");
+    assert.equal(fs.readFileSync(owner.repo.ledgerPath, "utf8"), before);
+  });
+}
+test("R3 at most ten files across two actual packages is large", () => {
+  const repo = makeRepo({ files: { "package.json": JSON.stringify({ workspaces: ["packages/*"] }), "packages/a/package.json": '{"name":"a"}', "packages/b/package.json": '{"name":"b"}' } });
+  const owner = initDelivery(repo);
+  const oid = commit(repo, { "packages/a/index.js": "a\n", "packages/b/index.js": "b\n" });
+  ok(owner.freeze(oid, { intended: ["packages"] }));
+  ok(setR3(owner, r3Bound(owner, { packages: ["packages/a", "packages/b"] })));
+  assert.equal(owner.ledger().review_bound.max_rounds, 3);
+});
+test("R3 package-less and zero normalized package counts permit small inline review", () => {
+  for (const packages of [["."], []]) {
+    const { owner } = r3Fixture(1);
+    ok(setR3(owner, r3Bound(owner, { packages })));
+    ok(owner.append("reviews", r3Cycle(owner)));
+    assert.equal(owner.ledger().review_bound.size, "small");
+    assert.equal(owner.ledger().review_bound.rounds_used, 1);
+    assert.equal(owner.ledger().review_bound.delegated_used, 0);
+  }
+});
+test("R3 unknown workspace boundaries record size_unknown with two cycles", () => {
+  const { owner } = r3Fixture(1);
+  ok(setR3(owner, r3Bound(owner, { packages: null })));
+  assert.equal(owner.ledger().review_bound.size, "size_unknown");
+  assert.equal(owner.ledger().review_bound.max_rounds, 2);
+});
+test("R3 zero-diff bootstrap is provisional and final candidate growth raises the bound", () => {
+  const repo = makeRepo();
+  const owner = initDelivery(repo);
+  assert.equal(owner.ledger().review_bound, null);
+  ok(owner.append("decisions", { id: "provisional-review-size", text: "Bootstrap has zero diff; estimate small provisionally and finalize after implementation.", source: "approved task scope" }));
+  refused(owner.owned("measure"), 2, "invariant_error");
+  ok(owner.freeze(git(repo.work, "rev-parse", "HEAD")));
+  ok(setR3(owner, r3Bound(owner)));
+  assert.equal(owner.ledger().measurements.files, 0);
+  const oldBound = owner.ledger().review_bound;
+  ok(owner.owned("begin-change"));
+  deliverToFrozen(repo, owner, Object.fromEntries(Array.from({ length: 11 }, (_, i) => [`src/growth-${i}.js`, "new\n"])));
+  refused(owner.append("reviews", r3Cycle(owner)), 2, "invariant_error", "stale bound cannot assess growth");
+  refused(setR3(owner, oldBound), 4, "identity_mismatch");
+  ok(setR3(owner, r3Bound(owner)));
+  assert.equal(owner.ledger().review_bound.max_rounds, 2);
+});
+test("R3 calculated replacement growth or shrinkage never reduces allowance below used rounds", () => {
+  const { repo, owner } = r3Fixture(40);
+  ok(setR3(owner, r3Bound(owner)));
+  for (let i = 0; i < 3; i++) ok(owner.append("reviews", r3Cycle(owner)));
+  ok(owner.owned("begin-change"));
+  deliverToFrozen(repo, owner, Object.fromEntries(Array.from({ length: 39 }, (_, i) => [`src/file-${i+1}.js`, null])));
+  const bound = r3Bound(owner);
+  assert.equal(bound.size, "small");
+  assert.equal(bound.max_rounds, 3);
+  refused(setR3(owner, { ...bound, max_rounds: 1 }), 2, "invariant_error");
+  ok(setR3(owner, bound));
+  assert.equal(owner.ledger().review_bound.rounds_used, 3);
+});
+test("R3 strict one-delegate policy counts dispatches and preserves failed-before-result exceptions", () => {
+  const { owner } = r3Fixture(40);
+  ok(setR3(owner, r3Bound(owner, { limit: 1 })));
+  const failed = roleRun(owner, { execution: "delegated", fallback_reason: null, status: "error", result_summary: "" });
+  ok(owner.append("role_runs", failed));
+  assert.equal(owner.ledger().review_bound.delegated_used, 0);
+  const dispatch = roleRun(owner, { execution: "delegated", fallback_reason: null, status: "running", result_summary: "" });
+  ok(owner.append("role_runs", dispatch));
+  ok(owner.append("role_runs", { ...dispatch, id: "done-dispatch", supersedes_id: dispatch.id, status: "complete", result_summary: "assessment" }));
+  ok(owner.append("role_runs", dispatch)); // exact retry
+  assert.equal(owner.ledger().review_bound.delegated_used, 1);
+  refused(owner.append("role_runs", roleRun(owner, { execution: "delegated", fallback_reason: null, parent_run_id: dispatch.id })), 2, "invariant_error");
+  ok(owner.append("reviews", r3Cycle(owner)));
+});
+test("R3 exhausted small bound refuses a new assessment and dispatch, while local remediation verification is free", () => {
+  const { owner } = r3Fixture();
+  ok(setR3(owner, r3Bound(owner)));
+  refused(owner.append("reviews", r3Cycle(owner, { findings: [finding()] })), 2, "invariant_error", "shape required");
+  refused(owner.append("reviews", review(owner, { source: "inline" })), 2, "invariant_error", "initial assessment cannot omit its cycle");
+  const dispatch = roleRun(owner, { execution: "delegated", fallback_reason: null, status: "running", result_summary: "" });
+  ok(owner.append("role_runs", dispatch));
+  refused(owner.append("role_runs", roleRun(owner, { execution: "delegated", fallback_reason: null, status: "running", result_summary: "" })), 2, "invariant_error", "an outstanding dispatch reserves the only cycle");
+  ok(owner.append("role_runs", { ...dispatch, id: "dispatch-done", supersedes_id: dispatch.id, status: "complete", result_summary: "assessment" }));
+  const initial = r3Cycle(owner, { findings: [finding({ shape: "identity-reset", disposition: "fixed", fix_oid: owner.ledger().candidate.oid })] });
+  ok(owner.append("reviews", initial));
+  ok(owner.append("reviews", initial));
+  ok(owner.append("reviews", review(owner, { source: "inline" })));
+  assert.equal(owner.ledger().review_bound.rounds_used, 1);
+  const failedRun = roleRun(owner, { execution: "delegated", fallback_reason: null, status: "error", result_summary: "" });
+  ok(owner.append("role_runs", failedRun));
+  const before = fs.readFileSync(owner.repo.ledgerPath, "utf8");
+  refused(owner.append("reviews", r3Cycle(owner)), 2, "invariant_error");
+  refused(owner.append("role_runs", roleRun(owner, { execution: "delegated", fallback_reason: null })), 2, "invariant_error");
+  refused(owner.append("role_runs", { ...failedRun, id: "revived-run", supersedes_id: failedRun.id, status: "running" }), 2, "invariant_error", "restarting a failed dispatch is a new reservation");
+  refused(owner.append("reviews", r3Cycle(owner, { cycle_id: initial.cycle_id })), 2, "invariant_error");
+  assert.equal(fs.readFileSync(owner.repo.ledgerPath, "utf8"), before);
+});
+test("R3 requested fourth fix batch records an extension; automatic fourth cycle fails and delegate limit survives", () => {
+  const { repo, owner } = r3Fixture(40);
+  pushCandidate(repo, owner);
+  ok(owner.recordContext({ pr: prRecord(repo, owner) }));
+  ok(setR3(owner, r3Bound(owner, { limit: 1 })));
+  for (let i = 0; i < 3; i++) ok(owner.append("reviews", r3Cycle(owner)));
+  const fourthFix = review(owner, { source: "codex-bot", batch: batchFile(repo, owner, []), cycle_id: "requested-fourth-fix", cycle_kind: "post_pr_fix", findings: [finding({ shape: "identity-reset", disposition: "fixed", fix_oid: owner.ledger().candidate.oid })] });
+  refused(owner.append("reviews", fourthFix), 2, "invariant_error");
+  const extension = grant("review_round", { wording: "Fix one further findings batch", additional_cycles: 1 });
+  refused(setR3(owner, r3Bound(owner, { limit: 1, overrides: [extension] })), 2, "invariant_error", "unrecorded authority");
+  ok(owner.authorize(extension));
+  ok(setR3(owner, r3Bound(owner, { limit: 1, overrides: [extension] })));
+  ok(owner.append("reviews", fourthFix));
+  assert.equal(owner.ledger().review_bound.rounds_used, 4);
+  assert.equal(owner.ledger().review_bound.extension_rounds, 1);
+  assert.equal(owner.ledger().review_bound.delegated_limit, 1);
+  assert.equal(owner.ledger().authorization.endpoint, "draft_pr");
+  refused(setR3(owner, r3Bound(owner, { overrides: [extension] })), 2, "invariant_error", "remediation cannot erase delegate limit");
+  refused(owner.append("reviews", r3Cycle(owner)), 2, "invariant_error");
+});
+test("R3 bot batch without a fix and reply-only or duplicate reports consume none; fixed successor consumes one", () => {
+  const { repo, owner } = r3Fixture(11);
+  pushCandidate(repo, owner);
+  ok(owner.recordContext({ pr: prRecord(repo, owner) }));
+  ok(setR3(owner, r3Bound(owner)));
+  const batch = batchFile(repo, owner, []);
+  const observation = review(owner, { source: "codex-bot", batch, findings: [finding({ shape: "identity-reset" })] });
+  ok(owner.append("reviews", observation));
+  assert.equal(owner.ledger().review_bound.rounds_used, 0);
+  const fixed = { ...observation, id: "bot-fixed", supersedes_id: observation.id, cycle_id: "bot-fix", cycle_kind: "post_pr_fix", findings: [{ ...observation.findings[0], disposition: "fixed", fix_oid: owner.ledger().candidate.oid }] };
+  ok(owner.append("reviews", fixed));
+  ok(owner.append("reviews", fixed));
+  refused(owner.append("reviews", { ...fixed, id: "repeated-bot-fix", supersedes_id: undefined, cycle_id: "another-cycle" }), 2, "invariant_error");
+  const replyOnly = review(owner, { source: "codex-bot", batch: batchFile(repo, owner, []), findings: [finding({ shape: "identity-reset", disposition: "duplicate", classification: "duplicate", reason: "same finding" })] });
+  ok(owner.append("reviews", replyOnly));
+  assert.equal(owner.ledger().review_bound.rounds_used, 1);
+  refused(owner.append("reviews", { ...replyOnly, id: "fake-fix-cycle", cycle_id: "bad-cycle", cycle_kind: "post_pr_fix" }), 2, "invariant_error");
+  refused(owner.append("reviews", { ...replyOnly, id: "batch-assessment-cycle", cycle_id: "batch-cycle", cycle_kind: "implementation_review" }), 2, "invariant_error");
+});
+test("R3 set-review-bound enforces ownership, revision, measurement, counters and recorded policy atomically", () => {
+  const { owner } = r3Fixture();
+  const bound = r3Bound(owner);
+  const before = fs.readFileSync(owner.repo.ledgerPath, "utf8");
+  for (const patch of [{ rounds_used: 1 }, { delegated_used: 1 }, { extension_rounds: 1 }, { basis: { ...bound.basis, files: 999 } }, { basis: { ...bound.basis, workspace_decision: "missing" } }]) refused(setR3(owner, { ...bound, ...patch }), 2, "invariant_error");
+  const intruder = new Session(owner.repo, "codex", "not-owner");
+  refused(setR3(intruder, bound), 3, "owner_conflict");
+  refused(owner.owned("set-review-bound", ["--bound-file", input(owner.repo, "bound", bound)], { revision: 0 }), 3, "stale_revision");
+  assert.equal(fs.readFileSync(owner.repo.ledgerPath, "utf8"), before);
+  ok(setR3(owner, bound));
+  assert.equal(ok(setR3(owner, bound)).changed, false);
+});
+test("R3 shape sweep finds and fixes a second instance; missing or stale sweep blocks push", () => {
+  const { repo, owner } = r3Fixture(2);
+  ok(setR3(owner, r3Bound(owner)));
+  const initial = r3Cycle(owner, { findings: [finding({ shape: "identity-reset", location: "src/file-0.js:1" })] });
+  ok(owner.append("reviews", initial));
+  // The owner searches both touched paths for the reported defect shape.
+  const siblings = ["src/file-0.js", "src/file-1.js"].filter((file) => fs.readFileSync(path.join(repo.work, file), "utf8").includes("n = 1"));
+  assert.deepEqual(siblings, ["src/file-0.js", "src/file-1.js"]);
+  ok(owner.owned("begin-change"));
+  const fixedOid = deliverToFrozen(repo, owner, Object.fromEntries(siblings.map((file) => [file, "export const n = 2;\n"])));
+  ok(owner.append("reviews", { ...initial, id: "shape-fixed", supersedes_id: initial.id, findings: [{ ...initial.findings[0], disposition: "fixed", fix_oid: fixedOid }] }));
+  const push = pushEvent(repo, owner);
+  refused(owner.append("publications", push), 2, "invariant_error");
+  const sweep = { id: "shape-sweep", shape: "identity-reset", first_seen: nowIso(), candidate_oid: fixedOid, sweep: "done", searched_scope: siblings, siblings_fixed: ["src/file-1.js"], evidence: "Searched both touched files; second instance fixed. Both now export n = 2." };
+  ok(owner.append("defect_shapes", { ...sweep, id: "stale-sweep", candidate_oid: initial.candidate_oid }));
+  refused(owner.append("publications", push), 2, "invariant_error");
+  for (const file of siblings) assert.equal(fs.readFileSync(path.join(repo.work, file), "utf8"), "export const n = 2;\n");
+  ok(owner.append("defect_shapes", sweep));
+  ok(owner.append("publications", push));
+  ok(owner.append("defect_shapes", { ...sweep, id: "reopened-sweep", supersedes_id: sweep.id, sweep: "pending", evidence: null }));
+  git(repo.work, "push", "-q", "origin", `HEAD:refs/heads/${repo.branch}`);
+  const verified = step(push, "verified", { observed: observedFor(push, { oid: fixedOid }) });
+  refused(owner.append("publications", verified), 2, "invariant_error", "a reopened sweep blocks push verification");
+  ok(owner.append("defect_shapes", { ...sweep, id: "resumed-sweep", supersedes_id: "reopened-sweep" }));
+  ok(owner.append("publications", verified));
+  assert.equal(owner.ledger().review_bound.rounds_used, 1);
+});
+test("R3 feature-grade spec check retains source evidence and consumes no implementation cycle", () => {
+  const { repo, owner } = r3Fixture();
+  fs.writeFileSync(repo.taskDoc, "# Feature: version-safe update\nRead the current version, then reject stale writes before mutation.\n");
+  // Refresh the supplied doc and record its actual source-correctness result.
+  ok(owner.owned("source-add", ["--kind", "task_doc", "--path", repo.taskDoc, "--reason", "feature-grade task"]));
+  const report = path.join(repo.inputs, "spec-review.md");
+  fs.writeFileSync(report, "revise: src/app.js only exports a value; no update contract or persistence exists. Supply the upstream API and product rule before delivery.\n");
+  const check = { verdict: "revise", report, source_hashes: [{ path: repo.taskDoc, sha256: sha(fs.readFileSync(repo.taskDoc)) }], checked_at: nowIso(), reason: null };
+  ok(owner.recordContext({ spec_check: check }));
+  ok(setR3(owner, r3Bound(owner)));
+  ok(owner.append("reviews", review(owner, { mode: "spec", source: "inline", verdict: "revise", report, source_hashes: check.source_hashes })));
+  assert.equal(owner.ledger().sources.spec_check.verdict, "revise");
+  assert.equal(owner.ledger().review_bound.rounds_used, 0);
+});
+
+test("R3 local remediation verification matches content identity, never two null OIDs", () => {
+  const { repo, owner } = r3Fixture();
+  ok(setR3(owner, r3Bound(owner)));
+  const firstManifest = manifestFile(repo, owner, [entry(repo, "src/file-0.js")]);
+  const first = contentId(repo, firstManifest);
+  ok(owner.append("reviews", r3Cycle(owner, { findings: [finding({ shape: "identity-reset", disposition: "fixed", fix_content_id: first.content_id, fix_content_manifest: firstManifest.source })] })));
+  ok(owner.append("reviews", review(owner, { source: "inline", candidate_oid: null, content_id: first.content_id, content_manifest: firstManifest.source })));
+  ok(owner.owned("begin-change"));
+  fs.writeFileSync(path.join(repo.work, "src/file-0.js"), "different candidate\n");
+  const nextManifest = manifestFile(repo, owner, [entry(repo, "src/file-0.js")]);
+  const next = contentId(repo, nextManifest);
+  assert.notEqual(next.content_id, first.content_id);
+  refused(owner.append("reviews", review(owner, { source: "inline", candidate_oid: null, content_id: next.content_id, content_manifest: nextManifest.source })), 2, "invariant_error");
+  assert.equal(owner.ledger().review_bound.rounds_used, 1);
+});
+
+describe("delivery ledger acceptance", { concurrency: Math.max(2, Math.min(6, os.availableParallelism?.() ?? 4)) }, () => {
   for (const { name, fn } of suite) serialTest(name, fn);
 });

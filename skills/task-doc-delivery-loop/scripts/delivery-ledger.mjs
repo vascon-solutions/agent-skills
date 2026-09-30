@@ -1154,7 +1154,8 @@ function subjectProblem(collection, item, target) {
   const same = (...fields) => fields.every((field) => isDeepStrictEqual(item[field] ?? null, target[field] ?? null));
   switch (collection) {
     case "reviews": {
-      if (!same("mode", "candidate_oid", "content_id", "source", "cycle_id", "cycle_kind", "round")) return "a review successor keeps the reviewed candidate, source and cycle";
+      const startsFix = target.batch !== null && target.cycle_id === null && item.cycle_kind === "post_pr_fix" && item.findings.some((finding) => finding.disposition === "fixed");
+      if (!same("mode", "candidate_oid", "content_id", "source", "round") || (!startsFix && !same("cycle_id", "cycle_kind"))) return "a review successor keeps the reviewed candidate, source and cycle";
       if (!isDeepStrictEqual(item.batch, target.batch)) return "a review successor keeps its frozen batch snapshot";
       const before = new Map(target.findings.map((finding) => [finding.id, finding]));
       if (item.findings.length !== target.findings.length) return "a review successor keeps every stable finding";
@@ -1246,6 +1247,14 @@ const operationFields = ["candidate_oid", "kind", "target", "intended", "precond
 
 export function ledgerInvariants(ledger) {
   const problems = [];
+  if (ledger.review_bound) {
+    const bound = ledger.review_bound;
+    const cycles = new Set(currentItems(ledger.reviews).map((item) => item.cycle_id).filter((id) => id !== null));
+    if (bound.rounds_used !== cycles.size || bound.delegated_used !== delegatedUsed(ledger)) problems.push("review_bound counters must match current evidence");
+    if (bound.rounds_used > bound.max_rounds + bound.extension_rounds || (bound.delegated_limit !== null && bound.delegated_used > bound.delegated_limit)) problems.push("review bound exceeded");
+    if (new Set(bound.overrides.map((grant) => grant.id)).size !== bound.overrides.length || bound.overrides.some((grant) => !ledger.authorization.grants.some((recorded) => isDeepStrictEqual(recorded, grant)) || !["review_round", "monitor_remediate"].includes(grant.scope) || !grant.additional_cycles)) problems.push("review-bound extensions must reference unique recorded review/remediation grants");
+    if (bound.extension_rounds !== bound.overrides.reduce((sum, grant) => sum + grant.additional_cycles, 0)) problems.push("review-bound extension count must match grants");
+  }
   if (ledger.history.length !== ledger.revision + 1) problems.push("history must hold exactly one event per revision");
   ledger.history.forEach((event, index) => {
     if (event.revision !== index) problems.push(`history/${index}: revision must be ${index}`);
@@ -2314,6 +2323,10 @@ const ITEM_DEFS = {
 function recomputeCounters(ledger) {
   const cycles = new Set(currentItems(ledger.reviews).map((review) => review.cycle_id).filter((cycle) => cycle !== null));
   ledger.measurements.review_rounds = cycles.size;
+  if (ledger.review_bound) {
+    ledger.review_bound.rounds_used = cycles.size;
+    ledger.review_bound.delegated_used = delegatedUsed(ledger);
+  }
   const groups = new Map();
   for (const entry of currentItems(ledger.validation)) {
     if (entry.kind !== "command" || entry.reused_from !== null || !["pass", "fail"].includes(entry.result)) continue;
@@ -2448,6 +2461,40 @@ function readBatchSnapshot(batch, ledger) {
 }
 
 function appendReviewChecks(ctx, ledger, item) {
+  // Historical R1 records remain readable. New frozen-candidate cycles and fixes
+  // must opt into R3 enforcement, so an unbounded fix cannot skip its sweep;
+  // local-only content reviews stay unmeasured.
+  if (!ledger.review_bound && ((item.candidate_oid !== null && item.cycle_id !== null) || (item.mode === "implementation" && item.findings.some((finding) => finding.disposition === "fixed" && finding.fix_oid !== null)))) {
+    fail("invariant_error", "set the review bound before recording a frozen-candidate review cycle or fix");
+  }
+  if (ledger.review_bound) {
+    if (item.findings.some((finding) => !finding.shape?.trim())) fail("invariant_error", "every finding needs a defect shape");
+    if (item.mode === "implementation" && !item.batch && item.cycle_id === null) {
+      const invalidated = invalidatedRefs(ledger);
+      const localVerification = item.source === "inline" && currentItems(ledger.reviews).some((prior) =>
+        prior.cycle_id !== null && !isInvalidated(ledger, invalidated, "reviews", prior) && prior.findings.some((finding) =>
+          finding.disposition === "fixed" && (
+            (finding.fix_oid !== null && finding.fix_oid === item.candidate_oid) ||
+            (finding.fix_content_id !== null && finding.fix_content_id === item.content_id)
+          )
+        )
+      );
+      if (!localVerification) fail("invariant_error", "implementation assessments need a cycle; only local verification of a recorded remediation is free");
+    }
+    if (item.mode !== "implementation" && item.cycle_id !== null) fail("invariant_error", "spec/doc reviews consume no implementation cycle");
+    if (item.cycle_kind === "post_pr_fix" && (!item.batch || !item.findings.some((finding) => finding.disposition === "fixed"))) fail("invariant_error", "post-PR batches consume a cycle only when they cause a fix");
+    if (item.batch && item.findings.some((finding) => finding.disposition === "fixed") && item.cycle_kind !== "post_pr_fix") fail("invariant_error", "a post-PR fix must record its cycle");
+    if (item.batch && item.cycle_id !== null && item.cycle_kind !== "post_pr_fix") fail("invariant_error", "a PR batch consumes only a post_pr_fix cycle, and only when it causes a fix");
+    if (item.cycle_id !== null && item.batch) {
+      const priorBatch = currentItems(ledger.reviews).find((prior) => prior.batch?.id === item.batch.id && prior.cycle_id !== null);
+      if (priorBatch && priorBatch.cycle_id !== item.cycle_id) fail("invariant_error", "a fixed batch retains one cycle across repeated reports");
+      if (ledger.reviews.some((prior) => prior.cycle_id === item.cycle_id && prior.batch?.id !== item.batch.id)) fail("invariant_error", "a different fixing batch needs a distinct cycle_id");
+    }
+    if (!item.supersedes_id && item.cycle_kind === "implementation_review") {
+      if (ledger.candidate.state !== "frozen" || item.candidate_oid !== ledger.candidate.oid || ledger.review_bound.measured_oid !== ledger.candidate.oid) fail("invariant_error", "finalize the bound on the frozen candidate before its assessment");
+      if (ledger.reviews.some((prior) => prior.cycle_id === item.cycle_id)) fail("invariant_error", "an additional assessment needs a new cycle_id");
+    }
+  }
   checkContentIdentity(ledger, item.content_id, item.content_manifest, "review");
   if (item.candidate_oid !== null) requireCommit(ctx, item.candidate_oid, "review candidate_oid");
   for (const finding of item.findings) {
@@ -2518,6 +2565,7 @@ function prepareChecks(ctx, ledger, item) {
   const { candidate, repo } = ledger;
   if (candidate.state !== "frozen" || item.candidate_oid !== candidate.oid) fail("invariant_error", "publication uses the frozen candidate unchanged", { expected: candidate.oid, observed: item.candidate_oid });
   publicationAuthority(ledger, item);
+  if (item.kind === "push" && ledger.review_bound) requireShapeSweeps(ctx, ledger, item.candidate_oid);
   const drift = localIdentity(ctx, ledger, "frozen");
   if (drift.environment.length > 0) fail("environment_error", "the recorded remote is not configured here", { observed: drift.environment });
   if (drift.mismatches.length > 0) fail("identity_mismatch", "the checkout drifted from the frozen candidate; stop before publishing", { observed: drift.mismatches });
@@ -2672,7 +2720,11 @@ function publicationChecks(ctx, ledger, item) {
   }
   const last = events[events.length - 1];
   if (TERMINAL_STEPS.has(last.step)) fail("invariant_error", `the operation already ended as ${last.step}`, { id: item.operation_id });
-  if (item.step === "verified") verifiedObservationChecks(ledger, item);
+  if (item.step === "verified") {
+    // Review or sweep records may change between preparing and verifying a push.
+    if (events[0].kind === "push" && ledger.review_bound) requireShapeSweeps(ctx, ledger, events[0].candidate_oid);
+    verifiedObservationChecks(ledger, item);
+  }
 }
 
 function appendChecks(ctx, ledger, field, item) {
@@ -2688,6 +2740,14 @@ function appendChecks(ctx, ledger, field, item) {
       appendReviewChecks(ctx, ledger, item);
       break;
     case "role_runs":
+      const reserves = (run) => ["queued", "running"].includes(run.status);
+      const prior = item.supersedes_id ? ledger.role_runs.find((run) => run.id === item.supersedes_id) : null;
+      const dispatches = prior ? reserves(item) && !reserves(prior) : !["error", "cancelled"].includes(item.status);
+      if (ledger.review_bound && item.role === "reviewer" && item.mode === "implementation" && item.execution === "delegated" && dispatches) {
+        const outstanding = currentItems(ledger.role_runs).filter((run) => run.role === "reviewer" && run.mode === "implementation" && run.execution === "delegated" && reserves(run)).length;
+        if (ledger.review_bound.rounds_used + outstanding >= ledger.review_bound.max_rounds + ledger.review_bound.extension_rounds) fail("invariant_error", "review bound exhausted before dispatch; outstanding dispatches reserve their cycles");
+        if (ledger.candidate.state !== "frozen" || item.candidate_oid !== ledger.candidate.oid || ledger.review_bound.measured_oid !== ledger.candidate.oid) fail("invariant_error", "finalize the frozen candidate bound before dispatch");
+      }
       checkContentIdentity(ledger, item.content_id, item.content_manifest, "role run");
       if (item.fallback_reason === INDEPENDENCE_REQUIRED && (item.status !== "blocked" || item.execution !== "inline")) {
         fail("invariant_error", "a required independent review that is unavailable is a blocked gate; self-review never substitutes for it");
@@ -2721,6 +2781,7 @@ function commandAppend(options, stdin) {
     appendChecks(ctx, ledger, field, item);
     items.push(item);
     recomputeCounters(draft);
+    enforceReviewBound(draft);
     return { actor: owner, operation: `append ${field}`, data: { id: item.id }, detail: { collection: field, id: item.id } };
   });
 }
@@ -3028,6 +3089,91 @@ function commandContentManifest(options) {
   const { manifest, digest } = loadManifest(source, ledger);
   verifyManifestContent(ctx.worktree, manifest, "worktree");
   return envelope("content-manifest", Boolean(options["output-file"]), ledger.revision, { content_id: `sha256:${digest}`, input_fingerprint: digest, manifest: source, files: manifest.files.length });
+}
+
+// R3 policy evidence is supplied by the owner, not inferred from folder names.
+// Git verifies file count and candidate identity; the recorded workspace decision
+// carries the repository's actual package boundaries (or explains uncertainty).
+function delegatedUsed(ledger) {
+  return currentItems(ledger.role_runs).filter((run) =>
+    run.role === "reviewer" && run.mode === "implementation" && run.execution === "delegated" &&
+    !(["error", "cancelled"].includes(run.status) && run.result_report === null && !run.result_summary.trim())
+  ).length;
+}
+
+function baseReviewClass(files, packages) {
+  if (packages === null) return { size: "size_unknown", max_rounds: 2 };
+  const count = Math.max(1, new Set(packages).size);
+  if (files >= 40 || count > 1) return { size: "large", max_rounds: 3 };
+  if (files >= 11) return { size: "medium", max_rounds: 2 };
+  return { size: "small", max_rounds: 1 };
+}
+
+function enforceReviewBound(ledger) {
+  const bound = ledger.review_bound;
+  if (!bound) return;
+  if (bound.rounds_used > bound.max_rounds + bound.extension_rounds) fail("invariant_error", "review bound exhausted; record an explicit user extension before another cycle");
+  if (bound.delegated_limit !== null && bound.delegated_used > bound.delegated_limit) fail("invariant_error", "delegated review limit exhausted; a remediation extension does not raise it");
+}
+
+function commandSetReviewBound(options) {
+  const ctx = resolveContext(options, { mutation: true });
+  const bound = readJsonFile(options["bound-file"], "--bound-file");
+  requireShape(bound, "ReviewBound", "review_bound");
+  return mutate(ctx, options, "set-review-bound", (draft, ledger) => {
+    const owner = requireOwner(ledger, options);
+    forbidDuringRecovery(ledger, "set-review-bound");
+    if (ledger.candidate.state !== "frozen" || bound.measured_oid !== ledger.candidate.oid) fail("identity_mismatch", "review bound must identify the frozen candidate");
+    const drift = localIdentity(ctx, ledger, "frozen");
+    if (drift.mismatches.length || drift.environment.length) fail("identity_mismatch", "cannot set a bound on a drifted candidate", { observed: drift });
+    if (ledger.measurements.measured_oid !== bound.measured_oid || ledger.measurements.diff_base_oid !== ledger.repo.diff_base_oid || ledger.measurements.files !== bound.basis.files) fail("invariant_error", "measure this candidate against diff_base_oid before setting its bound");
+    const decisions = ledger.sources.decisions;
+    if (!decisions.some((item) => item.id === bound.basis.workspace_decision)) fail("invariant_error", "workspace evidence must reference a recorded decision");
+    if (bound.delegated_limit !== null && !decisions.some((item) => item.id === bound.basis.delegated_decision)) fail("invariant_error", "a delegated limit needs its recorded policy source");
+    const packages = bound.basis.packages;
+    if (packages !== null && (new Set(packages).size !== packages.length || packages.some((item) => item !== "." && !validManifestPath(item)))) fail("invariant_error", "packages are unique repository-relative leaf boundaries");
+    if (packages !== null && packages.some((a) => packages.some((b) => a !== b && (a === "." || b.startsWith(`${a}/`))))) fail("invariant_error", "count affected leaf packages only, not their ancestors");
+    const calculated = baseReviewClass(bound.basis.files, packages);
+    const previous = ledger.review_bound;
+    // Retain the larger finalized allowance across replacement candidates.
+    const base = Math.max(calculated.max_rounds, previous?.max_rounds ?? 0);
+    if (bound.size !== calculated.size || bound.max_rounds !== base) fail("invariant_error", "size/base allowance differs from recorded size/workspace evidence", { expected: { size: calculated.size, max_rounds: base } });
+    const ids = new Set();
+    for (const grant of bound.overrides) {
+      if (ids.has(grant.id) || !ledger.authorization.grants.some((recorded) => isDeepStrictEqual(recorded, grant))) fail("invariant_error", "overrides need unique, already recorded grants");
+      if (!["review_round", "monitor_remediate"].includes(grant.scope) || !grant.additional_cycles) fail("invariant_error", "an extension needs explicit review/remediation authority and additional_cycles");
+      ids.add(grant.id);
+    }
+    if (previous?.overrides.some((grant) => !ids.has(grant.id))) fail("invariant_error", "retain recorded extensions");
+    const extension = bound.overrides.reduce((sum, grant) => sum + grant.additional_cycles, 0);
+    if (bound.extension_rounds !== extension) fail("invariant_error", "extension_rounds must equal explicitly granted additional_cycles");
+    // Delegate changes require their own explicit policy decision. A cycle grant
+    // alone can never relax this independent limit.
+    if (previous?.delegated_limit !== null && previous?.delegated_limit !== undefined && (bound.delegated_limit === null || bound.delegated_limit > previous.delegated_limit)) {
+      if (bound.basis.delegated_decision === previous.basis.delegated_decision || !decisions.some((item) => item.id === bound.basis.delegated_decision)) fail("invariant_error", "raising a delegate limit needs a new explicit delegated-review policy decision");
+    }
+    draft.review_bound = clone(bound);
+    recomputeCounters(draft);
+    if (bound.rounds_used !== draft.review_bound.rounds_used || bound.delegated_used !== draft.review_bound.delegated_used) fail("invariant_error", "review counters are derived from current evidence");
+    enforceReviewBound(draft);
+    return { actor: owner, data: { review_bound: draft.review_bound }, detail: { review_bound: draft.review_bound } };
+  });
+}
+
+// Fixes already contained in a verified push were swept with their own batch;
+// unpublished fixes carried into a later commit still need a sweep of this one.
+function requireShapeSweeps(ctx, ledger, oid) {
+  const pushed = ledger.publications.filter((event) => event.kind === "push" && event.step === "verified").map((event) => event.intended.oid);
+  const fixed = currentItems(ledger.reviews).flatMap((review) => review.findings).filter((finding) =>
+    finding.disposition === "fixed" && finding.fix_oid !== null &&
+    isAncestor(ctx.worktree, finding.fix_oid, oid) &&
+    !pushed.some((head) => isAncestor(ctx.worktree, finding.fix_oid, head))
+  );
+  for (const finding of fixed) {
+    if (!finding.shape?.trim()) fail("invariant_error", "fixed findings need shape labels before publication");
+    const sweep = currentItems(ledger.defect_shapes).find((item) => item.shape === finding.shape && item.candidate_oid === oid && item.sweep === "done");
+    if (!sweep || !sweep.evidence?.trim() || !sweep.searched_scope.length) fail("invariant_error", `complete the ${finding.shape} sweep for this candidate before pushing`);
+  }
 }
 
 function commandMeasure(options) {
@@ -3444,7 +3590,7 @@ const HANDLERS = {
   measure: commandMeasure,
   release: commandRelease,
   "recover-lock": commandRecoverLock,
-  "set-review-bound": () => fail("invariant_error", "set-review-bound is enabled in R3; R1 keeps review_bound null"),
+  "set-review-bound": commandSetReviewBound,
   "summary-body": commandSummaryBody,
 };
 

@@ -365,3 +365,11 @@ test("the delivery ledger reference documents every helper command", async () =>
   for (const command of commands) assert.match(reference, new RegExp("\\| `" + command + "[ `]"), command);
   assert.match(reference, /\]\(delivery-ledger\.schema\.json\)/);
 });
+
+test("R3 review routing links risk classes and has no unlimited critical-finding exception", () => {
+  const reviewer = read("skills", "review-implementation", "SKILL.md");
+  const loop = read("skills", "task-doc-delivery-loop", "SKILL.md");
+  const remediation = read("skills", "address-review-findings", "SKILL.md");
+  assert.match(reviewer, /references\/risk-classes\.md/);
+  for (const text of [loop, remediation]) assert.doesNotMatch(text, /Continue beyond this bound for new critical|Beyond that, continue for critical/);
+});

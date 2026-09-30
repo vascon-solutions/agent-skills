@@ -18,6 +18,8 @@ Infer the context from the request; do not ask the user to choose a mode when it
 
 Read relevant repo instructions and review the full intended diff, including uncommitted changes when in scope. Evaluate both requirement compliance and implementation quality: preserved behavior, excluded scope, contracts, errors/recovery, authorization, state transitions, accessibility, and adequacy of validation. Scale inspection to risk; do not demand a full repository tour or additional tests for cosmetic details.
 
+Load [risk classes](references/risk-classes.md) for the standing pre-PR checklist. Label every finding with its defect shape and check recorded sweeps across the candidate and equivalent touched paths, including sibling fixes. This skill remains implementation review; document diffs belong to `review-doc-changes`, and spec-correctness belongs to `review-task-docs`.
+
 Use direct review unless a fresh reviewer is explicitly requested or required by the calling workflow and delegation is available. When delegating, supply focused source paths, repo/base/head or diff, candidate evidence, prior decisions, and the review context. The reviewer does not inherit broad chat history or delegate again. One reviewer can assess both compliance and quality; separate agents per pass are not mandatory. The coordinating agent may delegate; the reviewer itself must not recursively delegate.
 
 For each actionable finding include file:line or symbol, violated requirement or concrete risk, impact, supporting evidence, and the smallest credible fix. Classify severity:
