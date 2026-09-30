@@ -203,7 +203,7 @@ bin/link-agents.sh --apply --plan /tmp/agents-plan.json
 
 - Codex needs an explicit adapter: `standalone` role files, or `registration` (`[agents.<role>]` entries in `config.toml`). One role never gets both forms.
 - A client version must be listed as qualified for the selected adapter in `agents/runtimes.yaml`; list a version only after native load and spawn probes pass on it.
-- The renderer records ownership in `~/.agent-skills/link-agents/manifest.json`, never overwrites unowned or locally modified files, removes its own outputs for roles deleted from `agents/`, backs up every changed destination, and rolls back a failed install. An interrupted install blocks the next apply until `--resolve-interrupted ID` after manual review.
+- The renderer records ownership in `~/.agent-skills/link-agents/manifest.json`, never overwrites unowned or locally modified files, removes its own outputs for roles deleted from `agents/`, backs up every changed destination, and rolls back a failed install, restoring file modes and symlinks. An existing file identical to a generated one is adopted only with `--adopt PATH`. An interrupted install blocks the next apply until `--resolve-interrupted ID` after manual review.
 - `--retire-pilot RUNTIME:NAME` removes an older role such as `ui-auditor` with a backup, only after its replacement is qualified.
 - `--home DIR` redirects every path for tests and probes and refuses symlinks that lead outside it. `--allow-unqualified` works only with `--home`. `--dispatch-reference` regenerates the delivery loop's `references/role-dispatch.md` after editing `agents/`.
 

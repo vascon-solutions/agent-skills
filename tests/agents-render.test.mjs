@@ -52,6 +52,7 @@ const snapshot = (dir) => {
     for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
       const full = path.join(current, entry.name);
       if (entry.isDirectory()) walk(full);
+      else if (entry.isSymbolicLink()) out[path.relative(dir, full)] = `link:${fs.readlinkSync(full)}`;
       else out[path.relative(dir, full)] = sha256(fs.readFileSync(full));
     }
   };
@@ -213,7 +214,24 @@ test("unowned files, cross-form names and quoted registrations are conflicts, ne
     (home) => write(path.join(home, ".codex", "agents", "custom", "mine.toml"), 'name = "scout"\ndescription = "x"\ndeveloper_instructions = "x"\n'),
     (home) => write(path.join(home, ".codex", "config.toml"), '[agents."watcher"]\ndescription = "mine"\n'),
     (home) => write(path.join(home, ".codex", "agents", "broken.toml"), "name = \n"),
+    (home) => {
+      write(path.join(home, ".codex", "src", "foreign.toml"), 'name = "scout"\ndescription = "x"\ndeveloper_instructions = "x"\n');
+      fs.symlinkSync(path.join(home, ".codex", "src", "foreign.toml"), path.join(home, ".codex", "agents", "foreign-scout.toml"));
+    },
+    (home) => {
+      write(path.join(home, ".claude", "shared", "r.md"), "---\nname: reviewer\ndescription: mine\n---\nmine\n");
+      fs.symlinkSync(path.join(home, ".claude", "agents"), path.join(home, ".claude", "shared", "back"));
+      fs.symlinkSync(path.join(home, ".claude", "shared"), path.join(home, ".claude", "agents", "linked"));
+    },
+    (home) => {
+      const outsideRole = path.join(SANDBOX, `outside-role-${(counter += 1)}.md`);
+      write(outsideRole, "---\nname: someone\ndescription: x\n---\nx\n");
+      fs.symlinkSync(outsideRole, path.join(home, ".claude", "agents", "outside.md"));
+    },
+    (home) => fs.copyFileSync(path.join(adoptSource, ".claude", "agents", "auditor.md"), path.join(home, ".claude", "agents", "auditor.md")),
   ];
+  const adoptSource = tempHome();
+  install(adoptSource);
   for (const arrange of cases) {
     const home = tempHome();
     arrange(home);
@@ -224,6 +242,14 @@ test("unowned files, cross-form names and quoted registrations are conflicts, ne
     expectCode(() => applyPlan(JSON.parse(JSON.stringify(result)), { env: ENV }), "blocked");
     assert.deepEqual(snapshot(home), before);
   }
+
+  const adopting = tempHome();
+  const adoptedFile = path.join(adopting, ".claude", "agents", "auditor.md");
+  fs.copyFileSync(path.join(adoptSource, ".claude", "agents", "auditor.md"), adoptedFile);
+  assert.match(plan(adopting).conflicts[0].reason, /pass --adopt/);
+  install(adopting, { adopt: [adoptedFile] });
+  const adoptedManifest = JSON.parse(read(path.join(adopting, ".agent-skills", "link-agents", "manifest.json")));
+  assert.equal(adoptedManifest.installs.claude.outputs[adoptedFile].sha256, sha256(fs.readFileSync(adoptedFile)));
 });
 
 test("a modified generated output needs explicit overwrite and is backed up privately", () => {
@@ -365,6 +391,24 @@ test("a failure or concurrent edit mid-install rolls back only this install's un
   const unrecordedClean = snapshot(unrecorded);
   assert.throws(() => install(unrecorded, {}, { beforeManifest: () => { throw Object.assign(new Error("read-only state"), { code: "EROFS" }); } }), /rolled back: read-only state/);
   assert.deepEqual(Object.keys(snapshot(unrecorded)).filter((file) => !file.includes("/backups/")), Object.keys(unrecordedClean));
+
+  const pilots = tempHome();
+  const claudePilot = path.join(pilots, ".claude", "agents", "ui-auditor.md");
+  write(claudePilot, "---\nname: ui-auditor\ndescription: pilot\n---\npilot\n");
+  fs.chmodSync(claudePilot, 0o600);
+  const pilotSource = path.join(pilots, ".codex", "pilots", "ui-auditor.toml");
+  write(pilotSource, 'developer_instructions = "pilot"\n');
+  const codexPilot = path.join(pilots, ".codex", "agents", "ui-auditor.toml");
+  fs.symlinkSync(pilotSource, codexPilot);
+  write(path.join(pilots, ".codex", "config.toml"), '[agents.ui-auditor]\ndescription = "pilot"\nconfig_file = "agents/ui-auditor.toml"\n');
+  assert.throws(() => install(pilots, { retirePilots: ["claude:ui-auditor", "codex:ui-auditor"] }, { beforeManifest: () => { throw new Error("disk full"); } }), /rolled back: disk full/);
+  assert.equal(fs.statSync(claudePilot).mode & 0o777, 0o600, "rollback restores the original mode");
+  assert.equal(fs.readlinkSync(codexPilot), pilotSource, "rollback restores a symlink as a symlink");
+
+  const linkedConfig = tempHome();
+  write(path.join(linkedConfig, "dotfiles", "config.toml"), 'model = "x"\n');
+  fs.symlinkSync(path.join(linkedConfig, "dotfiles", "config.toml"), path.join(linkedConfig, ".codex", "config.toml"));
+  assert.ok(plan(linkedConfig, { runtimes: ["codex"], codexAdapter: "registration" }).conflicts.some((conflict) => /config\.toml is a symlink/.test(conflict.reason)));
 
   const edited = tempHome();
   const userFile = path.join(edited, ".claude", "agents", "auditor.md");

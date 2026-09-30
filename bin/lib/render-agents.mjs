@@ -417,18 +417,41 @@ function readManifest(layout) {
   }
 }
 
-function listFiles(dir, extension) {
+// Clients follow symlinked files and directories when discovering roles, so aliases are listed too.
+// `outside` receives aliases that resolve outside a redirected home; they are never read.
+function listFiles(dir, extension, layout = null, outside = []) {
   const found = [];
+  const visited = new Set();
   const walk = (current) => {
     if (!exists(current)) return;
+    const real = fs.realpathSync(current);
+    if (visited.has(real)) return;
+    visited.add(real);
     for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
       const full = path.join(current, entry.name);
-      if (entry.isDirectory()) walk(full);
-      else if (entry.isFile() && entry.name.endsWith(extension)) found.push(full);
+      let stat = entry;
+      if (entry.isSymbolicLink()) {
+        if (!exists(full)) continue;
+        if (layout && !isolated(layout, full)) {
+          outside.push(full);
+          continue;
+        }
+        stat = fs.statSync(full);
+      }
+      if (stat.isDirectory()) walk(full);
+      else if (stat.isFile() && entry.name.endsWith(extension)) found.push(full);
     }
   };
   walk(dir);
   return found.sort();
+}
+
+function isLink(file) {
+  try {
+    return fs.lstatSync(file).isSymbolicLink();
+  } catch {
+    return false;
+  }
 }
 
 function ownedOutput(manifest, runtime, file) {
@@ -518,6 +541,7 @@ export function buildPlan(options) {
   const layout = resolveLayout(options.home, options.env);
   const manifest = readManifest(layout);
   const overwrite = new Set((options.overwriteModified ?? []).map((file) => path.resolve(file)));
+  const adopt = new Set((options.adopt ?? []).map((file) => path.resolve(file)));
   const runtimes = [...new Set(options.runtimes ?? [])];
   if (!runtimes.length) throw new RenderError("argument_error", "select at least one --runtime");
   const actions = [];
@@ -552,8 +576,12 @@ export function buildPlan(options) {
     const owned = ownedOutput(manifest, runtime, file);
     const afterHash = sha256(content);
     if (before === null) return actions.push(action("create", file, runtime, { role: role.name, after_sha256: afterHash, content, diff: lineDiff(null, content) }));
+    if (isLink(file)) return conflicts.push({ path: file, reason: "destination is a symlink; replace it with a regular file or remove it before installing" });
     const beforeHash = sha256(before);
-    if (beforeHash === afterHash) return actions.push(action("noop", file, runtime, { role: role.name, after_sha256: afterHash }));
+    if (beforeHash === afterHash) {
+      if (!owned && !adopt.has(file)) return conflicts.push({ path: file, reason: "identical file is not recorded as a generated output; pass --adopt to take ownership of it" });
+      return actions.push(action("noop", file, runtime, { role: role.name, after_sha256: afterHash, adopted: !owned }));
+    }
     if (!owned) return conflicts.push({ path: file, reason: "existing file is not owned by this renderer" });
     if (owned.sha256 !== beforeHash && !overwrite.has(file)) return conflicts.push({ path: file, reason: "generated output was modified after installation; pass --overwrite-modified to replace it after review" });
     actions.push(action("update", file, runtime, { role: role.name, after_sha256: afterHash, content, diff: lineDiff(before, content) }));
@@ -562,7 +590,8 @@ export function buildPlan(options) {
   if (selections.claude) {
     const agentsDir = path.join(layout.claude, "agents");
     const ours = new Set(canonical.roles.map((role) => path.join(agentsDir, `${role.name}.md`)));
-    for (const file of listFiles(agentsDir, ".md")) {
+    const outside = [];
+    for (const file of listFiles(agentsDir, ".md", layout, outside)) {
       if (ours.has(file)) continue;
       let name = null;
       try {
@@ -572,6 +601,7 @@ export function buildPlan(options) {
       }
       if (canonical.roles.some((role) => role.name === name)) conflicts.push({ path: file, reason: `another Claude agent file already declares name ${name}` });
     }
+    for (const file of outside) conflicts.push({ path: file, reason: "agent alias resolves outside --home; it cannot be inspected for a role name conflict" });
     for (const role of canonical.roles) planFile("claude", role, path.join(agentsDir, `${role.name}.md`), renderClaude(role, canonical.tiers));
   }
 
@@ -596,7 +626,8 @@ export function buildPlan(options) {
       const entry = declared[role.name];
       if (entry !== undefined && !blockRoles.includes(role.name)) conflicts.push({ path: configFile, reason: `config.toml already registers agents.${role.name}` });
     }
-    for (const file of listFiles(agentsDir, ".toml")) {
+    const outside = [];
+    for (const file of listFiles(agentsDir, ".toml", layout, outside)) {
       if (ours.has(file) || declaredFiles.has(file)) continue;
       let name;
       try {
@@ -607,6 +638,7 @@ export function buildPlan(options) {
       }
       if (canonical.roles.some((role) => role.name === name)) conflicts.push({ path: file, reason: `another Codex agent file declares name ${name}` });
     }
+    for (const file of outside) conflicts.push({ path: file, reason: "agent alias resolves outside --home; it cannot be inspected for a role name conflict" });
     for (const role of canonical.roles) planFile("codex", role, path.join(agentsDir, `${role.name}.toml`), renderCodex(role));
 
     let nextConfig = configText;
@@ -688,6 +720,7 @@ export function buildPlan(options) {
     const before = exists(configFile) ? readText(configFile) : null;
     const after = configText ?? before;
     if (after !== null && after !== (before ?? "")) {
+      if (isLink(configFile)) conflicts.push({ path: configFile, reason: "config.toml is a symlink; updating it would replace the link with a regular file" });
       strictToml(after, `${configFile} (planned)`);
       actions.push(action(before === null ? "create" : "update", configFile, "codex", { kind: "config", after_sha256: sha256(after), content: after, diff: lineDiff(before, after) }));
     }
@@ -708,6 +741,7 @@ export function buildPlan(options) {
     selections,
     retire_pilots: retire,
     overwrite_modified: [...overwrite],
+    adopt: [...adopt],
     actions,
     conflicts,
     notes,
@@ -735,7 +769,7 @@ const planKey = (plan) => JSON.stringify({
   source_hash: plan.source_hash,
   renderer_version: plan.renderer_version,
   selections: plan.selections,
-  actions: plan.actions.map(({ op, path: file, before_sha256, after_sha256, kind }) => ({ op, file, before_sha256, after_sha256, kind })),
+  actions: plan.actions.map(({ op, path: file, before_sha256, after_sha256, kind, adopted }) => ({ op, file, before_sha256, after_sha256, kind, adopted })),
   conflicts: plan.conflicts,
 });
 
@@ -749,6 +783,7 @@ function atomicWrite(file, content, fixedMode = null) {
   const temp = path.join(path.dirname(file), `.${path.basename(file)}.link-agents-${randomUUID()}.tmp`);
   const mode = fixedMode ?? (exists(file) ? fs.statSync(file).mode & 0o777 : 0o644);
   fs.writeFileSync(temp, content, { mode, flag: "wx" });
+  fs.chmodSync(temp, mode);
   const handle = fs.openSync(temp, "r");
   fs.fsyncSync(handle);
   fs.closeSync(handle);
@@ -772,13 +807,14 @@ export function applyPlan(savedPlan, hooks = {}) {
     versions: Object.fromEntries(Object.entries(savedPlan.selections).filter(([, selection]) => selection.version_source === "asserted").map(([runtime, selection]) => [runtime, selection.version ?? "unknown"])),
     retirePilots: savedPlan.retire_pilots,
     overwriteModified: savedPlan.overwrite_modified,
+    adopt: savedPlan.adopt,
     allowUnqualified: savedPlan.allow_unqualified,
   });
-  if (planKey(plan) !== planKey(savedPlan)) throw new RenderError("stale_plan", "destinations or sources changed since the dry run; rerun the dry run and review it");
-  if (plan.blocked.length) throw new RenderError("blocked", plan.blocked.join("\n"));
   const layout = { ...plan.layout, redirected: plan.home !== null, base: plan.home };
   const journalFile = path.join(layout.state, "journal.json");
   if (exists(journalFile)) throw new RenderError("interrupted_install", `an interrupted install needs manual recovery first: ${journalFile}`, { journal: JSON.parse(readText(journalFile)) });
+  if (planKey(plan) !== planKey(savedPlan)) throw new RenderError("stale_plan", "destinations or sources changed since the dry run; rerun the dry run and review it");
+  if (plan.blocked.length) throw new RenderError("blocked", plan.blocked.join("\n"));
 
   const changes = plan.actions.filter((item) => item.op !== "noop");
   const manifest = readManifest(layout);
@@ -814,12 +850,17 @@ export function applyPlan(savedPlan, hooks = {}) {
       const current = hashFile(item.path);
       if (current !== item.before_sha256) throw new RenderError("concurrent_change", `${item.path} changed after the plan was checked`);
       let backup = null;
+      let mode = null;
+      let link = null;
       if (current !== null) {
         backup = path.join(backupDir, path.relative(layout.claude, item.path).startsWith("..") ? path.join("codex", path.relative(layout.codex, item.path)) : path.join("claude", path.relative(layout.claude, item.path)));
         assertIsolated(layout, backup);
         writePrivate(backup, fs.readFileSync(item.path));
+        const stat = fs.lstatSync(item.path);
+        mode = stat.mode & 0o7777;
+        if (stat.isSymbolicLink()) link = fs.readlinkSync(item.path);
       }
-      journal.steps.push({ op: item.op, path: item.path, before_sha256: item.before_sha256, after_sha256: item.after_sha256, backup, state: "started" });
+      journal.steps.push({ op: item.op, path: item.path, before_sha256: item.before_sha256, after_sha256: item.after_sha256, backup, mode, link, state: "started" });
       saveJournal();
       hooks.beforeWrite?.(item);
       if (item.op === "delete") fs.unlinkSync(item.path);
@@ -904,7 +945,10 @@ function rollback(journal, layout) {
 }
 
 function restore(step) {
-  if (step.backup) atomicWrite(step.path, fs.readFileSync(step.backup));
+  if (step.link) {
+    if (exists(step.path) || isLink(step.path)) fs.unlinkSync(step.path);
+    fs.symlinkSync(step.link, step.path);
+  } else if (step.backup) atomicWrite(step.path, fs.readFileSync(step.backup), step.mode);
   else if (exists(step.path)) fs.unlinkSync(step.path);
 }
 
@@ -961,7 +1005,7 @@ export function formatPlan(plan) {
 const USAGE = `Usage:
   link-agents.sh --runtime claude|codex [--runtime ...] [--codex-adapter standalone|registration]
                  [--home DIR] [--claude-version V] [--codex-version V] [--retire-pilot RUNTIME:NAME]...
-                 [--overwrite-modified PATH]... [--allow-unqualified] [--plan-out FILE]
+                 [--overwrite-modified PATH]... [--adopt PATH]... [--allow-unqualified] [--plan-out FILE]
   link-agents.sh --apply --plan FILE
   link-agents.sh --resolve-interrupted ID [--home DIR]
   link-agents.sh --claude-session-definition ROLE [--model M] [--effort E]
@@ -972,8 +1016,8 @@ The default is a dry run that changes nothing. --apply installs a reviewed plan.
 `;
 
 function parseArgs(argv) {
-  const repeatable = new Set(["--runtime", "--retire-pilot", "--overwrite-modified"]);
-  const valued = new Set(["--runtime", "--codex-adapter", "--home", "--claude-version", "--codex-version", "--retire-pilot", "--overwrite-modified", "--plan-out", "--plan", "--resolve-interrupted", "--claude-session-definition", "--model", "--effort", "--repo-pointer"]);
+  const repeatable = new Set(["--runtime", "--retire-pilot", "--overwrite-modified", "--adopt"]);
+  const valued = new Set(["--runtime", "--codex-adapter", "--home", "--claude-version", "--codex-version", "--retire-pilot", "--overwrite-modified", "--adopt", "--plan-out", "--plan", "--resolve-interrupted", "--claude-session-definition", "--model", "--effort", "--repo-pointer"]);
   const flags = new Set(["--apply", "--allow-unqualified", "--dispatch-reference", "--check", "--help"]);
   const args = {};
   for (let i = 0; i < argv.length; i += 1) {
@@ -1035,6 +1079,7 @@ export function main(argv, io = { stdout: process.stdout, stderr: process.stderr
       versions: { ...(args["--claude-version"] ? { claude: args["--claude-version"] } : {}), ...(args["--codex-version"] ? { codex: args["--codex-version"] } : {}) },
       retirePilots: args["--retire-pilot"],
       overwriteModified: args["--overwrite-modified"],
+      adopt: args["--adopt"],
       allowUnqualified: args["--allow-unqualified"],
     });
     io.stdout.write(formatPlan(plan));
