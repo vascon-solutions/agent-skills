@@ -197,25 +197,35 @@ test("a modified generated output needs explicit overwrite and is backed up priv
   assert.match(path.basename(result.backup_dir), /^\d{4}-\d{2}-\d{2}T[\d-]+Z-[0-9a-f-]{36}$/);
 });
 
-test("pilot retirement shows the diff, backs up, and removes a quoted registration without touching other settings", () => {
+test("pilot retirement shows the diff, backs up, and removes only the pilot table, keeping comments and generated markers", () => {
   const home = tempHome();
   const pilotFile = path.join(home, ".codex", "agents", "ui-auditor.toml");
   const configFile = path.join(home, ".codex", "config.toml");
   write(pilotFile, 'developer_instructions = "pilot"\n');
   write(path.join(home, ".claude", "agents", "ui-auditor.md"), "---\nname: ui-auditor\ndescription: pilot\n---\npilot\n");
-  write(configFile, `model = "x"\n\n[agents."ui-auditor"] # pilot\ndescription = "pilot"\nconfig_file = ${JSON.stringify(pilotFile)}\n\n[projects."/a"]\ntrust_level = "trusted"\n`);
+  write(configFile, 'model = "x"\n\n[agents."ui-auditor"] # pilot\ndescription = "pilot"\nconfig_file = "agents/ui-auditor.toml"\n\n# Projects below are mine\n[projects."/a"]\ntrust_level = "trusted"\n');
 
   const dry = plan(home, { retirePilots: ["codex:ui-auditor", "claude:ui-auditor"] });
   assert.deepEqual(dry.blocked, []);
   assert.ok(dry.actions.find((item) => item.path === configFile).diff.includes('-[agents."ui-auditor"] # pilot'));
   const result = applyPlan(JSON.parse(JSON.stringify(dry)), { env: ENV });
 
-  assert.deepEqual(JSON.parse(JSON.stringify(parseToml(read(configFile)))), { model: "x", projects: { "/a": { trust_level: "trusted" } } });
+  assert.equal(read(configFile), 'model = "x"\n\n# Projects below are mine\n[projects."/a"]\ntrust_level = "trusted"\n');
   assert.ok(!fs.existsSync(pilotFile));
   assert.ok(!fs.existsSync(path.join(home, ".claude", "agents", "ui-auditor.md")));
   assert.equal(read(path.join(result.backup_dir, "codex", "agents", "ui-auditor.toml")), 'developer_instructions = "pilot"\n');
   const retired = JSON.parse(read(path.join(home, ".agent-skills", "link-agents", "manifest.json"))).retired_pilots;
   assert.deepEqual(retired.map((item) => `${item.runtime}:${item.name}`).sort(), ["claude:ui-auditor", "codex:ui-auditor"]);
+
+  const registered = tempHome();
+  const registeredConfig = path.join(registered, ".codex", "config.toml");
+  write(path.join(registered, ".codex", "agents", "ui-auditor.toml"), 'developer_instructions = "pilot"\n');
+  write(registeredConfig, 'model = "x"\n\n[agents.ui-auditor]\ndescription = "pilot"\nconfig_file = "agents/ui-auditor.toml"\n');
+  install(registered, { runtimes: ["codex"], codexAdapter: "registration" });
+  install(registered, { runtimes: ["codex"], codexAdapter: "registration", retirePilots: ["codex:ui-auditor"] });
+  assert.equal(install(registered, { runtimes: ["codex"], codexAdapter: "registration" }).changed, false);
+  install(registered, { runtimes: ["codex"] });
+  assert.equal(read(registeredConfig), 'model = "x"\n');
 });
 
 test("malformed config and unknown or unqualified client versions block installation", () => {
@@ -259,17 +269,23 @@ test("a failure or concurrent edit mid-install rolls back only this install's un
   assert.deepEqual(snapshot(concurrent), { ...clean, [path.relative(concurrent, configFile)]: sha256('model = "concurrent"\n') });
 
   const failing = tempHome();
-  write(path.join(failing, ".codex", "config.toml"), 'model = "x"\n');
+  const failingConfig = path.join(failing, ".codex", "config.toml");
+  write(failingConfig, '# mine\nmodel = "x"\n');
   install(failing, { runtimes: ["codex"] });
   const installed = snapshot(failing);
-  let writes = 0;
+  let backupDir = null;
   expectCode(() => install(failing, { codexAdapter: "registration" }, {
-    afterWrite: () => {
-      writes += 1;
-      if (writes === 3) throw new Error("disk full");
+    afterWrite: (item) => {
+      if (item.kind === "config") {
+        backupDir = JSON.parse(read(path.join(failing, ".agent-skills", "link-agents", "journal.json"))).backup_dir;
+        throw new Error("disk full");
+      }
     },
   }), "apply_failed");
-  assert.deepEqual(snapshot(failing), installed);
+  assert.equal(read(failingConfig), '# mine\nmodel = "x"\n');
+  assert.equal(read(path.join(backupDir, "codex", "config.toml")), '# mine\nmodel = "x"\n');
+  const { [path.relative(failing, path.join(backupDir, "codex", "config.toml"))]: _backup, ...afterRollback } = snapshot(failing);
+  assert.deepEqual(afterRollback, installed);
 
   const edited = tempHome();
   const userFile = path.join(edited, ".claude", "agents", "auditor.md");
@@ -316,9 +332,16 @@ test("the CLI defaults to a dry run, stays inside --home, and applies only a rev
 
   assert.equal(cli(["--apply"]).status, 64);
   assert.equal(cli(["--apply", "--plan", planFile, "--runtime", "claude"]).status, 64);
+  const rerun = cli(["--home", home, "--runtime", "claude", "--claude-version", "2.1.285", "--plan-out", planFile, "--runtime", "codex", "--codex-adapter", "standalone", "--codex-version", "0.146.0", "--allow-unqualified"]);
+  assert.equal(rerun.status, 0, rerun.stderr);
+  assert.equal(fs.statSync(planFile).mode & 0o777, 0o600);
   const applied = cli(["--apply", "--plan", planFile]);
   assert.equal(applied.status, 0, applied.stderr);
   assert.equal(fs.readdirSync(path.join(home, ".claude", "agents")).length, 4);
+
+  const asserted = cli(["--runtime", "claude", "--claude-version", "2.1.285"]);
+  assert.equal(asserted.status, 2, "an asserted version cannot qualify a real-home install");
+  assert.match(asserted.stdout, /asserted, not detected/);
 
   const outside = tempHome();
   write(path.join(outside, ".codex", "config.toml"), `[agents.ui-auditor]\ndescription = "pilot"\nconfig_file = ${JSON.stringify(path.join(SENTINEL_HOME, ".codex", "agents", "ui-auditor.toml"))}\n`);

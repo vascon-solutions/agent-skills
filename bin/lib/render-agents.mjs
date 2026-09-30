@@ -186,11 +186,12 @@ function enforcementText(role, runtime) {
   if (runtime === "claude") {
     const tools = claudeTools(role);
     const open = tools.filter((tool) => tool === "Bash" || tool === "Write");
-    const limits = role.capabilities.includes("write-workspace") ? "read-only, no-publish and workspace-only limits" : "read-only and no-publish limits";
+    const limits = role.capabilities.includes("write-workspace") ? "read-only, no-publish, no-delegation and workspace-only limits" : "read-only, no-publish and no-delegation limits";
+    const reach = tools.includes("Bash") ? ", or Bash from starting another agent's command-line client" : "";
     const limit = open.length
-      ? `It does not stop ${open.join(" or ")} from changing the repository, Git state or GitHub, so the ${limits} above are instructions you must follow.`
+      ? `It does not stop ${open.join(" or ")} from changing the repository, Git state or GitHub${reach}, so the ${limits} above are instructions you must follow.`
       : `The ${limits} above are also instructions you must follow.`;
-    return `Claude Code limits this role to the tools ${tools.join(", ")} and removes the Agent tool, so you cannot start another agent. ${limit}`;
+    return `Claude Code limits this role to the tools ${tools.join(", ")} and removes the Agent tool. ${limit}`;
   }
   const limits = role.capabilities.includes("write-workspace") ? "read-only, no-publish, no-delegation or workspace-only limits" : "read-only, no-publish or no-delegation limits";
   return `Codex applies its existing sandbox and approval settings to this role. It does not enforce the ${limits} above; they are instructions you must follow. Do not call any agent-spawning tool.`;
@@ -205,7 +206,7 @@ export function enforcementRecord(role, runtime) {
       tools: `enforced: allowlist ${tools.join(", ")}; Agent omitted and denied`,
       filesystem: shell || write ? `instructional: ${[shell && "Bash", write && "Write"].filter(Boolean).join(" and ")} granted` : "enforced: no write-capable tool granted",
       github: shell ? "instructional: Bash granted" : "enforced: no shell or network tool granted",
-      delegation: "enforced: Agent tool omitted and denied",
+      delegation: shell ? "enforced for the Agent tool; instructional: agent command-line clients remain reachable through Bash" : "enforced: Agent tool omitted and denied",
     };
   }
   return {
@@ -410,13 +411,17 @@ function registrationBlock(roles, codexDir) {
 
 function removeTable(text, name) {
   const lines = text.split("\n");
-  const header = new RegExp(`^\\s*\\[\\s*agents\\s*\\.\\s*(?:${name.replace(/[-]/g, "\\-")}|"${name.replace(/[-]/g, "\\-")}"|'${name.replace(/[-]/g, "\\-")}')\\s*\\]\\s*(#.*)?$`);
+  const key = name.replace(/-/g, "\\-");
+  const header = new RegExp(`^\\s*\\[\\s*agents\\s*\\.\\s*(?:${key}|"${key}"|'${key}')\\s*\\]\\s*(#.*)?$`);
   const start = lines.findIndex((line) => header.test(line));
   if (start === -1) return null;
-  let end = start + 1;
-  while (end < lines.length && !/^\s*\[/.test(lines[end])) end += 1;
-  while (end > start + 1 && lines[end - 1].trim() === "") end -= 1;
-  return [...lines.slice(0, start), ...lines.slice(end)].join("\n").replace(/\n{3,}/g, "\n\n");
+  let next = start + 1;
+  while (next < lines.length && !/^\s*\[/.test(lines[next]) && lines[next] !== BLOCK_START) next += 1;
+  // Comments and blank lines before the next table introduce what follows, so they stay.
+  let end = next;
+  while (end > start + 1 && /^\s*(#.*)?$/.test(lines[end - 1])) end -= 1;
+  const from = start > 0 && lines[start - 1].trim() === "" && (end >= lines.length || lines[end].trim() === "") ? start - 1 : start;
+  return [...lines.slice(0, from), ...lines.slice(end)].join("\n");
 }
 
 function deepEqual(a, b) {
@@ -470,9 +475,11 @@ export function buildPlan(options) {
     const adapter = runtime === "claude" ? options.claudeAdapter ?? "agent-file" : options.codexAdapter;
     if (!adapter) throw new RenderError("argument_error", "select the Codex adapter explicitly with --codex-adapter standalone|registration");
     if (!ADAPTERS[runtime].includes(adapter)) throw new RenderError("argument_error", `unsupported ${runtime} adapter ${adapter}`);
-    const version = detectVersion(runtime, options.versions?.[runtime]);
-    const qualified = version !== null && canonical.runtimes[runtime].adapters[adapter].qualified.includes(version);
-    selections[runtime] = { adapter, version, qualified };
+    const asserted = options.versions?.[runtime];
+    const version = detectVersion(runtime, asserted);
+    const versionSource = asserted === undefined ? "detected" : "asserted";
+    const listed = version !== null && canonical.runtimes[runtime].adapters[adapter].qualified.includes(version);
+    selections[runtime] = { adapter, version, version_source: versionSource, listed, qualified: listed && (versionSource === "detected" || layout.redirected) };
   }
 
   const guard = (file) => {
@@ -524,7 +531,7 @@ export function buildPlan(options) {
     if (!block && ownedBlock) conflicts.push({ path: configFile, reason: "recorded link-agents registration block is missing; review config.toml before reinstalling" });
     const blockRoles = block ? Object.keys(strictToml(block.text, `${configFile} generated block`).agents ?? {}) : [];
     const declared = config.agents && isPlainObject(config.agents) ? config.agents : {};
-    const declaredFiles = new Set(Object.values(declared).filter(isPlainObject).map((entry) => entry.config_file).filter((value) => typeof value === "string").map((value) => path.resolve(value)));
+    const declaredFiles = new Set(Object.values(declared).filter(isPlainObject).map((entry) => entry.config_file).filter((value) => typeof value === "string").map((value) => path.resolve(layout.codex, value)));
     const ours = new Set(canonical.roles.map((role) => path.join(agentsDir, `${role.name}.toml`)));
     for (const role of canonical.roles) {
       const entry = declared[role.name];
@@ -564,7 +571,7 @@ export function buildPlan(options) {
     } else {
       const parsed = strictToml(configText ?? "", configFile);
       const entry = parsed.agents?.[name];
-      const file = guard(isPlainObject(entry) && typeof entry.config_file === "string" ? path.resolve(entry.config_file) : path.join(layout.codex, "agents", `${name}.toml`));
+      const file = guard(isPlainObject(entry) && typeof entry.config_file === "string" ? path.resolve(layout.codex, entry.config_file) : path.join(layout.codex, "agents", `${name}.toml`));
       if (entry !== undefined) {
         const removed = removeTable(configText, name);
         const expected = structuredClone(parsed);
@@ -616,7 +623,11 @@ function blockedReasons(selections, conflicts, allowUnqualified) {
   const reasons = conflicts.map((conflict) => `conflict: ${conflict.path}: ${conflict.reason}`);
   for (const [runtime, selection] of Object.entries(selections)) {
     if (selection.version === null) reasons.push(`${runtime}: client version unknown; cannot qualify the ${selection.adapter} adapter`);
-    else if (!selection.qualified && !allowUnqualified) reasons.push(`${runtime}: ${selection.adapter} adapter is not qualified for ${selection.version}; probe it first or pass --allow-unqualified for a probe home`);
+    else if (!selection.qualified && !allowUnqualified) {
+      reasons.push(selection.listed
+        ? `${runtime}: version ${selection.version} was asserted, not detected; installing into the real home needs the detected client version`
+        : `${runtime}: ${selection.adapter} adapter is not qualified for ${selection.version}; probe it first or pass --allow-unqualified for a probe home`);
+    }
   }
   return reasons;
 }
@@ -634,10 +645,10 @@ function writePrivate(file, content, mode = 0o600) {
   fs.writeFileSync(file, content, { mode, flag: "wx" });
 }
 
-function atomicWrite(file, content) {
+function atomicWrite(file, content, fixedMode = null) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const temp = path.join(path.dirname(file), `.${path.basename(file)}.link-agents-${randomUUID()}.tmp`);
-  const mode = exists(file) ? fs.statSync(file).mode & 0o777 : 0o644;
+  const mode = fixedMode ?? (exists(file) ? fs.statSync(file).mode & 0o777 : 0o644);
   fs.writeFileSync(temp, content, { mode, flag: "wx" });
   const handle = fs.openSync(temp, "r");
   fs.fsyncSync(handle);
@@ -659,7 +670,7 @@ export function applyPlan(savedPlan, hooks = {}) {
     env: hooks.env,
     runtimes: Object.keys(savedPlan.selections),
     codexAdapter: savedPlan.selections.codex?.adapter,
-    versions: Object.fromEntries(Object.entries(savedPlan.selections).map(([runtime, selection]) => [runtime, selection.version ?? "unknown"])),
+    versions: Object.fromEntries(Object.entries(savedPlan.selections).filter(([, selection]) => selection.version_source === "asserted").map(([runtime, selection]) => [runtime, selection.version ?? "unknown"])),
     retirePilots: savedPlan.retire_pilots,
     overwriteModified: savedPlan.overwrite_modified,
     allowUnqualified: savedPlan.allow_unqualified,
@@ -677,13 +688,18 @@ export function applyPlan(savedPlan, hooks = {}) {
   const journal = { id, status: "in_progress", started_at: new Date().toISOString(), backup_dir: backupDir, steps: [] };
   const saveJournal = () => {
     fs.mkdirSync(layout.state, { recursive: true, mode: 0o700 });
-    atomicWrite(journalFile, `${JSON.stringify(journal, null, 2)}\n`);
-    fs.chmodSync(journalFile, 0o600);
+    atomicWrite(journalFile, `${JSON.stringify(journal, null, 2)}\n`, 0o600);
   };
   if (!changes.length && ownershipRecorded(manifest, plan)) return { changed: false, plan, manifest };
 
   for (const item of changes) validateContent(item);
-  saveJournal();
+  fs.mkdirSync(layout.state, { recursive: true, mode: 0o700 });
+  try {
+    fs.writeFileSync(journalFile, `${JSON.stringify(journal, null, 2)}\n`, { mode: 0o600, flag: "wx" });
+  } catch (error) {
+    if (error.code === "EEXIST") throw new RenderError("interrupted_install", `another install is running or was interrupted: ${journalFile}`);
+    throw error;
+  }
 
   const ordered = [
     ...changes.filter((item) => item.op !== "delete" && item.kind !== "config"),
@@ -731,7 +747,7 @@ export function applyPlan(savedPlan, hooks = {}) {
   for (const [runtime, selection] of Object.entries(plan.selections)) {
     const outputs = {};
     for (const item of plan.actions.filter((entry) => entry.runtime === runtime && entry.kind === "file" && entry.op !== "delete")) outputs[item.path] = { sha256: item.after_sha256, role: item.role };
-    next.installs[runtime] = { adapter: selection.adapter, runtime_version: selection.version, qualified: selection.qualified, installed_at: new Date().toISOString(), outputs };
+    next.installs[runtime] = { adapter: selection.adapter, runtime_version: selection.version, version_source: selection.version_source, qualified: selection.qualified, installed_at: new Date().toISOString(), outputs };
     if (runtime === "codex") {
       const configFile = path.join(layout.codex, "config.toml");
       const block = exists(configFile) ? findBlock(readText(configFile)) : null;
@@ -906,7 +922,10 @@ export function main(argv, io = { stdout: process.stdout, stderr: process.stderr
       allowUnqualified: args["--allow-unqualified"],
     });
     io.stdout.write(formatPlan(plan));
-    if (args["--plan-out"]) writePrivate(path.resolve(args["--plan-out"]), `${JSON.stringify(plan, null, 2)}\n`);
+    if (args["--plan-out"]) {
+      const planFile = path.resolve(args["--plan-out"]);
+      atomicWrite(planFile, `${JSON.stringify(plan, null, 2)}\n`, 0o600);
+    }
     return plan.blocked.length ? 2 : 0;
   } catch (error) {
     if (!(error instanceof RenderError)) throw error;

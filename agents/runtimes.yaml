@@ -13,5 +13,8 @@ codex:
       # 0.146.0: all four roles and modes spawned from standalone files, 2026-09-30.
       qualified: ["0.146.0"]
     registration:
-      # 0.146.0: rendered roles spawned through config_file registrations, 2026-09-30.
+      # Qualifying a version also requires that Codex skips a declared
+      # config_file during agents/ discovery, so one role never loads twice.
+      # 0.146.0: rendered roles spawned through config_file registrations, and
+      # agent_roles.rs excludes declared files from discovery, 2026-09-30.
       qualified: ["0.146.0"]
