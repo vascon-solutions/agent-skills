@@ -41,7 +41,9 @@ from current delegated implementation dispatches. Duplicate retries and status
 successors add nothing. `delegated_limit` is independently enforced, with its
 policy cited by `basis.delegated_decision`. A repo's one-delegate rule wins even
 when the size bound permits three cycles. Before dispatch or remediation, check
-both limits; at exhaustion stop ungranted work and report blockers.
+both limits. A queued or running delegated dispatch, including a failed run
+restarted by a successor, reserves a cycle; record its review before marking the
+run complete. At exhaustion stop ungranted work and report blockers.
 
 `extension_rounds` starts at 0. `overrides` contains exact copies of recorded
 review/remediation grants, each with positive `additional_cycles`; their sum is
@@ -56,13 +58,21 @@ changes endpoint authority. Keep prior grants when refreshing the bound.
 
 Legacy R1 records with a null bound remain readable. Install a bound before a
 new frozen implementation assessment or a fixing batch, under the same claim.
+Without one, the helper refuses any frozen-candidate cycle and any committed
+fix, with or without a `cycle_id`. A PR batch takes only a `post_pr_fix` cycle, and only when
+it causes a fix.
 Local-only deliveries use the same policy in their owner ledger decisions and
 report an unmeasured limitation; they never commit just to finalize this helper's
 frozen-OID bound. The owner enforces dispatch timing and natural-language scope;
 helper mutations enforce installed bounds atomically, not external agent actions.
 
 Before pushing remediation, complete the [shape sweep](../../review-implementation/references/risk-classes.md).
-A done sweep is for the replacement candidate, names the search and result, and
-may report zero siblings. Pending or earlier-candidate sweeps do not pass.
+A done sweep is for the pushed candidate, names the search and result, and
+may report zero siblings. It covers every fix in the candidate's history that no
+verified push contains yet, including fixes carried into follow-up commits.
+Pending or earlier-candidate sweeps do not pass, and the helper rechecks sweeps
+when the push is verified. Recovery of an interrupted push records the observed
+remote outcome without that recheck; complete any reopened sweep before the next
+push.
 Proposed vocabulary stays in the delivery ledger until accepted in separately
 authorized skill-pack work.

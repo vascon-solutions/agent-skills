@@ -2515,15 +2515,17 @@ function reviewRound(repo, { dispositions = ["fixed", "rejected"] } = {}) {
   ok(owner.release("complete", { next: nextStep("review_round", "review", { authorization_required: true }), completion: completion(owner, ["validation:" + delivered.gate.id, "publications:" + delivered.push.id, "publications:" + delivered.prCreate.id]), blocker: null }));
   const reviewer = new Session(repo, "codex");
   ok(reviewer.claim("review_round", { grantFile: input(repo, "grant", grant("review_round", { wording: '"address the review findings on the PR"' })) }));
+  ok(setR3(reviewer, r3Bound(reviewer)));
   const threads = [
     { thread_graphql_id: "PRRT_one", root_comment_database_id: "1001", path: "src/app.js", line: 1 },
     { thread_graphql_id: "PRRT_two", root_comment_database_id: "1002", path: "README.md", line: 1 },
   ];
   const batch = batchFile(repo, reviewer, threads);
   const findings = threads.map((thread, position) =>
-    finding({ id: "f" + (position + 1), source_id: thread.root_comment_database_id, thread_id: thread.thread_graphql_id, disposition: dispositions[position], reason: dispositions[position] === "rejected" ? "the behavior is intended" : null, fix_oid: dispositions[position] === "fixed" ? delivered.oid : null }),
+    finding({ id: "f" + (position + 1), shape: "identity-reset", source_id: thread.root_comment_database_id, thread_id: thread.thread_graphql_id, disposition: dispositions[position], reason: dispositions[position] === "rejected" ? "the behavior is intended" : null, fix_oid: dispositions[position] === "fixed" ? delivered.oid : null }),
   );
-  const batchReview = review(reviewer, { source: "codex-bot", verdict: "pass-with-fixes", findings, batch });
+  const cycle = dispositions.includes("fixed") ? { cycle_id: "batch-fix", cycle_kind: "post_pr_fix" } : {};
+  const batchReview = review(reviewer, { source: "codex-bot", verdict: "pass-with-fixes", findings, batch, ...cycle });
   ok(reviewer.append("reviews", batchReview));
   return { owner, reviewer, delivered, threads, batch, batchReview };
 }
@@ -2711,7 +2713,7 @@ test("N7 an incomplete snapshot cannot back publication", () => {
   const repo = makeRepo();
   const { reviewer, threads } = reviewRound(repo);
   const partial = batchFile(repo, reviewer, threads, { complete: false });
-  ok(reviewer.append("reviews", review(reviewer, { source: "codex-bot", findings: [finding({ thread_id: threads[0].thread_graphql_id, disposition: "informational" })], batch: partial })));
+  ok(reviewer.append("reviews", review(reviewer, { source: "codex-bot", findings: [finding({ shape: "identity-reset", thread_id: threads[0].thread_graphql_id, disposition: "informational" })], batch: partial })));
   refused(reviewer.append("publications", replyEvent(repo, reviewer, partial, threads[0], bodyFile(repo, "Noted."))), 2, "invariant_error");
   const partialReview = reviewer.ledger().reviews.find((entry) => entry.batch?.id === partial.id);
   const swapped = batchFile(repo, reviewer, threads, { complete: true, id: partial.id });
@@ -3490,7 +3492,7 @@ test("R1 review batch: disposition successors retain the reviewed head after a f
   ghPull(repo, pr);
   ok(reviewer.recordContext({ pr }));
   const successor = {
-    ...batchReview, id: randomUUID(), supersedes_id: batchReview.id,
+    ...batchReview, id: randomUUID(), supersedes_id: batchReview.id, cycle_id: "batch-fix", cycle_kind: "post_pr_fix",
     findings: batchReview.findings.map((item) => item.disposition === "pending" ? { ...item, disposition: "fixed", fix_oid: fixedOid } : item),
   };
   ok(reviewer.append("reviews", successor), "the original snapshot remains valid for dispositions");
@@ -3893,6 +3895,9 @@ test("R3 new frozen review and post-PR fix cycles require a bound; legacy reads 
   const before = fs.readFileSync(repo.ledgerPath, "utf8");
   const error = refused(owner.append("reviews", next), 2, "invariant_error");
   assert.match(error.message, /bound/);
+  refused(owner.append("reviews", review(owner, { source: "inline", findings: [finding({ disposition: "fixed", fix_oid: owner.ledger().candidate.oid })] })), 2, "invariant_error", "omitting cycle_id does not let a fix bypass the bound");
+  const manifest = manifestFile(repo, owner, Array.from({ length: 11 }, (_, i) => entry(repo, `src/file-${i}.js`)));
+  refused(owner.append("reviews", review(owner, { source: "inline", candidate_oid: null, content_id: contentId(repo, manifest).content_id, content_manifest: manifest.source, findings: [finding({ disposition: "fixed", fix_oid: owner.ledger().candidate.oid })] })), 2, "invariant_error", "a content-identity review cannot record a committed fix without the bound");
   assert.equal(fs.readFileSync(repo.ledgerPath, "utf8"), before);
   pushCandidate(repo, owner);
   ok(owner.recordContext({ pr: prRecord(repo, owner) }));
@@ -3903,6 +3908,7 @@ test("R3 new frozen review and post-PR fix cycles require a bound; legacy reads 
     findings: [{ ...observed.findings[0], disposition: "fixed", fix_oid: owner.ledger().candidate.oid }] };
   const beforeFix = fs.readFileSync(repo.ledgerPath, "utf8");
   refused(owner.append("reviews", fixed), 2, "invariant_error");
+  refused(owner.append("reviews", { ...fixed, cycle_id: null, cycle_kind: null }), 2, "invariant_error", "a cycle-less post-PR fix also needs the bound");
   assert.equal(fs.readFileSync(repo.ledgerPath, "utf8"), beforeFix);
   ok(setR3(owner, r3Bound(owner)));
   ok(owner.append("reviews", fixed));
@@ -3910,7 +3916,7 @@ test("R3 new frozen review and post-PR fix cycles require a bound; legacy reads 
   refused(owner.append("reviews", next), 2, "invariant_error", "the migrated history counts against the installed bound");
 });
 
-test("R3 a later fixing batch sweeps only shapes fixed in its current candidate", () => {
+test("R3 a push sweeps unpublished fixes in its history, including follow-up commits, but not pushed shapes", () => {
   const { repo, owner } = r3Fixture(11);
   ok(setR3(owner, r3Bound(owner)));
   const firstOid = owner.ledger().candidate.oid;
@@ -3923,11 +3929,14 @@ test("R3 a later fixing batch sweeps only shapes fixed in its current candidate"
   const nextOid = deliverToFrozen(repo, owner, { "src/file-0.js": "export const n = 2;\n" });
   ok(setR3(owner, r3Bound(owner)));
   ok(owner.append("reviews", r3Cycle(owner, { findings: [finding({ shape: "async-prerequisite", disposition: "fixed", fix_oid: nextOid })] })));
+  ok(owner.append("defect_shapes", { ...sweep, id: "second-sweep", shape: "async-prerequisite", candidate_oid: nextOid }));
+  ok(owner.owned("begin-change"));
+  const followUp = deliverToFrozen(repo, owner, { "src/file-1.js": "export const n = 3;\n" });
   const push = pushEvent(repo, owner, { precondition: { head_oid: firstOid, body_sha256: null, state: null, observed_at: nowIso() } });
   const error = refused(owner.append("publications", push), 2, "invariant_error");
   assert.match(error.message, /async-prerequisite/);
-  ok(owner.append("defect_shapes", { ...sweep, id: "second-sweep", shape: "async-prerequisite", candidate_oid: nextOid }));
-  ok(owner.append("publications", push), "the old shape needs no rubber-stamp sweep on the replacement candidate");
+  ok(owner.append("defect_shapes", { ...sweep, id: "follow-up-sweep", shape: "async-prerequisite", candidate_oid: followUp }));
+  ok(owner.append("publications", push), "the pushed identity-reset fix needs no rubber-stamp sweep on later candidates");
 });
 
 for (const [files, size, allowance] of [[10,"small",1],[11,"medium",2],[39,"medium",2],[40,"large",3]]) {
@@ -4015,14 +4024,21 @@ test("R3 exhausted small bound refuses a new assessment and dispatch, while loca
   ok(setR3(owner, r3Bound(owner)));
   refused(owner.append("reviews", r3Cycle(owner, { findings: [finding()] })), 2, "invariant_error", "shape required");
   refused(owner.append("reviews", review(owner, { source: "inline" })), 2, "invariant_error", "initial assessment cannot omit its cycle");
+  const dispatch = roleRun(owner, { execution: "delegated", fallback_reason: null, status: "running", result_summary: "" });
+  ok(owner.append("role_runs", dispatch));
+  refused(owner.append("role_runs", roleRun(owner, { execution: "delegated", fallback_reason: null, status: "running", result_summary: "" })), 2, "invariant_error", "an outstanding dispatch reserves the only cycle");
+  ok(owner.append("role_runs", { ...dispatch, id: "dispatch-done", supersedes_id: dispatch.id, status: "complete", result_summary: "assessment" }));
   const initial = r3Cycle(owner, { findings: [finding({ shape: "identity-reset", disposition: "fixed", fix_oid: owner.ledger().candidate.oid })] });
   ok(owner.append("reviews", initial));
   ok(owner.append("reviews", initial));
   ok(owner.append("reviews", review(owner, { source: "inline" })));
   assert.equal(owner.ledger().review_bound.rounds_used, 1);
+  const failedRun = roleRun(owner, { execution: "delegated", fallback_reason: null, status: "error", result_summary: "" });
+  ok(owner.append("role_runs", failedRun));
   const before = fs.readFileSync(owner.repo.ledgerPath, "utf8");
   refused(owner.append("reviews", r3Cycle(owner)), 2, "invariant_error");
   refused(owner.append("role_runs", roleRun(owner, { execution: "delegated", fallback_reason: null })), 2, "invariant_error");
+  refused(owner.append("role_runs", { ...failedRun, id: "revived-run", supersedes_id: failedRun.id, status: "running" }), 2, "invariant_error", "restarting a failed dispatch is a new reservation");
   refused(owner.append("reviews", r3Cycle(owner, { cycle_id: initial.cycle_id })), 2, "invariant_error");
   assert.equal(fs.readFileSync(owner.repo.ledgerPath, "utf8"), before);
 });
@@ -4063,6 +4079,7 @@ test("R3 bot batch without a fix and reply-only or duplicate reports consume non
   ok(owner.append("reviews", replyOnly));
   assert.equal(owner.ledger().review_bound.rounds_used, 1);
   refused(owner.append("reviews", { ...replyOnly, id: "fake-fix-cycle", cycle_id: "bad-cycle", cycle_kind: "post_pr_fix" }), 2, "invariant_error");
+  refused(owner.append("reviews", { ...replyOnly, id: "batch-assessment-cycle", cycle_id: "batch-cycle", cycle_kind: "implementation_review" }), 2, "invariant_error");
 });
 test("R3 set-review-bound enforces ownership, revision, measurement, counters and recorded policy atomically", () => {
   const { owner } = r3Fixture();
@@ -4095,6 +4112,12 @@ test("R3 shape sweep finds and fixes a second instance; missing or stale sweep b
   for (const file of siblings) assert.equal(fs.readFileSync(path.join(repo.work, file), "utf8"), "export const n = 2;\n");
   ok(owner.append("defect_shapes", sweep));
   ok(owner.append("publications", push));
+  ok(owner.append("defect_shapes", { ...sweep, id: "reopened-sweep", supersedes_id: sweep.id, sweep: "pending", evidence: null }));
+  git(repo.work, "push", "-q", "origin", `HEAD:refs/heads/${repo.branch}`);
+  const verified = step(push, "verified", { observed: observedFor(push, { oid: fixedOid }) });
+  refused(owner.append("publications", verified), 2, "invariant_error", "a reopened sweep blocks push verification");
+  ok(owner.append("defect_shapes", { ...sweep, id: "resumed-sweep", supersedes_id: "reopened-sweep" }));
+  ok(owner.append("publications", verified));
   assert.equal(owner.ledger().review_bound.rounds_used, 1);
 });
 test("R3 feature-grade spec check retains source evidence and consumes no implementation cycle", () => {

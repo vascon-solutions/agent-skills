@@ -2461,10 +2461,11 @@ function readBatchSnapshot(batch, ledger) {
 }
 
 function appendReviewChecks(ctx, ledger, item) {
-  // Historical R1 records remain readable. New frozen-candidate cycles must
-  // opt into R3 enforcement; local-only content reviews stay unmeasured.
-  if (!ledger.review_bound && item.cycle_id !== null && item.candidate_oid !== null) {
-    fail("invariant_error", "set the review bound before recording an implementation review or post-PR fix cycle");
+  // Historical R1 records remain readable. New frozen-candidate cycles and fixes
+  // must opt into R3 enforcement, so an unbounded fix cannot skip its sweep;
+  // local-only content reviews stay unmeasured.
+  if (!ledger.review_bound && ((item.candidate_oid !== null && item.cycle_id !== null) || (item.mode === "implementation" && item.findings.some((finding) => finding.disposition === "fixed" && finding.fix_oid !== null)))) {
+    fail("invariant_error", "set the review bound before recording a frozen-candidate review cycle or fix");
   }
   if (ledger.review_bound) {
     if (item.findings.some((finding) => !finding.shape?.trim())) fail("invariant_error", "every finding needs a defect shape");
@@ -2483,6 +2484,7 @@ function appendReviewChecks(ctx, ledger, item) {
     if (item.mode !== "implementation" && item.cycle_id !== null) fail("invariant_error", "spec/doc reviews consume no implementation cycle");
     if (item.cycle_kind === "post_pr_fix" && (!item.batch || !item.findings.some((finding) => finding.disposition === "fixed"))) fail("invariant_error", "post-PR batches consume a cycle only when they cause a fix");
     if (item.batch && item.findings.some((finding) => finding.disposition === "fixed") && item.cycle_kind !== "post_pr_fix") fail("invariant_error", "a post-PR fix must record its cycle");
+    if (item.batch && item.cycle_id !== null && item.cycle_kind !== "post_pr_fix") fail("invariant_error", "a PR batch consumes only a post_pr_fix cycle, and only when it causes a fix");
     if (item.cycle_id !== null && item.batch) {
       const priorBatch = currentItems(ledger.reviews).find((prior) => prior.batch?.id === item.batch.id && prior.cycle_id !== null);
       if (priorBatch && priorBatch.cycle_id !== item.cycle_id) fail("invariant_error", "a fixed batch retains one cycle across repeated reports");
@@ -2563,7 +2565,7 @@ function prepareChecks(ctx, ledger, item) {
   const { candidate, repo } = ledger;
   if (candidate.state !== "frozen" || item.candidate_oid !== candidate.oid) fail("invariant_error", "publication uses the frozen candidate unchanged", { expected: candidate.oid, observed: item.candidate_oid });
   publicationAuthority(ledger, item);
-  if (item.kind === "push" && ledger.review_bound) requireShapeSweeps(ledger);
+  if (item.kind === "push" && ledger.review_bound) requireShapeSweeps(ctx, ledger, item.candidate_oid);
   const drift = localIdentity(ctx, ledger, "frozen");
   if (drift.environment.length > 0) fail("environment_error", "the recorded remote is not configured here", { observed: drift.environment });
   if (drift.mismatches.length > 0) fail("identity_mismatch", "the checkout drifted from the frozen candidate; stop before publishing", { observed: drift.mismatches });
@@ -2718,7 +2720,11 @@ function publicationChecks(ctx, ledger, item) {
   }
   const last = events[events.length - 1];
   if (TERMINAL_STEPS.has(last.step)) fail("invariant_error", `the operation already ended as ${last.step}`, { id: item.operation_id });
-  if (item.step === "verified") verifiedObservationChecks(ledger, item);
+  if (item.step === "verified") {
+    // Review or sweep records may change between preparing and verifying a push.
+    if (events[0].kind === "push" && ledger.review_bound) requireShapeSweeps(ctx, ledger, events[0].candidate_oid);
+    verifiedObservationChecks(ledger, item);
+  }
 }
 
 function appendChecks(ctx, ledger, field, item) {
@@ -2734,8 +2740,12 @@ function appendChecks(ctx, ledger, field, item) {
       appendReviewChecks(ctx, ledger, item);
       break;
     case "role_runs":
-      if (ledger.review_bound && item.role === "reviewer" && item.mode === "implementation" && item.execution === "delegated" && !item.supersedes_id && !["error", "cancelled"].includes(item.status)) {
-        if (ledger.review_bound.rounds_used >= ledger.review_bound.max_rounds + ledger.review_bound.extension_rounds) fail("invariant_error", "review bound exhausted before dispatch");
+      const reserves = (run) => ["queued", "running"].includes(run.status);
+      const prior = item.supersedes_id ? ledger.role_runs.find((run) => run.id === item.supersedes_id) : null;
+      const dispatches = prior ? reserves(item) && !reserves(prior) : !["error", "cancelled"].includes(item.status);
+      if (ledger.review_bound && item.role === "reviewer" && item.mode === "implementation" && item.execution === "delegated" && dispatches) {
+        const outstanding = currentItems(ledger.role_runs).filter((run) => run.role === "reviewer" && run.mode === "implementation" && run.execution === "delegated" && reserves(run)).length;
+        if (ledger.review_bound.rounds_used + outstanding >= ledger.review_bound.max_rounds + ledger.review_bound.extension_rounds) fail("invariant_error", "review bound exhausted before dispatch; outstanding dispatches reserve their cycles");
         if (ledger.candidate.state !== "frozen" || item.candidate_oid !== ledger.candidate.oid || ledger.review_bound.measured_oid !== ledger.candidate.oid) fail("invariant_error", "finalize the frozen candidate bound before dispatch");
       }
       checkContentIdentity(ledger, item.content_id, item.content_manifest, "role run");
@@ -3150,11 +3160,18 @@ function commandSetReviewBound(options) {
   });
 }
 
-function requireShapeSweeps(ledger) {
-  const fixed = currentItems(ledger.reviews).flatMap((review) => review.findings).filter((finding) => finding.disposition === "fixed" && finding.fix_oid === ledger.candidate.oid);
+// Fixes already contained in a verified push were swept with their own batch;
+// unpublished fixes carried into a later commit still need a sweep of this one.
+function requireShapeSweeps(ctx, ledger, oid) {
+  const pushed = ledger.publications.filter((event) => event.kind === "push" && event.step === "verified").map((event) => event.intended.oid);
+  const fixed = currentItems(ledger.reviews).flatMap((review) => review.findings).filter((finding) =>
+    finding.disposition === "fixed" && finding.fix_oid !== null &&
+    isAncestor(ctx.worktree, finding.fix_oid, oid) &&
+    !pushed.some((head) => isAncestor(ctx.worktree, finding.fix_oid, head))
+  );
   for (const finding of fixed) {
     if (!finding.shape?.trim()) fail("invariant_error", "fixed findings need shape labels before publication");
-    const sweep = currentItems(ledger.defect_shapes).find((item) => item.shape === finding.shape && item.candidate_oid === ledger.candidate.oid && item.sweep === "done");
+    const sweep = currentItems(ledger.defect_shapes).find((item) => item.shape === finding.shape && item.candidate_oid === oid && item.sweep === "done");
     if (!sweep || !sweep.evidence?.trim() || !sweep.searched_scope.length) fail("invariant_error", `complete the ${finding.shape} sweep for this candidate before pushing`);
   }
 }
