@@ -340,6 +340,34 @@ function detectVersion(runtime, override) {
   return match ? match[1] : null;
 }
 
+// Follows existing symlinks so a link inside a redirected home cannot send reads or writes elsewhere.
+function resolvedPath(target) {
+  let current = path.resolve(target);
+  const rest = [];
+  for (;;) {
+    let stat = null;
+    try {
+      stat = fs.lstatSync(current);
+    } catch {
+      stat = null;
+    }
+    if (stat) {
+      if (stat.isSymbolicLink() && !exists(current)) throw new RenderError("home_escape", `${current} is a dangling symlink`);
+      return path.join(fs.realpathSync(current), ...rest);
+    }
+    const parent = path.dirname(current);
+    if (parent === current) return path.join(current, ...rest);
+    rest.unshift(path.basename(current));
+    current = parent;
+  }
+}
+
+function assertIsolated(layout, file) {
+  if (!layout.redirected) return;
+  const base = resolvedPath(layout.base);
+  if (!within(base, resolvedPath(file))) throw new RenderError("home_escape", `${file} resolves outside ${layout.base}`);
+}
+
 function within(base, target) {
   const relative = path.relative(base, target);
   return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
@@ -482,9 +510,11 @@ export function buildPlan(options) {
     selections[runtime] = { adapter, version, version_source: versionSource, listed, qualified: listed && (versionSource === "detected" || layout.redirected) };
   }
 
+  for (const dir of [layout.claude, layout.codex, layout.state]) assertIsolated(layout, dir);
   const guard = (file) => {
     const allowed = [layout.claude, layout.codex].filter((dir) => !layout.redirected || within(layout.base, dir));
     if (!allowed.some((dir) => within(dir, file))) throw new RenderError("home_escape", `destination ${file} is outside the selected runtime directories${layout.redirected ? ` under ${layout.base}` : ""}`);
+    assertIsolated(layout, file);
     return file;
   };
 
@@ -515,6 +545,24 @@ export function buildPlan(options) {
       if (canonical.roles.some((role) => role.name === name)) conflicts.push({ path: file, reason: `another Claude agent file already declares name ${name}` });
     }
     for (const role of canonical.roles) planFile("claude", role, path.join(agentsDir, `${role.name}.md`), renderClaude(role, canonical.tiers));
+  }
+
+  for (const [runtime, install] of Object.entries(manifest.installs ?? {})) {
+    if (!selections[runtime]) continue;
+    const desired = new Set(canonical.roles.map((role) => path.join(runtime === "claude" ? layout.claude : layout.codex, "agents", `${role.name}.${runtime === "claude" ? "md" : "toml"}`)));
+    for (const [file, owned] of Object.entries(install.outputs ?? {})) {
+      if (desired.has(file)) continue;
+      try {
+        guard(file);
+      } catch {
+        conflicts.push({ path: file, reason: `recorded output for role ${owned.role} is outside the selected runtime directories; review it by hand` });
+        continue;
+      }
+      if (!exists(file)) continue;
+      const current = readText(file);
+      if (sha256(current) === owned.sha256) actions.push(action("delete", file, runtime, { role: owned.role, kind: "obsolete", diff: lineDiff(current, null) }));
+      else conflicts.push({ path: file, reason: `generated output for removed role ${owned.role} was modified after installation; remove or keep it by hand` });
+    }
   }
 
   let configText = null;
@@ -560,6 +608,7 @@ export function buildPlan(options) {
   }
 
   const pilotActions = [];
+  const notes = [];
   for (const pilot of retire) {
     const [runtime, name] = pilot.split(":");
     if (!selections[runtime] || !NAME.test(name ?? "")) throw new RenderError("argument_error", `--retire-pilot needs RUNTIME:NAME for a selected runtime, got ${pilot}`);
@@ -586,7 +635,11 @@ export function buildPlan(options) {
         if (actual === null || !deepEqual(actual, expected)) conflicts.push({ path: configFile, reason: `cannot remove agents.${name} without disturbing other settings; edit config.toml by hand` });
         else configText = removed;
       }
-      if (exists(file)) pilotActions.push(action("delete", file, runtime, { role: name, kind: "pilot", diff: lineDiff(readText(file), null) }));
+      const remaining = Object.entries(strictToml(configText ?? "", configFile).agents ?? {})
+        .filter(([other, value]) => other !== name && isPlainObject(value) && typeof value.config_file === "string" && path.resolve(layout.codex, value.config_file) === file)
+        .map(([other]) => other);
+      if (remaining.length) notes.push(`${file} kept: still registered by ${remaining.map((other) => `agents.${other}`).join(", ")}`);
+      else if (exists(file)) pilotActions.push(action("delete", file, runtime, { role: name, kind: "pilot", diff: lineDiff(readText(file), null) }));
       else if (entry === undefined) conflicts.push({ path: file, reason: `pilot ${name} not found` });
     }
   }
@@ -600,6 +653,9 @@ export function buildPlan(options) {
     }
   }
   actions.push(...pilotActions);
+  for (const removal of actions.filter((item) => item.op === "delete")) {
+    if (actions.some((item) => item !== removal && item.path === removal.path)) conflicts.push({ path: removal.path, reason: "planned for deletion and also as another action; a retired pilot must not share a file with an installed role" });
+  }
 
   return {
     format: "agent-skills-link-agents-plan",
@@ -614,20 +670,22 @@ export function buildPlan(options) {
     overwrite_modified: [...overwrite],
     actions,
     conflicts,
-    blocked: blockedReasons(selections, conflicts, options.allowUnqualified),
+    notes,
+    blocked: blockedReasons(selections, conflicts, options.allowUnqualified, layout.redirected, retire),
     allow_unqualified: Boolean(options.allowUnqualified),
   };
 }
 
-function blockedReasons(selections, conflicts, allowUnqualified) {
+function blockedReasons(selections, conflicts, allowUnqualified, redirected, retire) {
   const reasons = conflicts.map((conflict) => `conflict: ${conflict.path}: ${conflict.reason}`);
   for (const [runtime, selection] of Object.entries(selections)) {
     if (selection.version === null) reasons.push(`${runtime}: client version unknown; cannot qualify the ${selection.adapter} adapter`);
-    else if (!selection.qualified && !allowUnqualified) {
+    else if (!selection.qualified && !(allowUnqualified && redirected)) {
       reasons.push(selection.listed
         ? `${runtime}: version ${selection.version} was asserted, not detected; installing into the real home needs the detected client version`
-        : `${runtime}: ${selection.adapter} adapter is not qualified for ${selection.version}; probe it first or pass --allow-unqualified for a probe home`);
+        : `${runtime}: ${selection.adapter} adapter is not qualified for ${selection.version}; probe it first${allowUnqualified ? "; --allow-unqualified applies only to a redirected probe home (--home)" : " or pass --allow-unqualified with --home for a probe home"}`);
     }
+    if (!selection.qualified && retire.some((pilot) => pilot.startsWith(`${runtime}:`))) reasons.push(`${runtime}: a pilot can be retired only after its replacement adapter is qualified`);
   }
   return reasons;
 }
@@ -677,7 +735,7 @@ export function applyPlan(savedPlan, hooks = {}) {
   });
   if (planKey(plan) !== planKey(savedPlan)) throw new RenderError("stale_plan", "destinations or sources changed since the dry run; rerun the dry run and review it");
   if (plan.blocked.length) throw new RenderError("blocked", plan.blocked.join("\n"));
-  const layout = plan.layout;
+  const layout = { ...plan.layout, redirected: plan.home !== null, base: plan.home };
   const journalFile = path.join(layout.state, "journal.json");
   if (exists(journalFile)) throw new RenderError("interrupted_install", `an interrupted install needs manual recovery first: ${journalFile}`, { journal: JSON.parse(readText(journalFile)) });
 
@@ -693,6 +751,7 @@ export function applyPlan(savedPlan, hooks = {}) {
   if (!changes.length && ownershipRecorded(manifest, plan)) return { changed: false, plan, manifest };
 
   for (const item of changes) validateContent(item);
+  assertIsolated(layout, journalFile);
   fs.mkdirSync(layout.state, { recursive: true, mode: 0o700 });
   try {
     fs.writeFileSync(journalFile, `${JSON.stringify(journal, null, 2)}\n`, { mode: 0o600, flag: "wx" });
@@ -706,13 +765,16 @@ export function applyPlan(savedPlan, hooks = {}) {
     ...changes.filter((item) => item.kind === "config"),
     ...changes.filter((item) => item.op === "delete"),
   ];
+  let finished = null;
   try {
     for (const item of ordered) {
+      assertIsolated(layout, item.path);
       const current = hashFile(item.path);
       if (current !== item.before_sha256) throw new RenderError("concurrent_change", `${item.path} changed after the plan was checked`);
       let backup = null;
       if (current !== null) {
         backup = path.join(backupDir, path.relative(layout.claude, item.path).startsWith("..") ? path.join("codex", path.relative(layout.codex, item.path)) : path.join("claude", path.relative(layout.claude, item.path)));
+        assertIsolated(layout, backup);
         writePrivate(backup, fs.readFileSync(item.path));
       }
       journal.steps.push({ op: item.op, path: item.path, before_sha256: item.before_sha256, after_sha256: item.after_sha256, backup, state: "started" });
@@ -724,6 +786,29 @@ export function applyPlan(savedPlan, hooks = {}) {
       saveJournal();
       hooks.afterWrite?.(item);
     }
+    const next = structuredClone(manifest);
+    next.version = 1;
+    next.renderer_version = plan.renderer_version;
+    next.source_hash = plan.source_hash;
+    next.installs ??= {};
+    next.retired_pilots ??= [];
+    for (const [runtime, selection] of Object.entries(plan.selections)) {
+      const outputs = {};
+      for (const item of plan.actions.filter((entry) => entry.runtime === runtime && entry.kind === "file" && entry.op !== "delete")) outputs[item.path] = { sha256: item.after_sha256, role: item.role };
+      next.installs[runtime] = { adapter: selection.adapter, runtime_version: selection.version, version_source: selection.version_source, qualified: selection.qualified, installed_at: new Date().toISOString(), outputs };
+      if (runtime === "codex") {
+        const configFile = path.join(layout.codex, "config.toml");
+        const block = exists(configFile) ? findBlock(readText(configFile)) : null;
+        next.installs.codex.registration = block && !block.malformed ? { path: configFile, sha256: sha256(block.text) } : null;
+      }
+    }
+    for (const item of plan.actions.filter((entry) => entry.kind === "pilot")) {
+      const step = journal.steps.find((entry) => entry.path === item.path);
+      next.retired_pilots.push({ runtime: item.runtime, name: item.role, path: item.path, backup: step?.backup ?? null, at: new Date().toISOString() });
+    }
+    hooks.beforeManifest?.();
+    atomicWrite(path.join(layout.state, "manifest.json"), `${JSON.stringify(next, null, 2)}\n`);
+    finished = { changed: true, plan, manifest: next, backup_dir: journal.steps.some((step) => step.backup) ? backupDir : null };
   } catch (error) {
     if (error?.simulateCrash) throw error;
     const unresolved = rollback(journal);
@@ -737,31 +822,8 @@ export function applyPlan(savedPlan, hooks = {}) {
     fs.unlinkSync(journalFile);
     throw new RenderError(error.code ?? "apply_failed", `install failed and was rolled back: ${error.message}`, { backup_dir: backupDir });
   }
-
-  const next = structuredClone(manifest);
-  next.version = 1;
-  next.renderer_version = plan.renderer_version;
-  next.source_hash = plan.source_hash;
-  next.installs ??= {};
-  next.retired_pilots ??= [];
-  for (const [runtime, selection] of Object.entries(plan.selections)) {
-    const outputs = {};
-    for (const item of plan.actions.filter((entry) => entry.runtime === runtime && entry.kind === "file" && entry.op !== "delete")) outputs[item.path] = { sha256: item.after_sha256, role: item.role };
-    next.installs[runtime] = { adapter: selection.adapter, runtime_version: selection.version, version_source: selection.version_source, qualified: selection.qualified, installed_at: new Date().toISOString(), outputs };
-    if (runtime === "codex") {
-      const configFile = path.join(layout.codex, "config.toml");
-      const block = exists(configFile) ? findBlock(readText(configFile)) : null;
-      next.installs.codex.registration = block && !block.malformed ? { path: configFile, sha256: sha256(block.text) } : null;
-    }
-  }
-  for (const item of plan.actions.filter((entry) => entry.kind === "pilot")) {
-    const step = journal.steps.find((entry) => entry.path === item.path);
-    next.retired_pilots.push({ runtime: item.runtime, name: item.role, path: item.path, backup: step?.backup ?? null, at: new Date().toISOString() });
-  }
-  fs.mkdirSync(layout.state, { recursive: true, mode: 0o700 });
-  atomicWrite(path.join(layout.state, "manifest.json"), `${JSON.stringify(next, null, 2)}\n`);
   fs.unlinkSync(journalFile);
-  return { changed: true, plan, manifest: next, backup_dir: journal.steps.some((step) => step.backup) ? backupDir : null };
+  return finished;
 }
 
 function ownershipRecorded(manifest, plan) {
@@ -798,6 +860,7 @@ function restore(step) {
 export function resolveInterrupted(home, id, env) {
   const layout = resolveLayout(home, env);
   const journalFile = path.join(layout.state, "journal.json");
+  assertIsolated(layout, journalFile);
   if (!exists(journalFile)) throw new RenderError("argument_error", "no interrupted install is recorded");
   const journal = JSON.parse(readText(journalFile));
   if (journal.id !== id) throw new RenderError("argument_error", `recorded interrupted install is ${journal.id}, not ${id}`);
@@ -838,6 +901,7 @@ export function formatPlan(plan) {
     lines.push(`${item.op.padEnd(6)} ${item.path}${item.kind === "pilot" ? " (retire pilot)" : ""}`);
     if (item.diff) lines.push(item.diff.split("\n").map((line) => `    ${line}`).join("\n"));
   }
+  for (const note of plan.notes ?? []) lines.push(`NOTE ${note}`);
   for (const reason of plan.blocked) lines.push(`BLOCKED ${reason}`);
   return `${lines.join("\n")}\n`;
 }
