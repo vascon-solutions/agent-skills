@@ -2565,7 +2565,7 @@ function prepareChecks(ctx, ledger, item) {
   const { candidate, repo } = ledger;
   if (candidate.state !== "frozen" || item.candidate_oid !== candidate.oid) fail("invariant_error", "publication uses the frozen candidate unchanged", { expected: candidate.oid, observed: item.candidate_oid });
   publicationAuthority(ledger, item);
-  if (item.kind === "push" && ledger.review_bound) requireShapeSweeps(ctx, ledger, item.candidate_oid);
+  if (item.kind === "push") requireShapeSweeps(ctx, ledger, item.candidate_oid);
   const drift = localIdentity(ctx, ledger, "frozen");
   if (drift.environment.length > 0) fail("environment_error", "the recorded remote is not configured here", { observed: drift.environment });
   if (drift.mismatches.length > 0) fail("identity_mismatch", "the checkout drifted from the frozen candidate; stop before publishing", { observed: drift.mismatches });
@@ -2722,7 +2722,7 @@ function publicationChecks(ctx, ledger, item) {
   if (TERMINAL_STEPS.has(last.step)) fail("invariant_error", `the operation already ended as ${last.step}`, { id: item.operation_id });
   if (item.step === "verified") {
     // Review or sweep records may change between preparing and verifying a push.
-    if (events[0].kind === "push" && ledger.review_bound) requireShapeSweeps(ctx, ledger, events[0].candidate_oid);
+    if (events[0].kind === "push") requireShapeSweeps(ctx, ledger, events[0].candidate_oid);
     verifiedObservationChecks(ledger, item);
   }
 }
@@ -2744,7 +2744,10 @@ function appendChecks(ctx, ledger, field, item) {
       const prior = item.supersedes_id ? ledger.role_runs.find((run) => run.id === item.supersedes_id) : null;
       const dispatches = prior ? reserves(item) && !reserves(prior) : !["error", "cancelled"].includes(item.status);
       if (ledger.review_bound && item.role === "reviewer" && item.mode === "implementation" && item.execution === "delegated" && dispatches) {
-        const outstanding = currentItems(ledger.role_runs).filter((run) => run.role === "reviewer" && run.mode === "implementation" && run.execution === "delegated" && reserves(run)).length;
+        // A finished dispatch stays reserved until a delegated review cycle records its result.
+        const delegated = currentItems(ledger.role_runs).filter((run) => run.role === "reviewer" && run.mode === "implementation" && run.execution === "delegated" && !["error", "cancelled"].includes(run.status));
+        const recorded = new Set(currentItems(ledger.reviews).filter((review) => review.source === "delegated" && review.cycle_id !== null).map((review) => review.cycle_id)).size;
+        const outstanding = delegated.filter(reserves).length + Math.max(0, delegated.filter((run) => !reserves(run)).length - recorded);
         if (ledger.review_bound.rounds_used + outstanding >= ledger.review_bound.max_rounds + ledger.review_bound.extension_rounds) fail("invariant_error", "review bound exhausted before dispatch; outstanding dispatches reserve their cycles");
         if (ledger.candidate.state !== "frozen" || item.candidate_oid !== ledger.candidate.oid || ledger.review_bound.measured_oid !== ledger.candidate.oid) fail("invariant_error", "finalize the frozen candidate bound before dispatch");
       }
@@ -3164,11 +3167,13 @@ function commandSetReviewBound(options) {
 // unpublished fixes carried into a later commit still need a sweep of this one.
 function requireShapeSweeps(ctx, ledger, oid) {
   const pushed = ledger.publications.filter((event) => event.kind === "push" && event.step === "verified").map((event) => event.intended.oid);
+  const applies = (finding, target) => finding.fix_oid !== null
+    ? isAncestor(ctx.worktree, finding.fix_oid, target)
+    : contentApplies(ctx, ledger, finding.fix_content_id, finding.fix_content_manifest, { endpoint: "push", candidate_oid: target });
   const fixed = currentItems(ledger.reviews).flatMap((review) => review.findings).filter((finding) =>
-    finding.disposition === "fixed" && finding.fix_oid !== null &&
-    isAncestor(ctx.worktree, finding.fix_oid, oid) &&
-    !pushed.some((head) => isAncestor(ctx.worktree, finding.fix_oid, head))
+    finding.disposition === "fixed" && applies(finding, oid) && !pushed.some((head) => applies(finding, head))
   );
+  if (fixed.length > 0 && !ledger.review_bound) fail("invariant_error", "set the review bound before pushing fixes; their shape sweeps are checked against it");
   for (const finding of fixed) {
     if (!finding.shape?.trim()) fail("invariant_error", "fixed findings need shape labels before publication");
     const sweep = currentItems(ledger.defect_shapes).find((item) => item.shape === finding.shape && item.candidate_oid === oid && item.sweep === "done");
