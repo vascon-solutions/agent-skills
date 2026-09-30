@@ -105,7 +105,7 @@ jq -n --arg oid "$oid" --arg session "$session" --arg at "$(date -u +%Y-%m-%dT%H
 owned append role_runs < "$evidence/review-1-run.json"
 ```
 
-The helper refuses the dispatch record when the bound has no cycle left; outstanding delegated runs reserve their cycles. After the role returns and its envelope checks out, append a successor with `supersedes_id: "review-1-run"`, the observed settings, `status`, `ended_at` and a `result_summary`, then the `reviews` record with `source: "delegated"` and the cycle it consumed. A role that is missing or returns a malformed result gets the successor with its real status, and any permitted inline replacement gets its own `execution: "inline"` run with the actual `fallback_reason`.
+The helper refuses the dispatch record when the bound has no cycle left; outstanding delegated runs reserve their cycles. After the role returns and its envelope checks out, append a successor with `supersedes_id: "review-1-run"`, the observed settings, `status`, `ended_at` and a `result_summary`, then the `reviews` record with `source: "delegated"` and the cycle it consumed. A role that is missing or returns a malformed result gets the successor with its real status, and any permitted inline replacement gets its own `execution: "inline"` run with the actual `fallback_reason`. When no child ran, keep that successor's `result_summary` empty and `result_report` null: the helper counts any failed dispatch that carries a result toward the delegate limit.
 
 ## Resume An Interrupted Delivery
 
