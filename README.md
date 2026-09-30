@@ -56,6 +56,8 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 
 ## Skills
 
+`docker-app-verify` connects configured agent-devbox applications to the maintained UI/API audits, preserving source identity, reports and scoped cleanup. Unsupported projects retain their existing workflow.
+
 | Skill                       | Purpose                                                                                                                                                                                                                                                                              |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `audit-api`                 | Audit focused endpoints, dependent API journeys, role boundaries, OpenAPI/Swagger surfaces, or rollout readiness with Hurl-first execution, hardened curl fallback, compact redacted evidence, and a calibrated verdict                                                              |

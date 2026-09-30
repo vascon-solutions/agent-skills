@@ -56,6 +56,10 @@ the required outcome is materially unclear.
 - Stop only audit-started processes, attempt interruption cleanup, and record
   cleanup failure without deleting evidence.
 
+## Supplied Docker Environment
+
+For an agent-devbox brief, use the supplied Docker executor, URLs, source receipts and evidence directory. The caller follows [docker-app-verify](../docker-app-verify/SKILL.md) and owns application shutdown; do not start duplicate services. Acquire/end the exact audit lease and preserve the report before returning. If its executor cannot cover the required scenario, report that gap rather than silently broadening capabilities or bypassing admission.
+
 ## Initialize And Probe
 
 Resolve helper paths relative to this skill directory, then run:

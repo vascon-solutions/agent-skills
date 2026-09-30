@@ -37,6 +37,8 @@ Read [validation](references/validation.md) when choosing checks or reusing evid
 
 Delegate a requested browser audit (`audit-ui`) to an available audit role, such as a `ui-auditor` agent definition, when the runtime offers one. It does not use up the repository's delegated implementation-review allowance. Run it on a cheaper model only when no explicit model or effort choice from the user or repository is in force. Implementation and fixes stay with the delivery owner. Before delegating, prove which URL serves the candidate. Hand over a brief with URLs, available test personas and secure credential sources, fixture identifiers and scenarios, so the auditor does not rediscover them. Consume its verdict, findings and report path, not its transcript, and send rechecks for affected checkpoints only. If the runtime cannot select the role, perform the audit inline and record that limitation (`role_runs` with `execution: inline` and its `fallback_reason`). A failing audit stays failing until fixed and rechecked.
 
+When changed behavior needs live application acceptance and the project has an agent-devbox configuration, use [docker-app-verify](../docker-app-verify/SKILL.md) to resolve the worktree, start only required components, hand off the audit, retain its report, and stop owned resources. Unsupported projects keep their established validation path; do not infer a broad Docker rollout or new infrastructure authority.
+
 When a check fails, read [debugging](references/debugging.md), investigate, and fix related failures within the authorized scope. A recoverable failure is work to do, not automatically a user approval gate. Record unrelated/environmental failures and their effect on completion.
 
 ## 3. Review And Remediate
