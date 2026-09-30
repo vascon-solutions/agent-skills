@@ -56,10 +56,11 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 
 ## Skills
 
-`docker-app-verify` connects configured agent-devbox applications to the maintained UI/API audits, preserving source identity, reports and scoped cleanup. Unsupported projects retain their existing workflow.
+`docker-app-verify` coordinates available, configured agent-devbox environments for generic UI/API feature audits. Project recipes remain in the runner; absent or unsupported integrations retain their established execution path. Supplied environments preserve candidate identity, executor limits, one evidence directory and explicit cleanup ownership. See the [integration decisions and API executor follow-up](docs/specs/runtime-feature-audit-integration.md).
 
 | Skill                       | Purpose                                                                                                                                                                                                                                                                              |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `docker-app-verify`         | Coordinate a supported agent-devbox environment, hand off required UI/API feature checkpoints, retain source and audit evidence, and clean up only created resources |
 | `audit-api`                 | Audit focused endpoints, dependent API journeys, role boundaries, OpenAPI/Swagger surfaces, or rollout readiness with Hurl-first execution, hardened curl fallback, compact redacted evidence, and a calibrated verdict                                                              |
 | `audit-ui`                  | Audit a focused running UI feature or end-to-end journey with service readiness checks, critical-page screenshots, functional evidence, a calibrated verdict, and prioritized UI/UX improvements                                                                                     |
 | `test-audit` | Evaluate permanent-test admission and rationalize authorized test scopes while preserving critical contracts |

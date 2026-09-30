@@ -56,13 +56,20 @@ the required outcome is materially unclear.
 - Stop only audit-started processes, attempt interruption cleanup, and record
   cleanup failure without deleting evidence.
 
-## Supplied Docker Environment
+## Resolve The Execution Environment
 
-For an agent-devbox brief, use the supplied Docker executor, URLs, source receipts and evidence directory. The caller follows [docker-app-verify](../docker-app-verify/SKILL.md) and owns application shutdown; do not start duplicate services. Acquire/end the exact audit lease and preserve the report before returning. If its executor cannot cover the required scenario, report that gap rather than silently broadening capabilities or bypassing admission.
+Reuse a supplied environment when its URLs, candidate source identities and ownership match the requested audit. If none was supplied and an available agent-devbox installation supports the repository, use [docker-app-verify](../docker-app-verify/SKILL.md) to resolve only the required components and then resume this audit. When called from that lifecycle owner, do not invoke it again. If the runner is absent or the project is unsupported, retain the documented standalone path unless Docker verification was explicitly required. Do not bypass a configured run's admission, readiness or ownership failure.
+
+The provider owns its application lifecycle; this auditor owns its interactions, session/lease closure and verdict. Do not start duplicate services or stop borrowed services. Adopt a supplied external evidence directory and complete its brief once, skipping workspace initialization below. Apply these rules to supplied environments from any provider, not only agent-devbox.
+
+Compare selected operations with the supplied executor's authentication, mutation, assertion and persistence support. This takes precedence over the Hurl/curl preference below. Schema and missing-route probes cover only those checks. Select an alternative executor only when the brief documents an authorized reachable path compatible with provider admission and ownership; otherwise leave unsupported feature checkpoints unverified.
+
+Verify which relevant UI/API/shared revisions or source digests the served environment represents. Mark candidate acceptance unverified where source identity is missing or mismatched. Preserve required feature checkpoints even when an executor cannot cover them; use the existing verdict rules for blocked or partial coverage.
 
 ## Initialize And Probe
 
-Resolve helper paths relative to this skill directory, then run:
+When no external evidence directory was supplied, resolve helper paths relative
+to this skill directory and run:
 
 ```bash
 node scripts/init-api-audit-workspace.mjs --feature "<feature>" \
@@ -73,7 +80,10 @@ node scripts/probe-services.mjs --service "api=<readiness-url>"
 Probe URLs reject embedded credentials, fragments, and query parameters by default. Opt in
 only a known query-bearing service with repeatable
 `--allow-nonsecret-query <service-name>`.
-Complete `audit-brief.md` once and keep every generated file in the workspace.
+Complete the selected `audit-brief.md` once and keep every generated file in its
+supplied or initialized workspace. Verify readiness through the provider's
+documented probe or receipt, from the executor's network location. Do not probe
+container-only URLs from the host.
 
 ## Discover The Effective Contract
 
@@ -90,13 +100,16 @@ Complete `audit-brief.md` once and keep every generated file in the workspace.
 
 ## Select The Executor
 
-Prefer Hurl 6.1+ for authentication, captures, dependent requests, and
+When no API executor was supplied, prefer Hurl 6.1+ for authentication,
+captures, dependent requests and
 assertions. Use curl for readiness, independent checks, or safe fallback. If
 Hurl is absent, do not install it implicitly. Read
 [references/hurl-execution.md](references/hurl-execution.md) before generating
 or executing scenarios.
 
 ## Execute Coverage
+
+Map acceptance criteria to selected operations, actors, expected results and independent persistence or terminal-state reads. API coverage owns those contracts; require UI coverage only for distinct visible-flow requirements. When both audits run, correlate record IDs, keep separate reports in one evidence directory and run dependent steps sequentially. Do not infer UI acceptance from API success.
 
 - Start with readiness/authentication, then the primary success path.
 - In focused and journey modes add one safe, useful risk-based negative case
@@ -130,13 +143,17 @@ reusable tokens, or full unreviewed response dumps.
 
 ## Report And Clean Up
 
-- Complete `report.md` and verify every evidence link exists.
+- Complete the agreed report (`report.md`, or `api-report.md` for a combined
+  audit) and verify every evidence link exists.
 - Include contract inventory, checkpoint outcomes, record IDs, functional and
   contract findings, reliability/security/developer-experience improvements,
   blocked areas, regression recommendations, and cleanup.
 - Remove ephemeral credentials and raw temporary output; preserve sanitized
   evidence for failed or blocked audits.
-- Stop only audit-started services unless asked to leave them running.
+- Close the exact audit lease or executor session. For a supplied environment,
+  return cleanup evidence to its lifecycle owner and leave borrowed application
+  services running. On the standalone path, stop only audit-started services
+  unless asked to leave them running.
 - Confirm the tested repository matches its baseline and report any residue.
 - Return a concise verdict, highest-impact findings, and report path.
 

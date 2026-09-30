@@ -1,26 +1,36 @@
 ---
 name: docker-app-verify
-description: Run selected configured application components in Docker for real UI or API verification, retain audit evidence, and clean up owned resources. Use for runtime acceptance of changed behavior; not every code edit or production deployment.
+description: Coordinate a configured agent-devbox environment for real UI or API feature verification, retain audit evidence, and clean up owned resources. Use when runtime acceptance needs a supported Docker environment.
 ---
 
 # Docker Application Verification
 
-Use the installed agent-devbox runner and protected machine project catalog. This skill owns lifecycle coordination; [audit-ui](../audit-ui/SKILL.md) and [audit-api](../audit-api/SKILL.md) retain interaction and verdict ownership. Preserve the caller's delivery endpoint and authorization.
+Use an available agent-devbox installation for repositories it supports. This skill owns environment lifecycle coordination; [audit-ui](../audit-ui/SKILL.md) and [audit-api](../audit-api/SKILL.md) own interactions, evidence and verdicts. Preserve the caller's acceptance scope, delivery endpoint and authorization.
 
-## Resolve The Run
+## Resolve The Environment
 
-Read the tested repository's instructions and relevant acceptance criteria. Locate the runner from supplied context or the machine's `agent-devbox` command; the maintained local installation may be at `~/Code/agent-devbox/src/cli.mjs`. Do not install or provision it implicitly. Use `node <runner>/src/cli.mjs help` to confirm capabilities.
+Read repository instructions and the feature's acceptance criteria. Locate the runner from supplied context or an available `agent-devbox` command. For a supplied source installation, use its documented Node entrypoint. Confirm installed capabilities through help, discovery and the selected adapter's documentation. Do not assume a machine path, install the runner, provision images or create project configuration implicitly.
 
-Run `discover --ui <absolute-worktree>` to resolve `~/.config/agent-devbox/projects.json` by canonical Git repository identity. Confirm selected component, worktree, shared inputs, existing API, and artifact destination against the task. A repository without a unique mapping is unsupported: report the missing configuration or use an explicitly supplied protected config. Never guess an API, choose by directory basename, or create a second registry to avoid queuing.
+Discover the candidate checkout through the runner's protected project catalog or use an explicitly supplied protected config. Confirm the repository identity, selected UI/API/shared inputs and evidence destination. Do not select projects by directory name or guess dependencies. A missing mapping means the repository is unsupported. Ambiguous mappings or invalid configuration remain blockers until resolved.
 
-Read [the lifecycle guide](references/lifecycle.md) when executing. Current reviewed adapters are NCDMB procurement frontend plus its selected shared build input, and Vascon Bits Storybook. Those default components start no APIs, databases or Redis. For NCDMB API-only checks, `up --ui <worktree> --component api` starts a gateway to the configured existing API without a frontend build; confirm this component appears in the selected runner’s discovery/help before using it, since older VPS releases do not have it. It requires the existing Node image and reports API source identity as unverified. API reads currently cover only unauthenticated NCDMB schema and missing-route checks; they do not establish authenticated endpoint or persistence correctness. Local NCDMB `managed-api`/`managed-stack` components build and run the API against disposable audit data on existing local Postgres/Redis when the protected config enables them. A persistent NCDMB base stack (golden data, three apps, `*.test` names) is the default target: use `route` to choose between the base and a golden copy (see the lifecycle guide). Other unsupported runtime/data needs remain explicit gaps, not implicit provisioning authority.
+If the runner is absent or the project is unsupported, retain the caller's documented execution path unless Docker verification was explicitly required. A configured run that fails readiness, admission or ownership checks remains a reported blocker; do not bypass it with an unmanaged executor or another registry.
 
-## Audit And Close
+Read [the lifecycle guide](references/lifecycle.md) before execution. Project components, personas, fixtures, routing, data initialization, logout evidence and remote limitations belong to the installed runner's adapter/configuration and authoritative project docs. Select only supported components needed to serve the candidate. Reuse a supplied environment when its source, ownership and capabilities match the task.
 
-Supply a focused brief with source receipt, intended change, URLs seen from the auditor's location, allowed operations, protected credential reference if needed, evidence directory, and cleanup owner. Add the task-specific scenarios to the generated brief. Readiness does not prove served source or application behavior.
+## Hand Off Feature Acceptance
 
-Use the runner's Docker browser with `audit-ui`; never replace required Docker browser evidence with host-only screenshots. Use `audit-api` for the bounded API checks when they cover the requested contract. Keep UI audits in visible application flows. Never use raw API calls to manufacture UI state.
+Supply the handoff contract in the lifecycle guide. Include candidate source identities, required checkpoints, auditor-reachable URLs, executor coverage and restrictions, actors and protected credential references, allowed data changes, evidence directory and cleanup owners. Add feature scenarios to the generated brief. Readiness alone proves neither candidate source nor behavior.
 
-Always preserve `report.md`, source/image receipts, selected observations, and cleanup outcome, including failed/blocked runs. In a finally-style cleanup path, end the current audit with its exact token, stop the exact environment, wait for `stopped`, and inspect `cleanup.json` and the registry. An uncertain logout quarantines the account; do not force reset, change aliases, or treat browser closure as logout. Recovery is allowed only after the runner confirms the exact supervisor is dead. Leave unrelated services and existing sessions untouched.
+Select `audit-ui` for visible flows and relevant usability; select `audit-api` for operation contracts, permissions and durable business behavior. Use both only when their checkpoints protect distinct requirements. Correlate shared record identifiers and run dependent steps sequentially. UI state changes must follow visible application flows.
 
-No remote installation, transfer, public preview exposure, migrations or fixture writes are implied. `up` accepts only verified Storybook source bundles, with explicit protected config and an independently retained digest. NCDMB bundles remain verification-only. A source bundle has no Git history or staging state and cannot resume an editable task. Use the runner's VPS proposal for remaining remote integration and approvals; preserve existing CLIs and tmux sessions.
+Use the supplied Docker executor for checks it supports. Determine API operation, authentication, mutation, assertion and persistence support before executing a feature journey. A capability flag or schema probe alone does not establish this coverage. An alternative executor must be explicitly selected in the brief, documented as reachable, authorized and compatible with the runner's admission and ownership contract. Otherwise mark unsupported checks unverified; never reduce the acceptance scope to obtain `PASS`.
+
+## Preserve Evidence And Close
+
+Use one external evidence directory for the brief, reports, source/image receipts and cleanup outcomes. When both audit types run, keep separate reports and a combined checkpoint verdict. Preserve failed and blocked evidence.
+
+Auditors close their own task sessions or exact audit leases. The lifecycle owner stops only environments it created, including queued or failed starts, and verifies completion through the installed runner's status and cleanup receipts. Borrowed persistent services remain running. Perform cleanup even after audit failure or interruption; report residue separately from behavioral results.
+
+Follow the runner's account exclusivity and documented logout evidence. Uncertain authentication cleanup stays quarantined where the runner requires it. Do not reset sessions, change account aliases, lower resource guards or remove registry records to proceed. Recovery requires a verifiably dead exact owner.
+
+Choosing a documented managed environment can include its authorized data initialization and teardown. It does not authorize resetting shared data, rebuilding fixtures, changing persistent base services, remote installation, source transfer or public exposure. Unsupported needs remain explicit gaps.
