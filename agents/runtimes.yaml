@@ -6,7 +6,9 @@ claude:
   adapters:
     agent-file:
       # 2.1.285: all four roles and modes spawned from rendered files, 2026-09-30.
-      qualified: ["2.1.285"]
+      # 2.1.287: all four installed roles loaded and spawned, 2026-10-02;
+      # post-merge evidence includes the corrected watcher recheck.
+      qualified: ["2.1.285", "2.1.287"]
 codex:
   adapters:
     standalone:

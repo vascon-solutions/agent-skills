@@ -8,7 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { parse as parseToml } from "smol-toml";
-import { parse as parseYaml } from "yaml";
+import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import {
   applyPlan,
   applyRepoPointer,
@@ -180,7 +180,10 @@ test("a repeated apply is a no-op with no backup, and a canonical change updates
   const qualifiedRoot = path.join(SANDBOX, `canonical-${(counter += 1)}`);
   fs.cpSync(path.join(root, "agents"), path.join(qualifiedRoot, "agents"), { recursive: true });
   fs.symlinkSync(path.join(root, "skills"), path.join(qualifiedRoot, "skills"));
-  write(path.join(qualifiedRoot, "agents", "runtimes.yaml"), read(path.join(qualifiedRoot, "agents", "runtimes.yaml")).replace('qualified: ["2.1.285"]', 'qualified: ["2.1.285", "9.9.9"]'));
+  const runtimesFile = path.join(qualifiedRoot, "agents", "runtimes.yaml");
+  const runtimes = parseYaml(read(runtimesFile));
+  runtimes.claude.adapters["agent-file"].qualified.push("9.9.9");
+  write(runtimesFile, stringifyYaml(runtimes));
   assert.equal(install(probeHome, { root: qualifiedRoot, versions: { claude: "9.9.9", codex: "0.146.0" } }).changed, true, "metadata-only changes refresh the manifest");
   const refreshed = JSON.parse(read(path.join(probeHome, ".agent-skills", "link-agents", "manifest.json")));
   assert.equal(refreshed.installs.claude.qualified, true);
@@ -368,6 +371,44 @@ test("malformed config and unknown or unqualified client versions block installa
 
   const unqualified = plan(tempHome(), { allowUnqualified: false, versions: { claude: "9.9.9", codex: "0.146.0" } });
   assert.ok(unqualified.blocked.some((reason) => /claude: agent-file adapter is not qualified for 9\.9\.9/.test(reason)));
+
+  // Exercise executable detection, not the separate asserted-version path.
+  // HOME is temporary but --home is omitted to test the real-install gate.
+  for (const runtime of ["claude", "codex"]) {
+    const home = tempHome();
+    const executable = path.join(SANDBOX, `version-bin-${(counter += 1)}`, runtime);
+    const planFile = path.join(SANDBOX, `version-plan-${counter}.json`);
+    const stable = VERSIONS[runtime];
+    const banner = (version) => runtime === "claude" ? `${version} (Claude Code)` : `codex-cli ${version}`;
+    const cases = [
+      [banner(stable), stable],
+      [stable, stable],
+      ...["-alpha.1", "+dev", "-beta.1+vendor", ".1", "vendor"].map((suffix) => [banner(`${stable}${suffix}`), null]),
+      [banner(`1${stable}`), `1${stable}`],
+      [`unrecognized build ${stable}`, null],
+      [`${banner(`${stable}-alpha.1`)}\n${banner(stable)}`, null],
+    ];
+    for (const [output, expectedVersion] of cases) {
+      write(executable, `#!/bin/sh\ncat <<'VERSION_OUTPUT'\n${output}\nVERSION_OUTPUT\n`);
+      fs.chmodSync(executable, 0o700);
+      const detected = spawnSync(CLI, ["--runtime", runtime, ...(runtime === "codex" ? ["--codex-adapter", "standalone"] : []), "--allow-unqualified", "--plan-out", planFile], {
+        encoding: "utf8",
+        env: { ...ENV, HOME: home, CLAUDE_CONFIG_DIR: path.join(home, ".claude"), CODEX_HOME: path.join(home, ".codex"), PATH: `${path.dirname(executable)}${path.delimiter}${process.env.PATH}` },
+      });
+      const qualified = expectedVersion === stable;
+      assert.equal(detected.status, qualified ? 0 : 2, output);
+      const detectedPlan = JSON.parse(read(planFile));
+      assert.deepEqual(detectedPlan.selections[runtime], {
+        adapter: runtime === "claude" ? "agent-file" : "standalone",
+        version: expectedVersion,
+        version_source: "detected",
+        listed: qualified,
+        qualified,
+      }, output);
+      assert.equal(detectedPlan.blocked.length, qualified ? 0 : 1, output);
+      assert.deepEqual(snapshot(home), {}, "version planning never installs files");
+    }
+  }
   const probePilot = tempHome();
   write(path.join(probePilot, ".claude", "agents", "ui-auditor.md"), "---\nname: ui-auditor\ndescription: pilot\n---\npilot\n");
   const unqualifiedRetire = plan(probePilot, { versions: { claude: "9.9.9", codex: "0.146.0" }, retirePilots: ["claude:ui-auditor"] });
