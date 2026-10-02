@@ -19,6 +19,7 @@ if [ ! -d "$SKILLS_DIR" ]; then
 fi
 
 SKILL_NAMES="
+docker-app-verify
 brainstorm
 unslop
 audit-api

@@ -9,6 +9,11 @@
 ## Scope And Runtime
 
 - Feature and mode:
+- Environment provider and ID:
+- Acceptance source:
+- Relevant candidate and served source identities:
+- Executor restrictions and unsupported checkpoints:
+- Related API report and correlated record IDs:
 - Environment:
 - Assumptions:
 - Browser capability and session:
@@ -47,6 +52,10 @@ proposed change, expected impact, and material screenshot when useful.
 
 ## Cleanup
 
+- Environment lifecycle owner:
+- Audit session/lease closure and evidence:
+- Borrowed services preserved:
+- Provider cleanup receipt and residue (when applicable):
 - Browser session closed:
 - Ephemeral auth removed:
 - Audit-started services stopped:

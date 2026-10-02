@@ -3,6 +3,14 @@
 ## Contract
 
 - Feature:
+- Acceptance source and required checkpoints:
+- Relevant UI/API/shared candidate and served source identities:
+- Environment provider and ID:
+- Executor coverage, restrictions and unsupported checkpoints:
+- Environment lifecycle owner:
+- Audit session/lease owner and closure requirements:
+- Report name: `report.md` or `ui-report.md`
+- Related API report and correlated record IDs (when required):
 - Mode: `focused | journey | rollout`
 - Environment: `local | test | staging | production`
 - Tested repository:
@@ -29,6 +37,8 @@
 
 ## Safety And Assumptions
 
+- Data isolation or serialization boundary:
+- Fixture identifiers:
 - Allowed mutations:
 - Repository baseline:
 - Bounded assumptions:

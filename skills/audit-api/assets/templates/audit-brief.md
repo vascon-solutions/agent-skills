@@ -1,6 +1,16 @@
 # API Audit Brief
 
 - Feature:
+- Acceptance source and required checkpoints:
+- Relevant UI/API/shared candidate and served source identities:
+- Environment provider and ID:
+- Executor operation/authentication/mutation/assertion/persistence support:
+- Executor restrictions, authorized alternatives and unsupported checkpoints:
+- Environment lifecycle owner:
+- Audit session/lease owner and closure requirements:
+- External evidence directory and report name (`report.md` or `api-report.md`):
+- Related UI report and correlated record IDs (when required):
+- Fixture identifiers and data isolation or serialization boundary:
 - Mode: focused | journey | rollout
 - Environment classification: local | test | staging | production
 - Mutation authorization and prohibited operations:
