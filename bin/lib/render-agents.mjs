@@ -336,7 +336,12 @@ function detectVersion(runtime, override) {
   if (override !== undefined) return /^\d+\.\d+\.\d+$/.test(override) ? override : null;
   const result = spawnSync(runtime, ["--version"], { encoding: "utf8", timeout: 20000 });
   if (result.status !== 0) return null;
-  const match = /(\d+\.\d+\.\d+)/.exec(result.stdout);
+  // Match the complete supported banner so unprobed builds cannot inherit a
+  // stable release's qualification through a numeric substring.
+  const pattern = runtime === "claude"
+    ? /^(\d+\.\d+\.\d+)(?: \(Claude Code\))?$/
+    : /^(?:codex-cli )?(\d+\.\d+\.\d+)$/;
+  const match = pattern.exec(result.stdout.trim());
   return match ? match[1] : null;
 }
 
