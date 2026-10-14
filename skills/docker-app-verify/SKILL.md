@@ -13,9 +13,9 @@ Read repository instructions and the feature's acceptance criteria. Locate the r
 
 Discover the candidate checkout through the runner's protected project catalog or use an explicitly supplied protected config. Confirm the repository identity, selected UI/API/shared inputs and evidence destination. Do not select projects by directory name or guess dependencies. A missing mapping means the repository is unsupported. Ambiguous mappings or invalid configuration remain blockers until resolved.
 
-If the runner is absent or the project is unsupported, retain the caller's documented execution path unless Docker verification was explicitly required. A configured run that fails readiness, admission or ownership checks remains a reported blocker; do not bypass it with an unmanaged executor or another registry.
+If the runner is absent, the project is unsupported, or no supported component can serve the candidate source (decided before any start, as the lifecycle guide's pre-start checklist describes, with a recorded limitation), retain the caller's documented execution path unless Docker verification was explicitly required. A configured run that fails readiness, admission or ownership checks remains a reported blocker; do not bypass it with an unmanaged executor or another registry.
 
-Read [the lifecycle guide](references/lifecycle.md) before execution. Project components, personas, fixtures, routing, data initialization, logout evidence and remote limitations belong to the installed runner's adapter/configuration and authoritative project docs. Select only supported components needed to serve the candidate. Reuse a supplied environment when its source, ownership and capabilities match the task.
+Read [the lifecycle guide](references/lifecycle.md) before execution and complete its pre-start checklist before any start; its items are selection decisions or recorded gaps, not mid-audit discoveries. Project components, personas, fixtures, routing, data initialization, logout evidence and remote limitations belong to the installed runner's adapter/configuration and authoritative project docs. Select only supported components needed to serve the candidate. Reuse a supplied environment when its source, ownership and capabilities match the task.
 
 ## Hand Off Feature Acceptance
 

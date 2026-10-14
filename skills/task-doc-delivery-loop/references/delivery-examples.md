@@ -17,7 +17,7 @@ ledger prepare-init --endpoint local --brief 'Implement the approved task locall
 
 Use `--remote NAME` when the delivery uses a configured remote. For a known GitHub Enterprise remote, add `--github-host HOST`; other hosts are not assumed to be GitHub. Add `--instruction PATH` for each applicable instruction file and `--skill-source PATH` for other loaded skills. The helper hashes those files and its own ledger sources.
 
-Inspect the generated `authorization.json` and `bootstrap.json`. Fill any existing grants, decisions, dependencies, requested audit and supplied spec check. For a dirty checkout, classify every reported `dirty_paths` entry in the `dirty_scope` decision. Use quoted literal filenames, including extensions. For an existing remote branch or PR, record verified adoption before initializing. Do not accept generated null or empty defaults when the context says otherwise.
+Inspect the generated `authorization.json` and `bootstrap.json`. Fill any existing grants, decisions, dependencies, requested audit (including a task-doc runtime acceptance checkpoint) and supplied spec check. For a dirty checkout, classify every reported `dirty_paths` entry in the `dirty_scope` decision. Use quoted literal filenames, including extensions. For an existing remote branch or PR, record verified adoption before initializing. Do not accept generated null or empty defaults when the context says otherwise.
 
 ```sh
 ledger init --runtime codex --session "$session" --task-doc "$task_doc" \

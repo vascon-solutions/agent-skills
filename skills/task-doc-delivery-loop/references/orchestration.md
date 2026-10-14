@@ -26,6 +26,15 @@ A required check does not automatically require a separate agent. Explicit user 
 
 Limits: one implementation owner; at most two independent read-only support jobs at once, fewer when the runtime or repository says so; no recursive delegation. Serialize audits that share an application, persona or fixture set, including across repositories that point at the same stack. Keep inputs stable while support work runs, or identify and recheck the conclusions a change affects.
 
+## Audits A Task Doc Requires
+
+A requested audit is an explicit user or repository request, or a runtime acceptance checkpoint in an approved task doc: an acceptance criterion or completion-verification row that requires observing UI, API or accessibility behavior in the running application. An explicit "none needed", an optional check or an illustrative mention does not count. When it is unclear whether a row counts, ask before bootstrap; do not default to required.
+
+- **Bootstrap.** Such a checkpoint sets `audit_policy` to `{required: true, state: pending, reason: <checkpoint reference>}`. After recording the passing audit, set `state: complete` with `update`.
+- **Coverage.** The helper checks only that at least one cited audit is `PASS`. The owner enforces one applicable `PASS` per required mode (`ui`, `api`, `a11y`) and coverage of every task checkpoint; implementation review checks both.
+- **Consequence.** `required: true` cannot be undone in this ledger: `update` refuses `required: false`, and amending the task doc through `source-add` or `source_refresh` does not touch `audit_policy`. A checkpoint that cannot be observed (no browser or API capability, no credentials, no environment that serves the candidate) yields a `BLOCKED` or `PARTIAL` audit, never a `PASS`, and the delivery is released as blocked listing the unverified checkpoints. Removing the requirement takes a new authorized delivery on the amended task doc, with its own ledger bootstrapped from that doc; the old ledger stays blocked and the new one cites it.
+- **Dispatch.** The order above still chooses between `auditor` and auditing inline. Either way the result is an `audits` record.
+
 ## Brief
 
 Send one brief per dispatch:
@@ -76,7 +85,7 @@ Use the ledger's existing records; selection needs no new schema.
 
 - **Delegated work.** Append a `role_runs` record before dispatch (`execution: delegated`, `status: running`) with the brief's requested tier, model and effort, and update it through a successor with the observed settings, status, block reason, `result_summary` and any saved report. Take `enforcement` from the [role dispatch defaults](role-dispatch.md) for that role and runtime. Save a report yourself when one is needed; roles do not write reports except an auditor's workspace.
 - **Delegated implementation review.** Dispatch only against the frozen candidate after `set-review-bound`. The helper reserves a cycle for the dispatch until a `delegated` review with that cycle records its result; a completed child does not release the reservation. Record the review with `source: delegated` and its `cycle_id`.
-- **Direct work.** Use ordinary validation, audit and review records: an owner review is `source: inline`, commands are validation records. Add a material direct-execution choice to the checkpoint summary only when it explains coverage or a limitation. Direct work has no `role_runs` record and is never labelled `role_unavailable`.
+- **Direct work.** Use ordinary validation, audit and review records: an owner review is `source: inline`, commands are validation records. Add a material direct-execution choice, with its reason, to the checkpoint summary when it explains coverage or a limitation, and always for a direct audit of a required task-doc checkpoint. Direct work has no `role_runs` record and is never labelled `role_unavailable`.
 - **Another approved independent agent.** A client discovers roles when its session starts, so a session that began before installation cannot select them. When you use another approved independent agent instead, record `execution: delegated`, `fallback_reason: role_unavailable` and that agent's own observed enforcement, not the role default.
 - **Actual fallback.** When a role you chose to use is absent or unusable, do the same bounded work inline when permitted and record `role_runs` with `execution: inline` and the real `fallback_reason`, such as `role_unavailable`, `model_unavailable`, `timeout` or `malformed_result`. Browser or API capability, a safe environment, authentication or the candidate URL cannot be invented by falling back; record the audit `BLOCKED` with the unverified scenarios.
 - **Independence unavailable.** Record `role_runs` with `execution: inline`, `status: blocked`, `block_reason: missing_capability` and `fallback_reason: independence_required`. Completion stays refused until an independent review of the final candidate is cited.

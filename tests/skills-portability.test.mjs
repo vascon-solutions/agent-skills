@@ -344,7 +344,7 @@ test("R1 carries the accepted audit-delegation and fresh-reviewer wording with i
   assert.match(loop, /available test personas and secure credential sources/);
   assert.doesNotMatch(loop, /free personas/);
   assert.match(loop, /If the runtime cannot select the role, perform the audit inline and record that limitation/);
-  assert.match(loop, /Where repo policy permits another delegated review, use a fresh reviewer with the remediation diff, original findings, claimed dispositions, affected requirements and candidate identity\. Otherwise verify remediation locally and state the independence limit\./);
+  assert.match(loop, /Where the effective cycle bound and delegate limit permit another delegated review \(a `null` limit means size cycles only\), use a fresh reviewer with the remediation diff, original findings, claimed dispositions, affected requirements and candidate identity\. Otherwise verify remediation locally and state the independence limit\./);
   assert.match(loop, /self-review is only ever supplementary/);
 });
 

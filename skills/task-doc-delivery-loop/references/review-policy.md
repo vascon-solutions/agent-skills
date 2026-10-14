@@ -46,6 +46,14 @@ successor, reserves a cycle until a `delegated` review cycle records its result,
 not merely until the run is marked complete. At exhaustion stop ungranted work
 and report blockers.
 
+With no repository delegate rule and no user instruction, `delegated_limit` is
+`null`: delegated reviews are bounded only by the size cycles. Generic wording
+such as "request independent review" is not a numeric limit. Record a decision
+that the repository sets none and cite it in `basis.delegated_decision`; the
+helper does not require one for a null limit, but the record keeps the choice
+visible. A non-null limit needs a cited repository rule or user wording that
+names a number. A permitted delegated review is not an expected one.
+
 `extension_rounds` starts at 0. `overrides` contains exact copies of recorded
 review/remediation grants, each with positive `additional_cycles`; their sum is
 the extension. A specific request to fix one further findings batch gives one
