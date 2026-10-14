@@ -4605,6 +4605,79 @@ test("B5 every hinted failure site carries its hint; other failures carry hint n
   assert.equal(refused(owner.update({ owner: null }), 2, "invariant_error").hint, null, "an unlisted site has no hint");
 });
 
+// The examples' write wrapper, run as written against a stub helper that
+// replays scripted envelopes and records each invocation and its stdin.
+function ownedWrapper() {
+  const examples = fs.readFileSync(path.join(root, "skills", "task-doc-delivery-loop", "references", "delivery-examples.md"), "utf8");
+  const section = examples.split("\n## Owned Writes\n")[1];
+  assert.ok(section, "delivery-examples.md keeps its Owned Writes section");
+  const block = section.match(/```sh\n([\s\S]*?)```/);
+  assert.ok(block, "the Owned Writes section holds one sh block");
+  return block[1];
+}
+
+function runOwned(responses, script) {
+  const dir = fs.mkdtempSync(path.join(SANDBOX, "owned-"));
+  const stub = path.join(dir, "stub-helper.mjs");
+  fs.writeFileSync(path.join(dir, "responses.json"), JSON.stringify(responses));
+  fs.writeFileSync(stub, `import fs from "node:fs";
+const dir = ${JSON.stringify(dir)};
+const responses = JSON.parse(fs.readFileSync(dir + "/responses.json", "utf8"));
+const calls = fs.existsSync(dir + "/calls.json") ? JSON.parse(fs.readFileSync(dir + "/calls.json", "utf8")) : [];
+let stdin = "";
+try { stdin = fs.readFileSync(0, "utf8"); } catch {}
+calls.push({ args: process.argv.slice(2), stdin });
+fs.writeFileSync(dir + "/calls.json", JSON.stringify(calls));
+const response = responses[calls.length - 1] ?? { status: 99, body: { ok: false, code: "unexpected_call" } };
+process.stdout.write(JSON.stringify(response.body) + "\\n");
+process.exit(response.status);
+`);
+  fs.writeFileSync(path.join(dir, "claim-id"), "claim-1\n");
+  fs.writeFileSync(path.join(dir, "revision"), "5\n");
+  const program = `helper=${JSON.stringify(stub)}\nrepo=${JSON.stringify(dir)}\nevidence=${JSON.stringify(dir)}\nruntime=claude\nsession=owner\n${ownedWrapper()}\n${script}\n`;
+  const result = spawnSync("bash", ["-c", program], { encoding: "utf8", env: baseEnv });
+  const calls = fs.existsSync(path.join(dir, "calls.json")) ? JSON.parse(fs.readFileSync(path.join(dir, "calls.json"), "utf8")) : [];
+  return { status: result.status, stdout: result.stdout, stderr: result.stderr, calls, dir, revision: fs.readFileSync(path.join(dir, "revision"), "utf8").trim() };
+}
+
+const stale = { status: 3, body: { ok: false, command: "append", code: "stale_revision" } };
+const revisionFlag = (call) => call.args[call.args.indexOf("--expected-revision") + 1];
+
+test("B6 the examples' owned wrapper stops on failure and retries exactly once on stale_revision", () => {
+  const guarded = 'printf %s "{\\"id\\":\\"x\\"}" | owned append limitations && touch "$evidence/guarded-write"; echo "exit=$?"';
+  const failedWrite = runOwned([{ status: 2, body: { ok: false, command: "append", code: "invariant_error" } }], guarded);
+  assert.equal(failedWrite.calls.length, 1);
+  assert.equal(fs.existsSync(path.join(failedWrite.dir, "guarded-write")), false, "a guarded write never follows a failed helper call");
+  assert.match(failedWrite.stdout, /exit=2/);
+
+  const retried = runOwned([stale, { status: 0, body: { ok: true, data: { value: 7 } } }, { status: 0, body: { ok: true, command: "append", changed: true, revision: 8, data: {} } }], guarded);
+  assert.equal(retried.calls.length, 3, "write, re-read, one retry");
+  assert.deepEqual(retried.calls.map((call) => call.args[0]), ["append", "show", "append"]);
+  assert.equal(revisionFlag(retried.calls[0]), "5");
+  assert.equal(revisionFlag(retried.calls[2]), "7", "the retry uses the re-read revision");
+  assert.equal(retried.calls[2].stdin, retried.calls[0].stdin, "the retry sends the same input");
+  assert.equal(retried.revision, "8", "the new revision is saved for the next tool call");
+  assert.ok(fs.existsSync(path.join(retried.dir, "guarded-write")));
+  assert.equal(retried.stdout.trim().split("\n").filter((line) => line.startsWith("{")).length, 1, "only the final envelope is printed");
+
+  const twice = runOwned([stale, { status: 0, body: { ok: true, data: { value: 7 } } }, stale], guarded);
+  assert.equal(twice.calls.length, 3, "a second stale revision stops");
+  assert.match(twice.stdout, /exit=3/);
+  assert.equal(fs.existsSync(path.join(twice.dir, "guarded-write")), false);
+
+  for (const code of ["claim_mismatch", "mutex_held", "owner_conflict"]) {
+    const other = runOwned([{ status: 3, body: { ok: false, command: "append", code } }], guarded);
+    assert.equal(other.calls.length, 1, `${code} is never retried`);
+    assert.match(other.stdout, /exit=3/);
+  }
+
+  const plain = runOwned([{ status: 0, body: { ok: true, command: "measure", changed: true, revision: 6, data: {} } }], 'owned measure; echo "exit=$?"');
+  assert.deepEqual(plain.calls[0].args.slice(0, 1), ["measure"]);
+  assert.equal(plain.calls[0].stdin, "", "commands that take no stdin get none");
+  assert.ok(plain.calls[0].args.includes("--claim-id") && plain.calls[0].args[plain.calls[0].args.indexOf("--claim-id") + 1] === "claim-1");
+  assert.equal(plain.revision, "6");
+});
+
 describe("delivery ledger acceptance", { concurrency: Math.max(2, Math.min(6, os.availableParallelism?.() ?? 4)) }, () => {
   for (const { name, fn } of suite) serialTest(name, fn);
 });

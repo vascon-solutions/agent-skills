@@ -555,7 +555,7 @@ const COMMANDS = {
     required: ["runtime", "session", "kind", "reason"],
   },
   "set-review-bound": { flags: { ...SELECTION, ...OWNED, "bound-file": "string" }, required: [...OWNED_REQUIRED, "bound-file"] },
-  template: { flags: {}, positional: 1 },
+  template: { flags: SELECTION, positional: 1 },
   publication: {
     flags: {
       ...SELECTION,
