@@ -534,6 +534,7 @@ const COMMANDS = {
     required: ["runtime", "session", "kind", "reason"],
   },
   "set-review-bound": { flags: { ...SELECTION, ...OWNED, "bound-file": "string" }, required: [...OWNED_REQUIRED, "bound-file"] },
+  template: { flags: {}, positional: 1 },
   publication: {
     flags: {
       ...SELECTION,
@@ -603,7 +604,7 @@ export function parseArgs(argv) {
   if (hasOwn(options, "ledger") && (hasOwn(options, "repo") || hasOwn(options, "branch"))) {
     fail("argument_error", "use --repo [--branch] or --ledger, not both");
   }
-  if (command !== "init" && !hasOwn(options, "ledger") && !hasOwn(options, "repo")) {
+  if (!["init", "template"].includes(command) && !hasOwn(options, "ledger") && !hasOwn(options, "repo")) {
     fail("argument_error", "select a ledger with --repo DIR [--branch NAME] or --ledger ABS_PATH");
   }
   for (const [name, value] of Object.entries(options)) {
@@ -664,6 +665,10 @@ export function parseArgs(argv) {
     options.field = field;
   }
   if (command === "publication") parsePublicationArgs(options, positionals[0]);
+  if (command === "template") {
+    if (!hasOwn(TEMPLATES, positionals[0])) fail("argument_error", `template NAME must be one of ${Object.keys(TEMPLATES).join(", ")}`);
+    options.name = positionals[0];
+  }
   if (command === "freeze" && options["review-bound"] !== undefined && options["review-bound"] !== "reuse") requireAbsolute(options["review-bound"], "--review-bound");
   if (command === "freeze" && !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(options.oid)) {
     fail("argument_error", "--oid must be a full lowercase object ID");
@@ -3972,6 +3977,114 @@ function commandSummaryBody(options) {
   return envelope("summary-body", false, ledger.revision, { action: result.action, body: result.body, body_sha256: sha256(Buffer.from(result.body, "utf8")), current_body_sha256: currentSha });
 }
 
+// ---------------------------------------------------------------------------
+// Templates: a skeleton for each record or input file, plus the cross-field
+// rules the schema cannot express. Placeholders in angle brackets must be
+// replaced; nullable fields start as null.
+
+const SUCCESSOR_RULE = "A successor sets supersedes_id to an earlier item of the same collection and keeps its subject (candidate, batch, run, session or operation); each item has at most one successor.";
+const TEMPLATES = {
+  validation: { def: "Validation", rules: [
+    "A completed command execution (result pass or fail, no reused_from) needs content_manifest and input_fingerprint: generate both with content-manifest --output-file, and use its input_fingerprint.",
+    "A completed command execution has exactly one of oid (the frozen candidate, from a clean checkout) or content_id (sha256:<input_fingerprint>, for working or local-only content).",
+    "pass and fail need the actual exit_code and log; skipped and unavailable need a reason.",
+    "A reuse record sets reused_from and reuse together, keeps the original command, cwd, scope, log and exit_code, and has input_fingerprint null.",
+    SUCCESSOR_RULE,
+  ] },
+  audits: { def: "Audit", rules: ["Exactly one of oid or content_id; content_id needs content_manifest.", "role_run_id names a recorded role run, or is null for a direct audit.", "A FAIL audit is never superseded by a better verdict; a recheck is a new audit.", SUCCESSOR_RULE] },
+  reviews: { def: "Review", item: { findings: "finding" }, rules: [
+    "An implementation review has exactly one of candidate_oid or content_id; content_id needs content_manifest.",
+    "verdict fits mode: accept, revise, split or rewrite only for spec; pass, pass-with-fixes or fail otherwise.",
+    "cycle_id and cycle_kind are both null or both set. Once a review bound is installed, every finding needs a shape label.",
+    "A fixed finding needs fix_oid or fix_content_id; rejected, deferred and duplicate need a reason.",
+    "A successor keeps mode, candidate, source, round, cycle, batch and every finding's source_id, severity, location and thread_id.",
+  ] },
+  defect_shapes: { def: "DefectShape", rules: ["A done sweep names its searched_scope and states its result in evidence, even when no sibling was found.", SUCCESSOR_RULE] },
+  publications: { def: "PublicationEvent", rules: [
+    "Prefer publication prepare and publication verify, which build these events from the ledger.",
+    "prepared has observed null; verified needs an observed read-back; failed, mismatch and uncertain need error.",
+    "batch_id is the frozen review batch, set only for reply and resolve.",
+    "Every step of one operation keeps candidate_oid, kind, target, intended, precondition and batch_id; a prepared step and a later step of the same operation never share one append.",
+  ] },
+  role_runs: { def: "RoleRun", rules: [
+    "runtime_version is a nonempty string (the client's version), never null.",
+    "execution inline needs fallback_reason; status blocked needs block_reason.",
+    "At most one of candidate_oid or content_id; content_id needs content_manifest.",
+    "A delegated implementation reviewer dispatch needs the frozen candidate with its bound installed and a free cycle.",
+    "A successor keeps role, mode, phase, candidate, execution, runtime, session_label and fallback_reason.",
+  ] },
+  sessions: { def: "Session", rules: ["A successor keeps label, runtime and phase; a known native_session_id cannot change."] },
+  limitations: { def: "Limitation", rules: [SUCCESSOR_RULE] },
+  decisions: { def: "Decision", rules: ["IDs are unique; a review bound's workspace_decision and delegated_decision name recorded decisions."] },
+  finding: { def: "Finding", rules: ["Give every finding a shape label once a review bound is installed, including a proposed new label when none fits."] },
+  grant: { def: "Grant", rules: ["wording quotes the user's words. endpoint is set only for scope endpoint. additional_cycles is a positive count only for a review_round or monitor_remediate extension, otherwise null."] },
+  authorization: { def: "AuthorizationObject", rules: ["endpoint must equal init --endpoint; carry forward authority the user already gave as grants."] },
+  bootstrap: { def: "BootstrapInput", rules: ["Prefer prepare-init, which generates this file. A dirty checkout needs a dirty_scope decision naming every changed path."] },
+  "commit-evidence": { def: "CommitEvidence", rules: ["prior_head is the recorded working head. intended_paths and excluded_paths are literal relative Git paths."] },
+  release: { def: "ReleaseInput", rules: ["complete needs completion and no blocker; handoff needs next for the same phase and checkpoint; blocked needs blocker and a next at its resume_checkpoint."] },
+  reconcile: { def: "ReconcileEvidence", rules: ["expected equals the ledger's current candidate_oid and working_head_oid; observed depends on case."] },
+  "review-bound": { def: "ReviewBound", rules: ["Prefer freeze --review-bound with the partial file, which derives every measured and counted field."] },
+  "review-bound-partial": { def: null, rules: [
+    "packages lists affected leaf workspace package or app roots once, never their ancestors; use [\".\"] for a root-only repository and null when boundaries cannot be established.",
+    "workspace_decision names a recorded decision; delegated_decision names one whenever delegated_limit is not null.",
+    "overrides are exact copies of recorded extension grants and keep every grant the prior bound carried.",
+  ] },
+  observed: { def: "Observed", rules: ["For publication verify --observed-file, nullable fields may be omitted (null) and observed_at defaults to now; target is the object actually read back."] },
+};
+
+const PLACEHOLDERS = {
+  Timestamp: "<ISO-8601 UTC timestamp>",
+  OID: "<full commit OID>",
+  SHA256: "<64-hex SHA-256>",
+  AbsolutePath: "<absolute path>",
+  Id: "<unique id>",
+  NonEmptyText: "<text>",
+  ContentId: "<sha256:digest>",
+  Uuid: "<uuid>",
+  Runtime: "<one of: claude | codex | gemini>",
+};
+
+function skeletonOf(node, refName = null, depth = 0) {
+  const defs = loadSchema().$defs;
+  if (depth > 12) return null;
+  if (node.$ref) {
+    const name = node.$ref.split("/").pop();
+    return skeletonOf(defs[name], name, depth + 1);
+  }
+  if (node.anyOf) {
+    if (node.anyOf.some((option) => option.type === "null")) return null;
+    return skeletonOf(node.anyOf[0], refName, depth + 1);
+  }
+  if (node.allOf && !node.properties) return Object.assign({}, ...node.allOf.map((part) => skeletonOf(part, refName, depth + 1)).filter(isObject));
+  if (hasOwn(node, "const")) return node.const;
+  if (node.enum) return node.enum.includes(null) ? null : `<one of: ${node.enum.join(" | ")}>`;
+  const types = Array.isArray(node.type) ? node.type : [node.type];
+  if (types.includes("null")) return null;
+  if (types.includes("object") || node.properties) {
+    const result = {};
+    for (const key of node.required ?? []) result[key] = node.properties?.[key] ? skeletonOf(node.properties[key], null, depth + 1) : null;
+    return result;
+  }
+  if (types.includes("array")) return [];
+  if (types.includes("boolean")) return false;
+  if (types.includes("integer") || types.includes("number")) return 0;
+  if (types.includes("string")) return PLACEHOLDERS[refName] ?? (node.minLength ? "<text>" : "");
+  return null;
+}
+
+function commandTemplate(options) {
+  const template = TEMPLATES[options.name];
+  const defs = loadSchema().$defs;
+  let skeleton;
+  if (options.name === "review-bound-partial") {
+    skeleton = { basis: { packages: ["<leaf package root>"], workspace_decision: PLACEHOLDERS.Id, delegated_decision: null }, delegated_limit: null, overrides: [] };
+  } else {
+    skeleton = skeletonOf(defs[template.def], template.def);
+  }
+  const items = Object.fromEntries(Object.entries(template.item ?? {}).map(([field, name]) => [field, skeletonOf(defs[TEMPLATES[name].def], TEMPLATES[name].def)]));
+  return envelope("template", false, null, { name: options.name, schema_def: template.def, skeleton, items, rules: template.rules });
+}
+
 const HANDLERS = {
   path: commandPath,
   "prepare-init": commandPrepareInit,
@@ -3995,6 +4108,7 @@ const HANDLERS = {
   "set-review-bound": commandSetReviewBound,
   "summary-body": commandSummaryBody,
   publication: commandPublication,
+  template: commandTemplate,
 };
 
 export async function run(argv) {

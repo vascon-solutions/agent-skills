@@ -4459,6 +4459,63 @@ test("B2 --review-bound reuse copies attested fields only when every changed pat
   refused(freezeWithBound(unknownOwner, git(unknown.work, "rev-parse", "HEAD"), { packages: ["."], workspace_decision: "workspace", delegated_decision: null, delegated_limit: null, overrides: [] }), 2, "schema_error", "flat partial bound keys");
 });
 
+function template(name) {
+  return ok(run(["template", name])).data;
+}
+
+// Fills a template the way an owner would: explicit values replace
+// placeholders; an unfilled placeholder is a test failure.
+function fillTemplate(skeleton, values) {
+  const filled = { ...skeleton, ...values };
+  for (const [key, value] of Object.entries(filled)) {
+    if (typeof value === "string" && value.startsWith("<")) assert.fail(`placeholder ${key} left unfilled: ${value}`);
+  }
+  assert.deepEqual(Object.keys(filled).sort(), Object.keys(skeleton).sort(), "a filled template keeps exactly the template's fields");
+  return filled;
+}
+
+test("B3 templates list every required field and their filled forms pass the helper's checks", () => {
+  for (const name of ["validation", "audits", "reviews", "defect_shapes", "publications", "role_runs", "sessions", "limitations", "decisions", "finding", "grant", "authorization", "bootstrap", "commit-evidence", "release", "reconcile", "review-bound", "observed"]) {
+    const data = template(name);
+    const def = SCHEMA.$defs[data.schema_def];
+    assert.deepEqual(Object.keys(data.skeleton).sort(), [...def.required].sort(), `${name} skeleton fields`);
+    assert.ok(data.rules.length > 0, `${name} states its cross-field rules`);
+  }
+  refused(run(["template", "nonsense"]), 1, "argument_error");
+  assert.match(template("role_runs").rules.join(" "), /runtime_version is a nonempty string/);
+  assert.match(template("validation").rules.join(" "), /content_manifest and input_fingerprint/);
+
+  const { repo, owner } = r3Fixture(1);
+  workspaceDecisions(owner);
+  const at = nowIso();
+  ok(owner.append("limitations", fillTemplate(template("limitations").skeleton, { id: "lim-template", kind: "note", phase: "delivery", reason: "from a template", at })));
+  ok(owner.append("decisions", fillTemplate(template("decisions").skeleton, { id: "decision-template", text: "From a template.", source: "owner" })));
+  const runTemplate = template("role_runs").skeleton;
+  ok(owner.append("role_runs", fillTemplate(runTemplate, { id: "run-template", role: "reviewer", mode: "implementation", phase: "delivery", candidate_oid: owner.ledger().candidate.oid, execution: "inline", runtime: "claude", runtime_version: "2.1.287", client: "claude-code", session_label: owner.session, requested_tier: "deep", enforcement: { tools: "not applicable: inline", filesystem: "instructional", github: "instructional", delegation: "instructional" }, status: "complete", fallback_reason: "role_unavailable", started_at: at })));
+  const manifest = manifestFile(repo, owner, [entry(repo, "src/file-0.js")]);
+  const identity = contentId(repo, manifest);
+  ok(owner.append("validation", fillTemplate(template("validation").skeleton, { id: "val-template", kind: "command", command: "node --test", cwd: repo.work, scope: "focused", content_id: identity.content_id, content_manifest: manifest.source, result: "pass", exit_code: 0, at, log: path.join(repo.inputs, "test.log"), input_fingerprint: identity.input_fingerprint })));
+  ok(owner.append("audits", fillTemplate(template("audits").skeleton, { id: "audit-template", mode: "ui", runtime: "claude", verdict: "PASS", report: path.join(repo.inputs, "audit.md"), oid: owner.ledger().candidate.oid, at })));
+  ok(owner.append("sessions", fillTemplate(template("sessions").skeleton, { id: "session-template", label: owner.session, runtime: "claude", runtime_version: "2.1.287", client: "claude-code", phase: "delivery", started_at: at, measurement_state: "unavailable" })));
+  ok(setR3(owner, r3Bound(owner)));
+  const findingTemplate = template("reviews").items.findings;
+  const reviewed = fillTemplate(template("reviews").skeleton, {
+    id: "review-template", mode: "implementation", candidate_oid: owner.ledger().candidate.oid, runtime: "claude", source: "inline", verdict: "pass-with-fixes", at, cycle_id: "cycle-template", cycle_kind: "implementation_review",
+    findings: [fillTemplate(findingTemplate, { id: "f-template", severity: "minor", shape: "identity-reset", location: "src/file-0.js:1", disposition: "deferred", reason: "follow-up" })],
+  });
+  ok(owner.append("reviews", reviewed));
+  ok(owner.append("defect_shapes", fillTemplate(template("defect_shapes").skeleton, { id: "shape-template", shape: "identity-reset", first_seen: at, candidate_oid: owner.ledger().candidate.oid, sweep: "done", searched_scope: ["src"], evidence: "Searched src; none." })));
+  ok(owner.authorize(fillTemplate(template("grant").skeleton, { id: "grant-template", scope: "merge", wording: '"merge it when green"', source: "user message", at })));
+
+  const fresh = makeRepo();
+  const freshOwner = initDelivery(fresh);
+  workspaceDecisions(freshOwner);
+  const oid = commit(fresh, { "src/app.js": "export const v = 9;\n" });
+  const evidence = fillTemplate(template("commit-evidence").skeleton, { prior_head: freshOwner.ledger().candidate.working_head_oid, reason: "commit the change", source: "owner", intended_paths: ["src"] });
+  const partial = template("review-bound-partial").skeleton;
+  ok(freshOwner.owned("freeze", ["--oid", oid, "--evidence-file", input(fresh, "evidence", evidence), "--review-bound", input(fresh, "partial", { ...partial, basis: { ...partial.basis, packages: ["."], workspace_decision: "workspace" } })]));
+});
+
 describe("delivery ledger acceptance", { concurrency: Math.max(2, Math.min(6, os.availableParallelism?.() ?? 4)) }, () => {
   for (const { name, fn } of suite) serialTest(name, fn);
 });
