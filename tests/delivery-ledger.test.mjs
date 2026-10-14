@@ -4370,11 +4370,15 @@ test("B1 a verify batch holds one kind, and an ambiguous reply default asks for 
   ok(publication(reviewer, "verify", ["--id", reply.operation_id, "--observed-file", input(repo, "observed", observed)]));
   const [resolve] = generated(publication(reviewer, "prepare", ["--kind", "resolve", "--thread", threads[0].thread_graphql_id]));
   const [second] = generated(publication(reviewer, "prepare", ["--kind", "reply", "--thread", threads[1].thread_graphql_id, "--body-file", body.file]));
-  refused(publication(reviewer, "verify", ["--batch", input(repo, "batch", [{ id: resolve.operation_id, failed: "x" }, { id: second.operation_id, failed: "y" }])]), 2, "invariant_error", "a verify batch holds operations of one kind");
+  const mixed = input(repo, "batch", [{ id: resolve.operation_id, failed: "x" }, { id: second.operation_id, failed: "y" }]);
+  refusedUnchanged(repo, () => publication(reviewer, "verify", ["--batch", mixed]), 2, "invariant_error", "a verify batch holds operations of one kind");
+  assert.match(publication(reviewer, "verify", ["--batch", mixed]).json.message, /one kind/);
   const later = batchFile(repo, reviewer, [threads[1]]);
   ok(reviewer.append("reviews", review(reviewer, { source: "codex-bot", verdict: "pass-with-fixes", findings: [{ ...batchReview.findings[1], id: "f9" }], batch: later })));
   ok(publication(reviewer, "verify", ["--id", second.operation_id, "--failed", "not attempted"]));
-  refused(publication(reviewer, "prepare", ["--kind", "reply", "--thread", threads[1].thread_graphql_id, "--body-file", body.file]), 1, "argument_error", "two current batches pair this thread");
+  const ambiguous = publication(reviewer, "prepare", ["--kind", "reply", "--thread", threads[1].thread_graphql_id, "--body-file", body.file]);
+  refused(ambiguous, 1, "argument_error", "two current batches pair this thread");
+  assert.match(ambiguous.json.message, /--review-batch/);
   const [chosen] = generated(publication(reviewer, "prepare", ["--kind", "reply", "--thread", threads[1].thread_graphql_id, "--body-file", body.file, "--review-batch", later.id]));
   assert.equal(chosen.batch_id, later.id);
 });

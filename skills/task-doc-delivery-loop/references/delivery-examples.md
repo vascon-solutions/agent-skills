@@ -43,7 +43,7 @@ Stop on any non-zero exit from `ledger` or `owned`. Never run a guarded Git or G
 
 This example assumes an explicitly requested local-only endpoint. The usual default remains a draft PR. Set `task_doc` and `base` as well; `evidence` is a new directory beneath an existing external directory.
 
-```sh
+```bash
 . /absolute/path/to/evidence/ledger.sh
 ledger prepare-init --endpoint local --brief 'Implement the approved task locally' \
   --no-remote --output-dir "$evidence/setup" --same-session
@@ -53,7 +53,7 @@ Use `--remote NAME` when the delivery uses a configured remote. For a known GitH
 
 Inspect the generated `setup/authorization.json` and `setup/bootstrap.json`; `prepare-init` needs a new directory, so it never writes into `$evidence` itself. Fill any existing grants, decisions, dependencies, requested audit (including a task-doc runtime acceptance checkpoint) and supplied spec check. For a dirty checkout, classify every reported `dirty_paths` entry in the `dirty_scope` decision. Use quoted literal filenames, including extensions. For an existing remote branch or PR, record verified adoption before initializing. Do not accept generated null or empty defaults when the context says otherwise.
 
-```sh
+```bash
 ledger init --runtime "$runtime" --session "$session" --task-doc "$task_doc" \
   --base "$base" --endpoint local \
   --authorization-file "$evidence/setup/authorization.json" \
@@ -67,7 +67,7 @@ jq -er '.revision' "$evidence/claim.json" > "$evidence/revision"
 
 Implement the approved scope. Choose and run its required check, saving the real result and log. The command below is an example for a repository whose selected check is `node --test`.
 
-```sh
+```bash
 if (cd "$repo" && node --test) > "$evidence/check.log" 2>&1; then
   check_exit=0
 else
@@ -96,7 +96,7 @@ Local-only work records its provisional size and cycle allowance in source decis
 
 Perform the implementation review against the task and this content. The following record is appropriate only after an actual passing review with no findings. Otherwise record the real verdict and findings using the schema's `Review` shape. Requested audits likewise need their actual result.
 
-```sh
+```bash
 ledger template reviews </dev/null |
   jq --slurpfile identity "$evidence/identity.json" --arg runtime "$runtime" '
   $identity[0].data as $i |
@@ -123,7 +123,7 @@ For a commit or PR endpoint, use the same preparation with the authorized endpoi
 
 Use this only after [orchestration](orchestration.md) selects a role. Direct work needs no role run. The example records a delegated implementation review after `freeze` and `set-review-bound`; `run.json` is the brief's identity plus the resolved settings, and `enforcement` comes from the [role dispatch defaults](role-dispatch.md).
 
-```sh
+```bash
 ledger template role_runs </dev/null |
   jq --arg oid "$oid" --arg session "$session" --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   --slurpfile enforcement "$evidence/reviewer-enforcement.json" '
@@ -141,7 +141,7 @@ The helper refuses the dispatch record when the bound has no cycle left; outstan
 
 Resolve `ledger_path` from the prior continuation brief. A different session uses its own runtime and stable session label.
 
-```sh
+```bash
 node "$helper" show --ledger "$ledger_path" > "$evidence/resume.json"
 node "$helper" validate --ledger "$ledger_path"
 stage=$(jq -er '.data.value.candidate.state' "$evidence/resume.json")
@@ -150,7 +150,7 @@ node "$helper" check --ledger "$ledger_path" --stage "$stage"
 
 Read the current scoped instructions and `next.inputs`. If another owner is still recorded, report the conflict; do not invent a takeover grant. For an unowned, unfinished phase, use the phase from `next` and the revision from the snapshot.
 
-```sh
+```bash
 phase=$(jq -er '.data.value.next.phase' "$evidence/resume.json")
 revision=$(jq -er '.revision' "$evidence/resume.json")
 node "$helper" claim --ledger "$ledger_path" --runtime codex --session "$session" \
@@ -173,7 +173,7 @@ Validate and check the supplied ledger. When continuing an owner's active phase,
 
 Use this only when the user says "no ledger" while this branch has an unfinished ledger, under a claim obtained as the [ledger reference](delivery-ledger.md#abandoning-a-ledger) describes. `wording` holds the user's quoted words.
 
-```sh
+```bash
 snapshot=$(ledger show </dev/null) || exit
 revision=$(jq -er '.revision' <<<"$snapshot") || exit
 phase=$(jq -er '.data.value.owner.phase' <<<"$snapshot") || exit
