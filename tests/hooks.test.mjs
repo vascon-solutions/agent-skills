@@ -114,6 +114,10 @@ test("the deny reason points at agent:fix only where the resolved package.json d
     assert.match(plain, /explicit changed paths/);
     const nested = run("pnpm fix", path.join(dir, "with-agent", "apps", "web")).hookSpecificOutput.permissionDecisionReason;
     assert.match(nested, /`pnpm agent:fix`/);
+    for (const command of ["cd with-agent && pnpm exec ultracite fix", "pnpm -C with-agent fix"]) {
+      assert.match(run(command, dir).hookSpecificOutput.permissionDecisionReason, /`pnpm agent:fix`/, command);
+    }
+    assert.match(run("cd ../plain && ultracite fix", path.join(dir, "with-agent")).hookSpecificOutput.permissionDecisionReason, /explicit changed paths/);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

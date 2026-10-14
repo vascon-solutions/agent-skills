@@ -2956,7 +2956,9 @@ function threadReview(ledger, thread, batchId) {
   if (batchId) return batchReview(ledger, batchId);
   const reviews = currentItems(ledger.reviews).filter((review) => review.batch && review.findings.some((finding) => finding.thread_id === thread));
   if (reviews.length === 0) fail("invariant_error", "no current review batch pairs a finding with this thread", { observed: thread });
-  return batchReview(ledger, reviews[reviews.length - 1].batch.id);
+  const batches = [...new Set(reviews.map((review) => review.batch.id))];
+  if (batches.length > 1) fail("argument_error", "more than one current review batch pairs a finding with this thread; pass --review-batch", { observed: batches });
+  return batchReview(ledger, batches[0]);
 }
 
 function prTargetOf(ledger) {
@@ -3111,6 +3113,8 @@ function commandPublication(options) {
     // Reads happen before the lock: network latency never holds the branch mutex.
     const snapshot = readLedger(ctx);
     observedFrom = new Map();
+    const kinds = new Set(items.map((item) => operationStart(snapshot, item.id).kind));
+    if (kinds.size > 1) fail("invariant_error", "a verify batch holds operations of one kind", { observed: [...kinds] });
     observations = items.map((item, index) => {
       const first = operationStart(snapshot, item.id);
       observedFrom.set(item.id, first);
@@ -3131,7 +3135,7 @@ function commandPublication(options) {
     } else {
       events = items.map((item, index) => {
         const first = operationStart(ledger, item.id);
-        if (!isDeepStrictEqual(first, observedFrom.get(item.id))) fail("stale_revision", "the operation changed while it was being read back; re-read and retry", { id: item.id });
+        if (!isDeepStrictEqual(first, observedFrom.get(item.id))) fail("stale_revision", "the operation changed while it was being read back; re-read and retry", { id: item.id }, "stale-revision");
         return buildObservationStep(first, observations[index]);
       });
     }
@@ -3716,12 +3720,16 @@ function reviewApplies(ctx, ledger, review, completion) {
   return null;
 }
 
+function appendedIn(event, operation, id) {
+  return event.operation === operation && (event.detail.id === id || event.detail.ids?.includes(id) === true);
+}
+
 function batchRecordedInReviewRound(ledger, batchId) {
   // A handoff, blocked resume or takeover changes the owner, not the round.
   // The claim that left done is the boundary for the newly authorized batch.
   const start = [...ledger.history].reverse().find((event) => event.operation === "claim" && event.phase === "review_round" && event.detail.from_phase === "done");
   const firstReview = ledger.reviews.find((review) => review.batch?.id === batchId);
-  const recorded = ledger.history.find((event) => event.operation === "append reviews" && event.detail.id === firstReview?.id);
+  const recorded = ledger.history.find((event) => appendedIn(event, "append reviews", firstReview?.id));
   return Boolean(start && recorded && recorded.revision > start.revision);
 }
 
@@ -3733,7 +3741,7 @@ function observationRecordedInWatch(ledger, evidence) {
   return Boolean(start && evidence.some(({ collection, item }) => {
     if (collection !== "sessions" || item.phase !== "watch") return false;
     const root = chainRoot(ledger.sessions, item);
-    return ledger.history.some((event) => event.operation === "append sessions" && event.detail.id === root.id
+    return ledger.history.some((event) => appendedIn(event, "append sessions", root.id)
       && event.revision > start.revision && event.phase === "watch" && event.session === root.label && event.runtime === root.runtime);
   }));
 }

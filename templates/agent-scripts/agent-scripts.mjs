@@ -1,4 +1,4 @@
-// agent-scripts v1 sha256:272e0627b7615d3b4459bb3f7a5262b61731a710eb0b4f407ae47b1b9fca31e4
+// agent-scripts v1 sha256:2d288ed0df4923dd2dc2a913d8fa6632b0a9b7e9cde0dc2053cbe41e39d9ffbb
 // Canonical copy: vascon-solutions/agent-skills templates/agent-scripts/agent-scripts.mjs.
 // Vendor this file unmodified; see the README next to the canonical copy.
 import { spawn, spawnSync } from "node:child_process";
@@ -680,6 +680,7 @@ async function serveStart(root, options, config) {
   };
   for (const signal of signals) process.on(signal, onSignal);
   const handles = [];
+  let exited = null;
   for (const command of commands) {
     const logFile = path.join(paths.dir, `${command.name}.log`);
     const fd = fs.openSync(logFile, "w", 0o600);
@@ -702,13 +703,13 @@ async function serveStart(root, options, config) {
     }
     state.children.push({ name: command.name, pid: child.pid, pgid: child.pid, start_time: startTime(child.pid), command: command.argv, ports: command.ports, log: logFile });
     writeState(paths.state, state);
-    handles.push({ command, child, logFile });
+    const handle = { command, child, logFile };
+    child.once("exit", (code, signal) => (exited ??= { handle, code, signal }));
+    handles.push(handle);
   }
   const timeout = (config.serve.readyTimeoutSeconds ?? DEFAULT_READY_TIMEOUT_SECONDS) * 1000;
   const deadline = Date.now() + timeout;
   const pending = new Set(handles);
-  let exited = null;
-  for (const handle of handles) handle.child.once("exit", (code, signal) => (exited ??= { handle, code, signal }));
   while (pending.size > 0 && !exited && Date.now() < deadline) {
     for (const handle of [...pending]) if (await probeReady(handle.command.ready)) pending.delete(handle);
     if (pending.size > 0) await new Promise((resolve) => setTimeout(resolve, 250));

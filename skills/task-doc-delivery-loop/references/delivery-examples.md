@@ -6,9 +6,9 @@ Use Node.js, Git and bash. These shell examples also use `jq` to fill `template`
 
 ## Owned Writes
 
-Shell variables and functions do not persist between agent tool calls, so the claim ID and the current revision live in files in the evidence directory. Save this block once as `$evidence/ledger.sh`, with `repo`, `helper`, `evidence`, `runtime` and `session` set to verified absolute paths, the runtime and the current session's stable label, and source it at the start of every tool call.
+Shell variables and functions do not persist between agent tool calls, so the claim ID and the current revision live in files in the evidence directory. Save this block once as `$evidence/ledger.sh`, with `repo`, `helper`, `evidence`, `runtime` and `session` set at its top to verified absolute paths, the runtime and the current session's stable label. Source it by its literal absolute path at the start of every tool call, because `$evidence` itself does not persist either.
 
-```sh
+```bash
 ledger() { node "$helper" "$@" --repo "$repo"; }
 
 # Every owned write reads the claim and revision from files and saves the new
@@ -44,20 +44,20 @@ Stop on any non-zero exit from `ledger` or `owned`. Never run a guarded Git or G
 This example assumes an explicitly requested local-only endpoint. The usual default remains a draft PR. Set `task_doc` and `base` as well; `evidence` is a new directory beneath an existing external directory.
 
 ```sh
-. "$evidence/ledger.sh"
+. /absolute/path/to/evidence/ledger.sh
 ledger prepare-init --endpoint local --brief 'Implement the approved task locally' \
-  --no-remote --output-dir "$evidence" --same-session
+  --no-remote --output-dir "$evidence/setup" --same-session
 ```
 
 Use `--remote NAME` when the delivery uses a configured remote. For a known GitHub Enterprise remote, add `--github-host HOST`; other hosts are not assumed to be GitHub. Add `--instruction PATH` for each applicable instruction file and `--skill-source PATH` for other loaded skills. The helper hashes those files and its own ledger sources.
 
-Inspect the generated `authorization.json` and `bootstrap.json`. Fill any existing grants, decisions, dependencies, requested audit (including a task-doc runtime acceptance checkpoint) and supplied spec check. For a dirty checkout, classify every reported `dirty_paths` entry in the `dirty_scope` decision. Use quoted literal filenames, including extensions. For an existing remote branch or PR, record verified adoption before initializing. Do not accept generated null or empty defaults when the context says otherwise.
+Inspect the generated `setup/authorization.json` and `setup/bootstrap.json`; `prepare-init` needs a new directory, so it never writes into `$evidence` itself. Fill any existing grants, decisions, dependencies, requested audit (including a task-doc runtime acceptance checkpoint) and supplied spec check. For a dirty checkout, classify every reported `dirty_paths` entry in the `dirty_scope` decision. Use quoted literal filenames, including extensions. For an existing remote branch or PR, record verified adoption before initializing. Do not accept generated null or empty defaults when the context says otherwise.
 
 ```sh
 ledger init --runtime "$runtime" --session "$session" --task-doc "$task_doc" \
   --base "$base" --endpoint local \
-  --authorization-file "$evidence/authorization.json" \
-  --bootstrap-file "$evidence/bootstrap.json" || exit
+  --authorization-file "$evidence/setup/authorization.json" \
+  --bootstrap-file "$evidence/setup/bootstrap.json" || exit
 
 ledger claim --runtime "$runtime" --session "$session" --phase delivery \
   --expected-revision 0 > "$evidence/claim.json" || exit
@@ -105,12 +105,13 @@ ledger template reviews </dev/null |
    runtime:$runtime, source:"inline", verdict:"pass", at:(now|todateiso8601)}' |
   owned append reviews || exit
 
-jq -n --slurpfile identity "$evidence/identity.json" '
+ledger template release </dev/null |
+  jq --slurpfile identity "$evidence/identity.json" '
   $identity[0].data as $i |
-  {next:null, blocker:null, completion:{endpoint:"local", reached_at:(now|todateiso8601),
+  .data.skeleton + {next:null, blocker:null, completion:{endpoint:"local", reached_at:(now|todateiso8601),
    candidate_oid:null, content_id:$i.content_id, content_manifest:$i.manifest,
    evidence_ids:["validation:local-gate","reviews:local-review"], limitations:[]}}' \
-  > "$evidence/release.json"
+  > "$evidence/release.json" || exit
 owned release --outcome complete --release-file "$evidence/release.json" || exit
 ```
 
@@ -165,7 +166,7 @@ Validate and check the supplied ledger. When continuing an owner's active phase,
 1. Fetch a complete, paginated PR snapshot. Save its frozen `Review.batch` file with `pr: {repository, number}` identifying the recorded PR and paired thread/root-comment IDs. Set the review's `candidate_oid` and batch `head` to the recorded PR head. A new round needs a new batch recorded under that round; handoffs within an unfinished round keep the existing batch. GitHub's numeric database IDs are accepted in the snapshot; use strings in publication targets. An incomplete read cannot establish an empty batch.
 2. Classify and disposition each finding. Use `begin-change` before fixes; record a replacement review observation with `supersedes_id` to preserve finding identity and history. Failed or pending findings block completion even if left out of `evidence_ids`.
 3. Validate affected inputs, commit only when the authorized endpoint calls for it, and freeze the replacement candidate. A reply-only round needs no empty commit or repeated implementation review.
-4. Prepare each reply against its own thread/root pair, post it, read it back, and record verification. `publication prepare --kind reply --batch "$evidence/replies.json"` prepares every reply in one write from `[{thread, body_file}]`; after posting and reading each back, `publication verify --batch "$evidence/read-backs.json"` records each item's own outcome from `[{id, observed_file}]`. Resolve eligible findings only after verified fixes and replies, in a later batch (`--kind resolve`). If resolution fails, retry only resolution. Use the existing [publication contract](delivery-ledger.md#publication) for event shapes and [GitHub transport](../../publish-branch/references/github-transport.md) for writes.
+4. Prepare each reply against its own thread/root pair, post it, read it back, and record verification. `publication prepare --kind reply --batch "$evidence/replies.json"` prepares every reply in one write from `[{thread, body_file}]`; after posting and reading each back, `publication verify --batch "$evidence/read-backs.json"` records each item's own outcome from `[{id, observed_file}]`. A recorded `mismatch` still exits 0, so check every step before going on: `jq -e 'all(.data.items[]; .step == "verified")'` on the envelope, and stop when it fails. Resolve eligible findings only after verified fixes and replies, in a later batch (`--kind resolve`). If resolution fails, retry only resolution. Use the existing [publication contract](delivery-ledger.md#publication) for event shapes and [GitHub transport](../../publish-branch/references/github-transport.md) for writes.
 5. Cite the complete batch, applicable validation and verified publication events; take the final read-only snapshot and release. New findings belong to a later request unless monitoring was already authorized.
 
 ## Abandon A Ledger
@@ -173,10 +174,10 @@ Validate and check the supplied ledger. When continuing an owner's active phase,
 Use this only when the user says "no ledger" while this branch has an unfinished ledger, under a claim obtained as the [ledger reference](delivery-ledger.md#abandoning-a-ledger) describes. `wording` holds the user's quoted words.
 
 ```sh
-snapshot=$(ledger show </dev/null)
-revision=$(jq -er '.revision' <<<"$snapshot")
-phase=$(jq -er '.data.value.owner.phase' <<<"$snapshot")
-checkpoint=$(jq -er '.data.value.checkpoint' <<<"$snapshot")
+snapshot=$(ledger show </dev/null) || exit
+revision=$(jq -er '.revision' <<<"$snapshot") || exit
+phase=$(jq -er '.data.value.owner.phase' <<<"$snapshot") || exit
+checkpoint=$(jq -c '.data.value.checkpoint' <<<"$snapshot") || exit
 
 ledger template limitations </dev/null |
   jq --arg phase "$phase" --arg wording "$wording" '
@@ -184,19 +185,20 @@ ledger template limitations </dev/null |
    reason:("abandoned on user wording: " + $wording), affects:["delivery ledger"],
    at:(now|todateiso8601)}' | owned append limitations || exit
 
-jq -n --arg phase "$phase" --arg checkpoint "$checkpoint" --arg wording "$wording" \
+ledger template release </dev/null |
+  jq --arg phase "$phase" --argjson checkpoint "$checkpoint" --arg wording "$wording" \
   --argjson revision "$revision" '
-  {completion:null,
+  .data.skeleton + {completion:null,
    blocker:{reason:("abandoned: revision \($revision); " + $wording),
             resume_phase:$phase, resume_checkpoint:$checkpoint,
             required_action:"resume only on explicit user wording to use the ledger"},
    next:{phase:$phase, checkpoint:$checkpoint, suggested_runtime:null,
          brief:"Abandoned ledger; resume only on explicit user wording to use the ledger",
-         inputs:[], authorization_required:true}}' > "$evidence/abandon.json"
+         inputs:[], authorization_required:true}}' > "$evidence/abandon.json" || exit
 owned release --outcome blocked --release-file "$evidence/abandon.json" || exit
 ```
 
-`revision` is the ledger revision the user's wording abandoned. Leave the file in place, then remove or annotate its summary block in the PR body.
+`revision` is the ledger revision the user's wording abandoned. `checkpoint` stays JSON, so a watch's `null` checkpoint is passed through unchanged. Leave the file in place, then remove or annotate its summary block in the PR body.
 
 ## Live Handoff Acceptance
 

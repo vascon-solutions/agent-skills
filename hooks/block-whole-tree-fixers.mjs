@@ -197,7 +197,8 @@ function quote(arg) {
   return /^[A-Za-z0-9_./:=@%+-]+$/.test(arg) ? arg : `'${arg.replaceAll("'", "'\\''")}'`;
 }
 
-// Analyses one segment's words; returns {blocked, dir} where dir is the effective directory afterwards.
+// Analyses one segment's words; returns {blocked, dir, at}: dir is the effective directory afterwards,
+// at is the directory a blocked command runs in.
 function analyseWords(words, dir, depth) {
   let index = 0;
   while (index < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[index])) index += 1;
@@ -219,7 +220,7 @@ function analyseWords(words, dir, depth) {
     let position = 0;
     while (position < args.length && args[position].startsWith("-")) position += ["-p", "--package"].includes(args[position]) ? 2 : 1;
     if (position >= args.length) return { blocked: null, dir };
-    return { blocked: wholeTree(toolName(args[position]), args.slice(position + 1), dir), dir };
+    return { blocked: wholeTree(toolName(args[position]), args.slice(position + 1), dir), dir, at: dir };
   }
   if (head === "pnpm") {
     let runDir = dir;
@@ -236,7 +237,7 @@ function analyseWords(words, dir, depth) {
     if (sub === undefined) return { blocked: null, dir };
     if (sub === "exec" || sub === "dlx") {
       if (tail.length === 0) return { blocked: null, dir };
-      return { blocked: wholeTree(toolName(tail[0]), tail.slice(1), runDir), dir };
+      return { blocked: wholeTree(toolName(tail[0]), tail.slice(1), runDir), dir, at: runDir };
     }
     const script = sub === "run" || sub === "run-script" ? tail[0] : sub;
     const scriptArgs = sub === "run" || sub === "run-script" ? tail.slice(1) : tail;
@@ -245,13 +246,13 @@ function analyseWords(words, dir, depth) {
     const pkg = nearestPackageJson(runDir);
     const body = pkg?.json?.scripts?.[script];
     if (typeof body !== "string") {
-      return { blocked: wholeTree(toolName(script), scriptArgs, runDir), dir };
+      return { blocked: wholeTree(toolName(script), scriptArgs, runDir), dir, at: runDir };
     }
     const forwarded = scriptArgs[0] === "--" ? scriptArgs.slice(1) : scriptArgs;
-    const blocked = analyseCommand(`${body} ${forwarded.map(quote).join(" ")}`, pkg.dir, depth + 1);
-    return { blocked: blocked ? `pnpm ${script} (${blocked})` : null, dir };
+    const inner = analyseCommand(`${body} ${forwarded.map(quote).join(" ")}`, pkg.dir, depth + 1);
+    return { blocked: inner ? `pnpm ${script} (${inner.blocked})` : null, dir, at: runDir };
   }
-  return { blocked: wholeTree(toolName(head), args, dir), dir };
+  return { blocked: wholeTree(toolName(head), args, dir), dir, at: dir };
 }
 
 function analyseCommand(command, cwd, depth = 0) {
@@ -265,7 +266,7 @@ function analyseCommand(command, cwd, depth = 0) {
   let dir = cwd;
   for (const words of parsed) {
     const result = analyseWords(words, dir, depth);
-    if (result.blocked) return result.blocked;
+    if (result.blocked) return { blocked: result.blocked, at: result.at };
     dir = result.dir;
   }
   return null;
@@ -275,9 +276,10 @@ function analyseCommand(command, cwd, depth = 0) {
 export function decide(input) {
   if (!input || input.tool_name !== "Bash" || typeof input.tool_input?.command !== "string") return null;
   const cwd = typeof input.cwd === "string" ? input.cwd : process.cwd();
-  const blocked = analyseCommand(input.tool_input.command, cwd);
-  if (!blocked) return null;
-  const pkg = nearestPackageJson(cwd);
+  const result = analyseCommand(input.tool_input.command, cwd);
+  if (!result) return null;
+  const { blocked } = result;
+  const pkg = nearestPackageJson(result.at);
   const hasAgentFix = typeof pkg?.json?.scripts?.["agent:fix"] === "string";
   const advice = hasAgentFix
     ? "use `pnpm agent:fix`, which formats only this delivery's changed files"

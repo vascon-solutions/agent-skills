@@ -2509,7 +2509,7 @@ test("V3 a completed command cannot submit an arbitrary fingerprint; rerun count
 
 // A completed draft-PR delivery, then an authorized review_round owner with
 // a frozen two-thread findings batch.
-function reviewRound(repo, { dispositions = ["fixed", "rejected"] } = {}) {
+function reviewRound(repo, { dispositions = ["fixed", "rejected"], arrayAppend = false } = {}) {
   const owner = initDelivery(repo);
   const delivered = draftPrDelivery(repo, owner);
   ok(owner.release("complete", { next: nextStep("review_round", "review", { authorization_required: true }), completion: completion(owner, ["validation:" + delivered.gate.id, "publications:" + delivered.push.id, "publications:" + delivered.prCreate.id]), blocker: null }));
@@ -2526,7 +2526,7 @@ function reviewRound(repo, { dispositions = ["fixed", "rejected"] } = {}) {
   );
   const cycle = dispositions.includes("fixed") ? { cycle_id: "batch-fix", cycle_kind: "post_pr_fix" } : {};
   const batchReview = review(reviewer, { source: "codex-bot", verdict: "pass-with-fixes", findings, batch, ...cycle });
-  ok(reviewer.append("reviews", batchReview));
+  ok(reviewer.append("reviews", arrayAppend ? [batchReview] : batchReview));
   return { owner, reviewer, delivered, threads, batch, batchReview };
 }
 
@@ -4349,6 +4349,36 @@ test("B1 recovery and refusals: not-attempted items fail, reply and resolve neve
   refused(publication(reviewer, "sideways", ["--kind", "push"]), 1, "argument_error");
 });
 
+test("B4 a batch review appended as an array still satisfies the review-round completion gate", () => {
+  const repo = makeRepo();
+  const { reviewer, threads, batch, batchReview, delivered } = reviewRound(repo, { dispositions: ["rejected", "rejected"], arrayAppend: true });
+  assert.deepEqual(reviewer.ledger().history.at(-1).detail.ids, [batchReview.id]);
+  for (const thread of threads) {
+    const prepared = replyEvent(repo, reviewer, batch, thread, bodyFile(repo, `Not changing ${thread.path}.`));
+    ok(reviewer.append("publications", prepared));
+    ok(reviewer.append("publications", verifiedReply(prepared, { object_id: `r-${thread.root_comment_database_id}` })));
+  }
+  ok(reviewer.release("complete", { next: null, completion: completion(reviewer, [`validation:${delivered.gate.id}`, `reviews:${batchReview.id}`]), blocker: null }));
+});
+
+test("B1 a verify batch holds one kind, and an ambiguous reply default asks for --review-batch", () => {
+  const repo = makeRepo();
+  const { reviewer, threads, batchReview } = reviewRound(repo);
+  const body = bodyFile(repo, "Fixed in the latest push.");
+  const [reply] = generated(publication(reviewer, "prepare", ["--kind", "reply", "--thread", threads[0].thread_graphql_id, "--body-file", body.file]));
+  const observed = observedFor(reply, { object_id: "7001", url: `${reply.target.pr_url}#discussion_r7001`, body_sha256: body.sha256 });
+  ok(publication(reviewer, "verify", ["--id", reply.operation_id, "--observed-file", input(repo, "observed", observed)]));
+  const [resolve] = generated(publication(reviewer, "prepare", ["--kind", "resolve", "--thread", threads[0].thread_graphql_id]));
+  const [second] = generated(publication(reviewer, "prepare", ["--kind", "reply", "--thread", threads[1].thread_graphql_id, "--body-file", body.file]));
+  refused(publication(reviewer, "verify", ["--batch", input(repo, "batch", [{ id: resolve.operation_id, failed: "x" }, { id: second.operation_id, failed: "y" }])]), 2, "invariant_error", "a verify batch holds operations of one kind");
+  const later = batchFile(repo, reviewer, [threads[1]]);
+  ok(reviewer.append("reviews", review(reviewer, { source: "codex-bot", verdict: "pass-with-fixes", findings: [{ ...batchReview.findings[1], id: "f9" }], batch: later })));
+  ok(publication(reviewer, "verify", ["--id", second.operation_id, "--failed", "not attempted"]));
+  refused(publication(reviewer, "prepare", ["--kind", "reply", "--thread", threads[1].thread_graphql_id, "--body-file", body.file]), 1, "argument_error", "two current batches pair this thread");
+  const [chosen] = generated(publication(reviewer, "prepare", ["--kind", "reply", "--thread", threads[1].thread_graphql_id, "--body-file", body.file, "--review-batch", later.id]));
+  assert.equal(chosen.batch_id, later.id);
+});
+
 test("B1 --from-check issues only read requests to git and GitHub", () => {
   const repo = makeRepo();
   const owner = initDelivery(repo, { endpoint: "ready_pr" });
@@ -4611,8 +4641,8 @@ function ownedWrapper() {
   const examples = fs.readFileSync(path.join(root, "skills", "task-doc-delivery-loop", "references", "delivery-examples.md"), "utf8");
   const section = examples.split("\n## Owned Writes\n")[1];
   assert.ok(section, "delivery-examples.md keeps its Owned Writes section");
-  const block = section.match(/```sh\n([\s\S]*?)```/);
-  assert.ok(block, "the Owned Writes section holds one sh block");
+  const block = section.match(/```bash\n([\s\S]*?)```/);
+  assert.ok(block, "the Owned Writes section holds one bash block");
   return block[1];
 }
 
