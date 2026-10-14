@@ -339,6 +339,29 @@ test("R1 skills route delivery state through the ledger helper and one shared au
   assert.match(authorization, /A ready PR does not authorize monitoring/);
 });
 
+test("the delivery ledger stays opt-in with a fixed mode precedence and a lightweight default", () => {
+  const loop = read("skills", "task-doc-delivery-loop", "SKILL.md");
+  const mode = loop.split("### Ledger Or Lightweight Mode")[1]?.split("### Bootstrap")[0] ?? "";
+  const order = [
+    /1\. The current prompt's explicit wording, either way/,
+    /2\. A user-level standing instruction/,
+    /3\. An unfinished ledger for this branch means ledger mode/,
+    /4\. A repository rule: an `AGENTS\.md` line, then `\.agent\/delivery-policy\.json` `delivery_ledger: "required" \| "optional"`/,
+    /5\. Otherwise, lightweight mode\./,
+  ];
+  let at = -1;
+  for (const rule of order) {
+    const match = rule.exec(mode);
+    assert.ok(match, `missing ${rule}`);
+    assert.ok(match.index > at, `out of order: ${rule}`);
+    at = match.index;
+  }
+  assert.match(mode, /`required` is a floor that only the current prompt's explicit wording overrides, never a standing user instruction/);
+  assert.match(mode, /Never enable the ledger without user wording/);
+  assert.match(mode, /plain `## Delivery summary` section in the PR body, with no `agent-delivery-\*` markers/);
+  assert.doesNotMatch(loop, /^Keep the delivery in a \[delivery ledger\]/m);
+});
+
 test("R1 carries the accepted audit-delegation and fresh-reviewer wording with its corrections", () => {
   const loop = read("skills", "task-doc-delivery-loop", "SKILL.md");
   assert.match(loop, /available test personas and secure credential sources/);

@@ -29,7 +29,7 @@ not this skill.
 Read repository instructions and only relevant feature docs. Resolve in order:
 
 1. explicit user instructions
-2. supplied audit brief, including a delivery role brief derived from the ledger
+2. supplied audit brief, including a delivery role brief
 3. authoritative repository docs
 4. visible application state
 5. bounded inference for minor gaps

@@ -1,6 +1,6 @@
 # Delivery Ledger
 
-One machine-readable record per delivery branch, so any phase can resume in a fresh Claude Code or Codex session. The phase owner writes it only through [`scripts/delivery-ledger.mjs`](../scripts/delivery-ledger.mjs); roles and reviewers never write it. Structure is [`delivery-ledger.schema.json`](delivery-ledger.schema.json), which the helper loads and enforces; this page states the behavior the schema cannot. Authority rules live in [authorization](authorization.md).
+In ledger mode, one machine-readable record per delivery branch, so any phase can resume in a fresh Claude Code or Codex session. The ledger is opt-in; the [delivery loop](../SKILL.md#ledger-or-lightweight-mode) decides the mode, and a lightweight delivery uses none of this page. The phase owner writes it only through [`scripts/delivery-ledger.mjs`](../scripts/delivery-ledger.mjs); roles and reviewers never write it. Structure is [`delivery-ledger.schema.json`](delivery-ledger.schema.json), which the helper loads and enforces; this page states the behavior the schema cannot. Authority rules live in [authorization](authorization.md).
 
 The ledger records decisions, identities and evidence paths. It never replaces reading the code, the current repository instructions, or remote state.
 
@@ -167,6 +167,18 @@ R1 supports PRs whose base and head use the configured repository remote. It can
 3. `check` the stage that fits `candidate.state`; stop and report drift.
 4. `claim` the recorded `next` (or a newly granted phase) at that revision, and work from the returned `consumed_next`.
 5. At the session boundary, append the ending `sessions` observation, `release` with a precise `next`, and give the user the ledger path plus a copy-ready continuation brief. Do not launch another CLI, create a task, or schedule a monitor to get a fresh session.
+
+## Abandoning A Ledger
+
+When the user says "no ledger" while an unfinished ledger exists, record the abandonment before the ledger-free session changes the branch:
+
+1. Obtain the claim. Use this session's existing claim when it holds one. When another session owns the ledger, take over only with a `takeover` grant carrying the user's word that the other session has stopped. Claim an unowned, healthy ledger normally, and an unowned ledger that has drifted (for example, another session pushed) with `claim --recovery`, which can release only as handoff or blocked. Claim an already `blocked` ledger in its recorded `blocker.resume_phase`; the new blocker replaces the old one.
+2. Append a `limitations` entry describing the abandonment.
+3. `release --outcome blocked` with a full `Blocker` and a matching `Next`. `resume_phase` equals the owner's phase, and `next` names that phase and `resume_checkpoint`. `reason` begins `abandoned: revision <N>; <user wording>`, which the delivery loop's mode rule matches. `required_action` says to resume only on explicit user wording to use the ledger.
+4. Leave the file in place.
+5. Remove or annotate its PR-body summary block through the normal body update.
+
+The [worked examples](delivery-examples.md#abandon-a-ledger) show the release.
 
 ## Test Hooks
 

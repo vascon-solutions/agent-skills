@@ -70,8 +70,8 @@ new frozen implementation assessment or a fixing batch, under the same claim.
 Without one, the helper refuses any frozen-candidate cycle and any committed
 fix, with or without a `cycle_id`. A PR batch takes only a `post_pr_fix` cycle, and only when
 it causes a fix.
-Local-only deliveries use the same policy in their owner ledger decisions and
-report an unmeasured limitation; they never commit just to finalize this helper's
+Local-only deliveries use the same policy in their owner decisions (the ledger,
+or the delivery summary without one) and report an unmeasured limitation; they never commit just to finalize this helper's
 frozen-OID bound. The owner enforces dispatch timing and natural-language scope;
 helper mutations enforce installed bounds atomically, not external agent actions.
 
@@ -85,5 +85,10 @@ Pending or earlier-candidate sweeps do not pass, and the helper rechecks sweeps
 when the push is verified. Recovery of an interrupted push records the observed
 remote outcome without that recheck; complete any reopened sweep before the next
 push.
-Proposed vocabulary stays in the delivery ledger until accepted in separately
-authorized skill-pack work.
+Proposed vocabulary stays in the delivery ledger, or the delivery summary
+without one, until accepted in separately authorized skill-pack work.
+
+Without a ledger, the [lightweight path](../SKILL.md#ledger-or-lightweight-mode)
+applies this policy as owner rules: measure a committed candidate with the
+same `git diff` invocation as `measure`, record the bound and delegate limit
+in the delivery summary, and complete the sweep before pushing remediation.

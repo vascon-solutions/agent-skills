@@ -30,7 +30,6 @@ Resolve scope in this order:
 
 1. explicit user instructions
 2. supplied audit brief or acceptance criteria, including a delivery role brief
-   derived from the ledger
 3. OpenAPI/Swagger contract
 4. authoritative repository docs and code
 5. observed runtime behavior

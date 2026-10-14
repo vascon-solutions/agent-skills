@@ -41,7 +41,7 @@ Send one brief per dispatch:
 
 `{run_id, role, mode, goal, candidate: {branch, oid, content_id, content_manifest}, source_paths, questions_or_scenarios, writable_paths, forbidden_actions, stop_condition, timeout_seconds, requested_tier, requested_model, requested_effort, allow_escalation}`
 
-- `candidate` names the frozen commit, or for local-only work the content identity and manifest described in the [ledger reference](delivery-ledger.md#evidence).
+- `candidate` names the frozen commit, or for local-only work the content identity and manifest described in the [ledger reference](delivery-ledger.md#evidence) (without a ledger, the changed paths and their state).
 - A UI, API or accessibility brief also carries the proven candidate URL, the environment, actors with a secure credential source (never the credential), fixtures, allowed application mutations, startup commands if needed, cleanup requirements and the coverage level. Prove which URL serves the candidate before dispatch.
 - Add the mode's extra fields from [role dispatch defaults](role-dispatch.md). Give facts the role would otherwise rediscover.
 - The purpose of a delegated job lives in `goal`; no separate decision artifact is needed.
@@ -81,15 +81,15 @@ Consume the result:
 
 ## Record What Happened
 
-Use the ledger's existing records; selection needs no new schema.
+In ledger mode, use the ledger's existing records; selection needs no new schema. Without a ledger, put the same dispatch, direct-choice and fallback facts in the [delivery summary](../SKILL.md#ledger-or-lightweight-mode).
 
 - **Delegated work.** Append a `role_runs` record before dispatch (`execution: delegated`, `status: running`) with the brief's requested tier, model and effort, and update it through a successor with the observed settings, status, block reason, `result_summary` and any saved report. Take `enforcement` from the [role dispatch defaults](role-dispatch.md) for that role and runtime. Save a report yourself when one is needed; roles do not write reports except an auditor's workspace.
 - **Delegated implementation review.** Dispatch only against the frozen candidate after `set-review-bound`. The helper reserves a cycle for the dispatch until a `delegated` review with that cycle records its result; a completed child does not release the reservation. Record the review with `source: delegated` and its `cycle_id`.
 - **Direct work.** Use ordinary validation, audit and review records: an owner review is `source: inline`, commands are validation records. Add a material direct-execution choice, with its reason, to the checkpoint summary when it explains coverage or a limitation, and always for a direct audit of a required task-doc checkpoint. Direct work has no `role_runs` record and is never labelled `role_unavailable`.
 - **Another approved independent agent.** A client discovers roles when its session starts, so a session that began before installation cannot select them. When you use another approved independent agent instead, record `execution: delegated`, `fallback_reason: role_unavailable` and that agent's own observed enforcement, not the role default.
 - **Actual fallback.** When a role you chose to use is absent or unusable, do the same bounded work inline when permitted and record `role_runs` with `execution: inline` and the real `fallback_reason`, such as `role_unavailable`, `model_unavailable`, `timeout` or `malformed_result`. Browser or API capability, a safe environment, authentication or the candidate URL cannot be invented by falling back; record the audit `BLOCKED` with the unverified scenarios.
-- **Independence unavailable.** Record `role_runs` with `execution: inline`, `status: blocked`, `block_reason: missing_capability` and `fallback_reason: independence_required`. Completion stays refused until an independent review of the final candidate is cited.
+- **Independence unavailable.** Record `role_runs` with `execution: inline`, `status: blocked`, `block_reason: missing_capability` and `fallback_reason: independence_required`. Completion stays refused until an independent review of the final candidate is cited; without a ledger, the owner enforces the same block.
 
 ## Watching
 
-An authorized monitoring owner applies the same order to each observation. Read small results directly with the monitoring skill's helper. Dispatch `watcher` for one bounded read when interpreting or reducing the material warrants it, passing the previous snapshot, the PR identity and the helper path. The owner keeps seen and pending IDs, timing, scheduling, ledger writes, fixes and every GitHub mutation. A watcher run is one read, not a polling loop, and never creates monitoring or remediation authority.
+An authorized monitoring owner applies the same order to each observation. Read small results directly with the monitoring skill's helper. Dispatch `watcher` for one bounded read when interpreting or reducing the material warrants it, passing the previous snapshot, the PR identity and the helper path. The owner keeps seen and pending IDs, timing, scheduling, any ledger writes, fixes and every GitHub mutation. A watcher run is one read, not a polling loop, and never creates monitoring or remediation authority.

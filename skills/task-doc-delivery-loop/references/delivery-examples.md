@@ -139,6 +139,35 @@ Validate and check the supplied ledger. When continuing an owner's active phase,
 4. Prepare each reply against its own thread/root pair, post it, read it back, and record verification. Resolve eligible findings only after verified fixes and replies. If resolution fails, retry only resolution. Use the existing [publication contract](delivery-ledger.md#publication) for event shapes and [GitHub transport](../../publish-branch/references/github-transport.md) for writes.
 5. Cite the complete batch, applicable validation and verified publication events; take the final read-only snapshot and release. New findings belong to a later request unless monitoring was already authorized.
 
+## Abandon A Ledger
+
+Use this only when the user says "no ledger" while this branch has an unfinished ledger, under a claim obtained as the [ledger reference](delivery-ledger.md#abandoning-a-ledger) describes. `wording` holds the user's quoted words.
+
+```sh
+snapshot=$(ledger show </dev/null)
+revision=$(jq -er '.revision' <<<"$snapshot")
+phase=$(jq -er '.data.value.owner.phase' <<<"$snapshot")
+checkpoint=$(jq -er '.data.value.checkpoint' <<<"$snapshot")
+
+jq -n --arg phase "$phase" --arg wording "$wording" '
+  {id:"ledger-abandoned", supersedes_id:null, kind:"ledger_abandoned", phase:$phase,
+   reason:("abandoned on user wording: " + $wording), affects:["delivery ledger"],
+   at:(now|todateiso8601)}' | owned append limitations
+
+jq -n --arg phase "$phase" --arg checkpoint "$checkpoint" --arg wording "$wording" \
+  --argjson revision "$revision" '
+  {completion:null,
+   blocker:{reason:("abandoned: revision \($revision); " + $wording),
+            resume_phase:$phase, resume_checkpoint:$checkpoint,
+            required_action:"resume only on explicit user wording to use the ledger"},
+   next:{phase:$phase, checkpoint:$checkpoint, suggested_runtime:null,
+         brief:"Abandoned ledger; resume only on explicit user wording to use the ledger",
+         inputs:[], authorization_required:true}}' > "$evidence/abandon.json"
+owned release --outcome blocked --release-file "$evidence/abandon.json"
+```
+
+`revision` is the ledger revision the user's wording abandoned. Leave the file in place, then remove or annotate its summary block in the PR body.
+
 ## Live Handoff Acceptance
 
 Unit tests with runtime labels do not prove that another coding runtime can follow this workflow. Before claiming live handoff acceptance, run the two planned pilots: a real Claude-to-Codex findings batch and a disposable Codex-to-Claude resume with owner-conflict and drift refusals. Keep runtime versions, session identities, redacted ledger copies and results outside the repository. Record extra helper calls, elapsed time and user interventions. The pilots remain pending until those real runs exist; do not launch another runtime or create a task solely to clear this checklist without the required authorization.
