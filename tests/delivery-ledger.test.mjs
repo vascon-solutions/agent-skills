@@ -4389,6 +4389,76 @@ test("B1 --from-check issues only read requests to git and GitHub", () => {
   for (const args of ghRequests) assert.equal(args[args.indexOf("--method") + 1], "GET");
 });
 
+function freezeWithBound(owner, oid, spec, { intended = ["src", "README.md"] } = {}) {
+  const evidence = { prior_head: owner.ledger().candidate.working_head_oid, reason: "commit the authorized change", source: "delivery owner", intended_paths: intended, excluded_paths: [] };
+  const bound = typeof spec === "string" ? spec : input(owner.repo, "partial-bound", spec);
+  return owner.owned("freeze", ["--oid", oid, "--evidence-file", input(owner.repo, "freeze", evidence), "--review-bound", bound]);
+}
+
+function workspaceDecisions(owner, { limit = false } = {}) {
+  ok(owner.append("decisions", { id: "workspace", text: "Inspected fixture workspace configuration and affected leaf roots; root-only when no workspace is configured.", source: "fixture workspace evidence" }));
+  if (limit) ok(owner.append("decisions", { id: "delegate-policy", text: "Repository permits at most one delegated implementation review.", source: "fixture repository policy" }));
+}
+
+const B2_FILES = Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`src/file-${i}.js`, `export const n = ${i};\n`]));
+
+test("B2 freeze --review-bound derives exactly the bound measure and set-review-bound install, in one revision", () => {
+  for (const limit of [null, 1]) {
+    const separateRepo = makeRepo();
+    const separate = initDelivery(separateRepo);
+    deliverToFrozen(separateRepo, separate, B2_FILES);
+    ok(setR3(separate, r3Bound(separate, { limit })));
+    const expected = separate.ledger();
+
+    const combinedRepo = makeRepo();
+    const combined = initDelivery(combinedRepo);
+    workspaceDecisions(combined, { limit: limit !== null });
+    const oid = commit(combinedRepo, B2_FILES);
+    const before = combined.ledger();
+    const result = ok(freezeWithBound(combined, oid, { basis: { packages: ["."], workspace_decision: "workspace", delegated_decision: limit === null ? null : "delegate-policy" }, delegated_limit: limit, overrides: [] }));
+    const after = combined.ledger();
+    assert.equal(after.revision, before.revision + 1, "one revision");
+    assert.equal(after.history.at(-1).operation, "freeze");
+    assert.equal(after.candidate.state, "frozen");
+    const strip = ({ measured_oid, ...rest }) => rest;
+    assert.deepEqual(strip(after.review_bound), strip(expected.review_bound), `limit ${limit}`);
+    assert.equal(after.review_bound.measured_oid, oid);
+    for (const field of ["files", "additions", "deletions", "binary_files"]) assert.equal(after.measurements[field], expected.measurements[field], field);
+    assert.deepEqual(result.data.review_bound, after.review_bound);
+  }
+});
+
+test("B2 --review-bound reuse copies attested fields only when every changed path stays under the recorded roots", () => {
+  const repo = makeRepo();
+  const owner = initDelivery(repo);
+  workspaceDecisions(owner);
+  refused(freezeWithBound(owner, commit(repo, { "src/a.js": "a\n" }), "reuse"), 2, "invariant_error", "no prior bound");
+  assert.equal(owner.ledger().candidate.state, "working", "a refused freeze writes nothing");
+  ok(freezeWithBound(owner, git(repo.work, "rev-parse", "HEAD"), { basis: { packages: ["src"], workspace_decision: "workspace", delegated_decision: null }, delegated_limit: null, overrides: [] }));
+  ok(owner.owned("begin-change"));
+  const second = commit(repo, { "src/b.js": "b\n" });
+  ok(freezeWithBound(owner, second, "reuse"));
+  const bound = owner.ledger().review_bound;
+  assert.deepEqual(bound.basis, { files: 2, packages: ["src"], workspace_decision: "workspace", delegated_decision: null });
+  assert.equal(bound.measured_oid, second);
+
+  ok(owner.owned("begin-change"));
+  refused(freezeWithBound(owner, commit(repo, { "README.md": "changed\n" }), "reuse"), 2, "invariant_error", "a path outside the recorded roots");
+  ok(freezeWithBound(owner, git(repo.work, "rev-parse", "HEAD"), { basis: { packages: ["."], workspace_decision: "workspace", delegated_decision: null }, delegated_limit: null, overrides: [] }));
+  ok(owner.authorize(grant("review_round", { wording: '"fix one further findings batch"', additional_cycles: 1 })));
+  ok(owner.owned("begin-change"));
+  refused(freezeWithBound(owner, commit(repo, { "src/c.js": "c\n" }), "reuse"), 2, "invariant_error", "a new extension grant needs the file form");
+
+  const unknown = makeRepo();
+  const unknownOwner = initDelivery(unknown);
+  workspaceDecisions(unknownOwner);
+  ok(freezeWithBound(unknownOwner, commit(unknown, { "src/a.js": "a\n" }), { basis: { packages: null, workspace_decision: "workspace", delegated_decision: null }, delegated_limit: null, overrides: [] }));
+  ok(unknownOwner.owned("begin-change"));
+  refused(freezeWithBound(unknownOwner, commit(unknown, { "src/b.js": "b\n" }), "reuse"), 2, "invariant_error", "null packages cannot be reused");
+  refused(freezeWithBound(unknownOwner, git(unknown.work, "rev-parse", "HEAD"), { basis: { packages: ["src/a.js", "src"], workspace_decision: "workspace", delegated_decision: null }, delegated_limit: null, overrides: [] }), 2, "invariant_error", "ancestor packages are refused as in set-review-bound");
+  refused(freezeWithBound(unknownOwner, git(unknown.work, "rev-parse", "HEAD"), { packages: ["."], workspace_decision: "workspace", delegated_decision: null, delegated_limit: null, overrides: [] }), 2, "schema_error", "flat partial bound keys");
+});
+
 describe("delivery ledger acceptance", { concurrency: Math.max(2, Math.min(6, os.availableParallelism?.() ?? 4)) }, () => {
   for (const { name, fn } of suite) serialTest(name, fn);
 });

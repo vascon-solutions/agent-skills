@@ -524,7 +524,7 @@ const COMMANDS = {
   authorize: { flags: { ...SELECTION, ...OWNED, "grant-file": "string" }, required: [...OWNED_REQUIRED, "grant-file"] },
   "record-context": { flags: { ...SELECTION, ...OWNED, "context-file": "string", reason: "string" }, required: [...OWNED_REQUIRED, "context-file", "reason"] },
   "begin-change": { flags: { ...SELECTION, ...OWNED }, required: OWNED_REQUIRED },
-  freeze: { flags: { ...SELECTION, ...OWNED, oid: "string", "evidence-file": "string" }, required: [...OWNED_REQUIRED, "oid", "evidence-file"] },
+  freeze: { flags: { ...SELECTION, ...OWNED, oid: "string", "evidence-file": "string", "review-bound": "string" }, required: [...OWNED_REQUIRED, "oid", "evidence-file"] },
   reconcile: { flags: { ...SELECTION, ...OWNED, "evidence-file": "string" }, required: [...OWNED_REQUIRED, "evidence-file"] },
   "content-manifest": { flags: { ...SELECTION, "manifest-file": "string", "output-file": "string", "exclude-path": "repeat", "inputs-file": "string" } },
   measure: { flags: { ...SELECTION, ...OWNED }, required: OWNED_REQUIRED },
@@ -664,6 +664,7 @@ export function parseArgs(argv) {
     options.field = field;
   }
   if (command === "publication") parsePublicationArgs(options, positionals[0]);
+  if (command === "freeze" && options["review-bound"] !== undefined && options["review-bound"] !== "reuse") requireAbsolute(options["review-bound"], "--review-bound");
   if (command === "freeze" && !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(options.oid)) {
     fail("argument_error", "--oid must be a full lowercase object ID");
   }
@@ -3277,7 +3278,15 @@ function commandFreeze(options) {
     forbidDuringRecovery(ledger, "an ordinary freeze");
     if (ledger.phase === "watch" && ledger.authorization.monitoring !== "remediate") fail("invariant_error", "an observe-only watch never remediates");
     const transition = applyFreeze(ctx, ledger, draft, options.oid, evidence);
-    return { actor: owner, data: { oid: options.oid }, detail: transition ?? {} };
+    if (!options["review-bound"]) return { actor: owner, data: { oid: options.oid }, detail: transition ?? {} };
+    // Freeze, measure and install the bound in one revision, with the same
+    // checks the separate measure and set-review-bound commands apply.
+    const frozen = clone(draft);
+    const measurement = measureCandidate(ctx, frozen, draft);
+    const measured = clone(draft);
+    const bound = deriveReviewBound(ctx, measured, options["review-bound"]);
+    installReviewBound(ctx, measured, draft, bound);
+    return { actor: owner, data: { oid: options.oid, measurement, review_bound: draft.review_bound }, detail: { ...(transition ?? {}), measurement, review_bound: draft.review_bound } };
   });
 }
 
@@ -3457,6 +3466,15 @@ function commandSetReviewBound(options) {
   return mutate(ctx, options, "set-review-bound", (draft, ledger) => {
     const owner = requireOwner(ledger, options);
     forbidDuringRecovery(ledger, "set-review-bound");
+    installReviewBound(ctx, ledger, draft, bound);
+    return { actor: owner, data: { review_bound: draft.review_bound }, detail: { review_bound: draft.review_bound } };
+  });
+}
+
+// Shared by set-review-bound and freeze --review-bound: `ledger` is the state
+// the bound is checked against, `draft` receives it.
+function installReviewBound(ctx, ledger, draft, bound) {
+  {
     if (ledger.candidate.state !== "frozen" || bound.measured_oid !== ledger.candidate.oid) fail("identity_mismatch", "review bound must identify the frozen candidate");
     const drift = localIdentity(ctx, ledger, "frozen");
     if (drift.mismatches.length || drift.environment.length) fail("identity_mismatch", "cannot set a bound on a drifted candidate", { observed: drift });
@@ -3490,8 +3508,51 @@ function commandSetReviewBound(options) {
     recomputeCounters(draft);
     if (bound.rounds_used !== draft.review_bound.rounds_used || bound.delegated_used !== draft.review_bound.delegated_used) fail("invariant_error", "review counters are derived from current evidence");
     enforceReviewBound(draft);
-    return { actor: owner, data: { review_bound: draft.review_bound }, detail: { review_bound: draft.review_bound } };
-  });
+  }
+}
+
+const EXTENSION_SCOPES = ["review_round", "monitor_remediate"];
+
+// Builds the complete bound from the owner-attested fields; everything the
+// helper can measure or count is derived exactly as set-review-bound checks it.
+function deriveReviewBound(ctx, ledger, spec) {
+  const prior = ledger.review_bound;
+  let attested;
+  if (spec === "reuse") {
+    if (!prior) fail("invariant_error", "--review-bound reuse needs a prior bound; supply the attested fields in a file");
+    if (prior.basis.packages === null) fail("invariant_error", "--review-bound reuse needs recorded package roots; supply the attested fields in a file");
+    const unbound = ledger.authorization.grants.filter((grant) => EXTENSION_SCOPES.includes(grant.scope) && grant.additional_cycles && !prior.overrides.some((entry) => entry.id === grant.id));
+    if (unbound.length > 0) fail("invariant_error", "an extension grant is recorded that the prior bound does not carry; supply the attested fields in a file", { observed: unbound.map((grant) => grant.id) });
+    const packages = prior.basis.packages;
+    const changed = splitNul(git(ctx.worktree, ["diff", "--name-only", "-z", "--no-renames", ledger.repo.diff_base_oid, ledger.candidate.oid, "--"], { buffer: true }).stdout).map(decodePath);
+    const outside = packages.includes(".") ? [] : changed.filter((file) => !inScope(file, packages));
+    if (outside.length > 0) fail("invariant_error", "the candidate changes paths outside the recorded package roots; supply the attested fields in a file", { observed: outside });
+    attested = { basis: { packages: clone(packages), workspace_decision: prior.basis.workspace_decision, delegated_decision: prior.basis.delegated_decision }, delegated_limit: prior.delegated_limit, overrides: clone(prior.overrides) };
+  } else {
+    attested = readJsonFile(spec, "--review-bound");
+    requireExactKeys(attested, ["basis", "delegated_limit", "overrides"], "partial review bound");
+    if (!isObject(attested.basis)) fail("schema_error", "a partial review bound nests packages, workspace_decision and delegated_decision under basis");
+    requireExactKeys(attested.basis, ["packages", "workspace_decision", "delegated_decision"], "partial review bound basis");
+    if (!Array.isArray(attested.overrides)) fail("schema_error", "overrides is an array of recorded grants");
+  }
+  const files = ledger.measurements.files;
+  const calculated = baseReviewClass(files, attested.basis.packages);
+  const counted = clone(ledger);
+  counted.review_bound = { rounds_used: 0, delegated_used: 0 };
+  recomputeCounters(counted);
+  const bound = {
+    max_rounds: Math.max(calculated.max_rounds, prior?.max_rounds ?? 0),
+    rounds_used: counted.review_bound.rounds_used,
+    size: calculated.size,
+    measured_oid: ledger.candidate.oid,
+    basis: { files, ...attested.basis },
+    delegated_limit: attested.delegated_limit,
+    delegated_used: counted.review_bound.delegated_used,
+    extension_rounds: attested.overrides.reduce((sum, grant) => sum + (Number.isSafeInteger(grant?.additional_cycles) ? grant.additional_cycles : 0), 0),
+    overrides: attested.overrides,
+  };
+  requireShape(bound, "ReviewBound", "review_bound");
+  return bound;
 }
 
 // Fixes already contained in a verified push were swept with their own batch;
@@ -3518,28 +3579,33 @@ function commandMeasure(options) {
     const owner = requireOwner(ledger, options);
     forbidDuringRecovery(ledger, "measure");
     if (ledger.candidate.state !== "frozen") fail("invariant_error", "measure needs a frozen candidate; leave local-only work unmeasured with an explicit limitation");
-    const out = git(ctx.worktree, ["diff", "--numstat", "-z", "--no-renames", ledger.repo.diff_base_oid, ledger.candidate.oid, "--"], { buffer: true }).stdout;
-    let files = 0;
-    let additions = 0;
-    let deletions = 0;
-    let binary = 0;
-    for (const record of splitNul(out)) {
-      const text = record.toString("utf8");
-      const first = text.indexOf("\t");
-      const second = text.indexOf("\t", first + 1);
-      if (first === -1 || second === -1) continue;
-      const added = text.slice(0, first);
-      const removed = text.slice(first + 1, second);
-      files += 1;
-      if (added === "-" || removed === "-") binary += 1;
-      else {
-        additions += Number(added);
-        deletions += Number(removed);
-      }
-    }
-    Object.assign(draft.measurements, { files, additions, deletions, binary_files: binary, measured_oid: ledger.candidate.oid, diff_base_oid: ledger.repo.diff_base_oid });
-    return { actor: owner, data: { files, additions, deletions, binary_files: binary }, detail: { measured_oid: ledger.candidate.oid, diff_base_oid: ledger.repo.diff_base_oid } };
+    const counts = measureCandidate(ctx, ledger, draft);
+    return { actor: owner, data: counts, detail: { measured_oid: ledger.candidate.oid, diff_base_oid: ledger.repo.diff_base_oid } };
   });
+}
+
+function measureCandidate(ctx, ledger, draft) {
+  const out = git(ctx.worktree, ["diff", "--numstat", "-z", "--no-renames", ledger.repo.diff_base_oid, ledger.candidate.oid, "--"], { buffer: true }).stdout;
+  let files = 0;
+  let additions = 0;
+  let deletions = 0;
+  let binary = 0;
+  for (const record of splitNul(out)) {
+    const text = record.toString("utf8");
+    const first = text.indexOf("\t");
+    const second = text.indexOf("\t", first + 1);
+    if (first === -1 || second === -1) continue;
+    const added = text.slice(0, first);
+    const removed = text.slice(first + 1, second);
+    files += 1;
+    if (added === "-" || removed === "-") binary += 1;
+    else {
+      additions += Number(added);
+      deletions += Number(removed);
+    }
+  }
+  Object.assign(draft.measurements, { files, additions, deletions, binary_files: binary, measured_oid: ledger.candidate.oid, diff_base_oid: ledger.repo.diff_base_oid });
+  return { files, additions, deletions, binary_files: binary };
 }
 
 function invalidatedRefs(ledger) {
