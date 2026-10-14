@@ -4161,6 +4161,69 @@ test("R3 local remediation verification matches content identity, never two null
   assert.equal(owner.ledger().review_bound.rounds_used, 1);
 });
 
+// Ergonomics (docs/tasks/2026-10-06-delivery-ledger-ergonomics.md): B1-B6.
+function appendMany(owner, field, items, options = {}) {
+  return owner.owned("append", [field], { stdin: JSON.stringify(items), ...options });
+}
+
+function refusedUnchanged(repo, result, exit, code, message) {
+  const before = fs.readFileSync(repo.ledgerPath, "utf8");
+  refused(result(), exit, code, message);
+  assert.equal(fs.readFileSync(repo.ledgerPath, "utf8"), before, `${message}: nothing is written`);
+}
+
+test("B4 an append array is written whole, in one revision with one history event", () => {
+  const repo = makeRepo();
+  const owner = initDelivery(repo);
+  const first = limitation();
+  ok(owner.append("limitations", first));
+  const before = owner.ledger();
+  const second = limitation();
+  const third = limitation();
+  const result = ok(appendMany(owner, "limitations", [first, second, third]));
+  assert.deepEqual(result.data.ids, [first.id, second.id, third.id]);
+  assert.deepEqual(result.data.added, [second.id, third.id], "an identical existing item is a no-op");
+  const after = owner.ledger();
+  assert.equal(after.revision, before.revision + 1);
+  assert.equal(after.history.length, before.history.length + 1);
+  assert.deepEqual(after.history.at(-1).detail, { collection: "limitations", ids: [second.id, third.id] });
+  assert.equal(ok(appendMany(owner, "limitations", [first, second])).changed, false, "an all-identical array changes nothing");
+  refusedUnchanged(repo, () => appendMany(owner, "limitations", [limitation(), { ...first, reason: "different content" }]), 2, "invariant_error", "an existing ID with other content");
+  const duplicate = limitation();
+  refusedUnchanged(repo, () => appendMany(owner, "limitations", [duplicate, duplicate]), 2, "invariant_error", "duplicate IDs inside the array");
+  refusedUnchanged(repo, () => appendMany(owner, "limitations", [limitation(), { id: "broken" }]), 2, "schema_error", "one invalid item refuses the whole array");
+  refusedUnchanged(repo, () => appendMany(owner, "limitations", []), 2, "schema_error", "an empty array");
+});
+
+test("B4 same-call checks see earlier items: one open operation per target, prepared then verified never share a write", () => {
+  const repo = makeRepo();
+  const owner = initDelivery(repo);
+  deliverToFrozen(repo, owner);
+  const one = pushEvent(repo, owner);
+  const two = pushEvent(repo, owner);
+  refusedUnchanged(repo, () => appendMany(owner, "publications", [one, two]), 2, "invariant_error", "two prepared operations on one target");
+  git(repo.work, "push", "-q", "origin", `HEAD:refs/heads/${repo.branch}`);
+  const verified = step(one, "verified", { observed: observedFor(one, { oid: owner.ledger().candidate.oid }) });
+  refusedUnchanged(repo, () => appendMany(owner, "publications", [one, verified]), 2, "invariant_error", "a prepared step and its verified step in one array");
+  ok(owner.append("publications", one));
+  ok(appendMany(owner, "publications", [verified]));
+});
+
+test("B4 same-call checks see earlier items: one reply per thread and delegated reservations", () => {
+  const repo = makeRepo();
+  const { reviewer, threads, batch } = reviewRound(repo);
+  const first = replyEvent(repo, reviewer, batch, threads[0], bodyFile(repo, "Fixed."));
+  ok(reviewer.append("publications", first));
+  const second = replyEvent(repo, reviewer, batch, threads[0], bodyFile(repo, "Fixed again."));
+  refusedUnchanged(repo, () => appendMany(reviewer, "publications", [verifiedReply(first), second]), 2, "invariant_error", "a second reply after a verified reply in the same call");
+
+  const bounded = r3Fixture(1);
+  ok(setR3(bounded.owner, r3Bound(bounded.owner)));
+  const dispatch = () => roleRun(bounded.owner, { status: "running", execution: "delegated", fallback_reason: null, ended_at: null });
+  refusedUnchanged(bounded.repo, () => appendMany(bounded.owner, "role_runs", [dispatch(), dispatch()]), 2, "invariant_error", "two dispatches that together exceed a one-cycle bound");
+  ok(appendMany(bounded.owner, "role_runs", [dispatch()]));
+});
+
 describe("delivery ledger acceptance", { concurrency: Math.max(2, Math.min(6, os.availableParallelism?.() ?? 4)) }, () => {
   for (const { name, fn } of suite) serialTest(name, fn);
 });

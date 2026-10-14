@@ -44,7 +44,7 @@ node <skill-dir>/scripts/delivery-ledger.mjs <command> (--repo DIR [--branch NAM
 | `claim --phase delivery\|review_round\|watch [--grant-file F] [--force --reason TEXT] [--recovery]` | Take ownership; returns `claim_id` and the consumed `next`. |
 | `update` (stdin) | Owner patch of `checkpoint` and `audit_policy` only. |
 | `source-add --kind task_doc\|spec\|instruction --path P --reason TEXT` | Append a source's current hash; adding or changing a source invalidates current reviews. |
-| `append FIELD` (stdin) | Append one item to `validation`, `audits`, `reviews`, `defect_shapes`, `publications`, `role_runs`, `sessions`, `limitations` or `decisions`. Same ID and content is a no-op; same ID with other content fails. |
+| `append FIELD` (stdin) | Append one item, or a JSON array of items, to `validation`, `audits`, `reviews`, `defect_shapes`, `publications`, `role_runs`, `sessions`, `limitations` or `decisions`. Same ID and content is a no-op; same ID with other content fails. An array is validated item by item, in order, against the accumulating draft, then written whole or not at all in one revision with one history event; duplicate IDs inside it are refused, and a prepared publication and a later step of the same operation cannot share one call. |
 | `authorize --grant-file F` | Record one quoted user grant and apply only its declared effect. |
 | `record-context --context-file F --reason TEXT` | Replace `sources.spec_check`, `policy`, `candidate.dependencies` or `pr` after verification. Nothing else. |
 | `begin-change` | Return to `implement`; a frozen candidate becomes working at its OID. |

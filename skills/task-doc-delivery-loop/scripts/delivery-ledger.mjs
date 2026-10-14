@@ -2765,27 +2765,64 @@ function appendChecks(ctx, ledger, field, item) {
   }
 }
 
+function checkAppendItems(field, items) {
+  const ids = new Set();
+  items.forEach((item, index) => {
+    const label = items.length === 1 ? field : `${field}/${index}`;
+    if (!isObject(item)) fail("schema_error", "append takes one JSON object or an array of objects", { path: label });
+    requireShape(item, ITEM_DEFS[field], label);
+    const problems = itemProblems(field, item, label);
+    if (problems.length > 0) fail("invariant_error", problems.join("; "), { id: item.id ?? null });
+    if (ids.has(item.id)) fail("invariant_error", "an append array repeats an ID", { id: item.id });
+    ids.add(item.id);
+  });
+}
+
+// Appends items in order inside one mutation. Each new item is checked
+// against the accumulating draft, so same-call checks (one unresolved
+// operation per action, one reply per thread, role-run reservations) see the
+// earlier items. A prepared publication and a later step of the same
+// operation never share a revision: the prepared record must land before the
+// external write it guards is read back.
+function appendInto(ctx, draft, field, items) {
+  const added = [];
+  const preparedHere = new Set();
+  for (const item of items) {
+    const collection = collectionOf(draft, field);
+    const existing = collection.find((entry) => entry.id === item.id);
+    if (existing) {
+      if (isDeepStrictEqual(existing, item)) continue;
+      fail("invariant_error", "an existing ID was reused with different content; use a new ID and supersedes_id", { id: item.id });
+    }
+    if (field === "publications") {
+      if (item.step !== "prepared" && preparedHere.has(item.operation_id)) {
+        fail("invariant_error", "a prepared step and a later step of the same operation cannot share one write; record the read-back after the external write", { id: item.operation_id });
+      }
+      if (item.step === "prepared") preparedHere.add(item.operation_id);
+    }
+    appendChecks(ctx, draft, field, item);
+    collection.push(item);
+    recomputeCounters(draft);
+    enforceReviewBound(draft);
+    added.push(item.id);
+  }
+  return added;
+}
+
 function commandAppend(options, stdin) {
   const ctx = resolveContext(options, { mutation: true });
   const field = options.field;
-  const item = parseJson(stdin, "stdin");
-  if (!isObject(item)) fail("schema_error", "append takes exactly one JSON object");
-  requireShape(item, ITEM_DEFS[field], field);
-  const problems = itemProblems(field, item);
-  if (problems.length > 0) fail("invariant_error", problems.join("; "), { id: item.id ?? null });
+  const parsed = parseJson(stdin, "stdin");
+  const batch = Array.isArray(parsed);
+  const items = batch ? parsed : [parsed];
+  if (batch && items.length === 0) fail("schema_error", "an append array holds at least one item");
+  checkAppendItems(field, items);
   return mutate(ctx, options, "append", (draft, ledger) => {
     const owner = requireOwner(ledger, options);
-    const items = collectionOf(draft, field);
-    const existing = items.find((entry) => entry.id === item.id);
-    if (existing) {
-      if (isDeepStrictEqual(existing, item)) return { actor: owner, data: { id: item.id } };
-      fail("invariant_error", "an existing ID was reused with different content; use a new ID and supersedes_id", { id: item.id });
-    }
-    appendChecks(ctx, ledger, field, item);
-    items.push(item);
-    recomputeCounters(draft);
-    enforceReviewBound(draft);
-    return { actor: owner, operation: `append ${field}`, data: { id: item.id }, detail: { collection: field, id: item.id } };
+    const added = appendInto(ctx, draft, field, items);
+    const ids = items.map((item) => item.id);
+    if (!batch) return { actor: owner, operation: `append ${field}`, data: { id: ids[0] }, detail: { collection: field, id: ids[0] } };
+    return { actor: owner, operation: `append ${field}`, data: { ids, added }, detail: { collection: field, ids: added } };
   });
 }
 
