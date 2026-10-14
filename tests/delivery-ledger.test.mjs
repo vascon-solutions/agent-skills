@@ -1539,7 +1539,7 @@ test("F14 read and lock-only commands refuse unexpected stdin; update and append
 test("F14 exact exit codes and a single parseable JSON envelope for every error class", () => {
   const repo = makeRepo();
   const owner = initDelivery(repo);
-  const envelopeKeys = ["ok", "command", "code", "message", "path", "id", "expected", "observed"];
+  const envelopeKeys = ["ok", "command", "code", "message", "path", "id", "expected", "observed", "hint"];
   const failures = [
     [run(["show", "--repo", repo.work, "--nope"]), 1, "argument_error"],
     [run(["show", "--repo", path.join(repo.dir, "missing")]), 1, "environment_error"],
@@ -4514,6 +4514,95 @@ test("B3 templates list every required field and their filled forms pass the hel
   const evidence = fillTemplate(template("commit-evidence").skeleton, { prior_head: freshOwner.ledger().candidate.working_head_oid, reason: "commit the change", source: "owner", intended_paths: ["src"] });
   const partial = template("review-bound-partial").skeleton;
   ok(freshOwner.owned("freeze", ["--oid", oid, "--evidence-file", input(fresh, "evidence", evidence), "--review-bound", input(fresh, "partial", { ...partial, basis: { ...partial.basis, packages: ["."], workspace_decision: "workspace" } })]));
+});
+
+test("B5 every hinted failure site carries its hint; other failures carry hint null", async () => {
+  const { HINTS } = await import(pathToHelper());
+  const frozen = () => {
+    const repo = makeRepo();
+    const owner = initDelivery(repo);
+    deliverToFrozen(repo, owner);
+    return { repo, owner };
+  };
+  const triggers = {
+    "stale-revision": () => {
+      const { owner } = frozen();
+      return owner.append("limitations", limitation(), { revision: 0 });
+    },
+    "append-shape": () => {
+      const { owner } = frozen();
+      return owner.append("role_runs", roleRun(owner, { runtime_version: null }));
+    },
+    "append-item-problems": () => {
+      const { repo, owner } = frozen();
+      return owner.append("validation", commandValidation(repo, { oid: owner.ledger().candidate.oid }));
+    },
+    "write-invariant": () => {
+      const { owner } = frozen();
+      const first = limitation();
+      ok(owner.append("limitations", first));
+      return owner.append("limitations", limitation({ supersedes_id: first.id, kind: "another kind" }));
+    },
+    "review-finding-shape": () => {
+      const { owner } = r3Fixture(1);
+      ok(setR3(owner, r3Bound(owner)));
+      return owner.append("reviews", r3Cycle(owner, { findings: [finding()] }));
+    },
+    "bound-measure-first": () => {
+      const { owner } = frozen();
+      workspaceDecisions(owner);
+      const oid = owner.ledger().candidate.oid;
+      return setR3(owner, { max_rounds: 1, rounds_used: 0, size: "small", measured_oid: oid, basis: { files: 1, packages: ["."], workspace_decision: "workspace", delegated_decision: null }, delegated_limit: null, delegated_used: 0, extension_rounds: 0, overrides: [] });
+    },
+    "bound-ancestor-packages": () => {
+      const { owner } = r3Fixture(1);
+      return setR3(owner, r3Bound(owner, { packages: [".", "src"] }));
+    },
+    "bound-size-mismatch": () => {
+      const { owner } = r3Fixture(1);
+      return setR3(owner, r3Bound(owner, { size: "large" }));
+    },
+    "publication-frozen": () => {
+      const repo = makeRepo();
+      const owner = initDelivery(repo);
+      return publication(owner, "prepare", ["--kind", "push"]);
+    },
+    "publication-target": () => {
+      const { repo, owner } = frozen();
+      const event = pushEvent(repo, owner);
+      return owner.append("publications", { ...event, target: { ...event.target, remote_url: "https://example.com/elsewhere.git" } });
+    },
+    "push-before-pr-create": () => {
+      const { repo, owner } = frozen();
+      const body = summaryBody(repo, owner, "Summary.");
+      return publication(owner, "prepare", ["--kind", "pr-create", "--body-file", body.bodyFile, "--draft", "true"]);
+    },
+    "unresolved-operation": () => {
+      const { owner } = frozen();
+      ok(publication(owner, "prepare", ["--kind", "push"]));
+      return publication(owner, "prepare", ["--kind", "push"]);
+    },
+    "prepared-first": () => {
+      const { repo, owner } = frozen();
+      const event = pushEvent(repo, owner);
+      return owner.append("publications", step(event, "verified", { observed: observedFor(event, { oid: event.intended.oid }) }));
+    },
+    "sweep-before-push": () => {
+      const { repo, owner } = r3Fixture(1);
+      ok(setR3(owner, r3Bound(owner)));
+      ok(owner.append("reviews", r3Cycle(owner, { findings: [finding({ shape: "identity-reset", disposition: "fixed", fix_oid: owner.ledger().candidate.oid })] })));
+      return owner.append("publications", pushEvent(repo, owner));
+    },
+  };
+  assert.deepEqual(Object.keys(triggers).sort(), Object.keys(HINTS).sort(), "every hint site has a trigger");
+  for (const [site, trigger] of Object.entries(triggers)) {
+    const result = trigger();
+    assert.notEqual(result.status, 0, site);
+    assert.equal(result.json.hint, HINTS[site], `${site}: ${JSON.stringify(result.json)}`);
+  }
+  assert.equal(refused(run(["show", "--repo", SANDBOX, "--nope"]), 1, "argument_error").hint, null);
+  const { owner } = frozen();
+  assert.equal(refused(owner.update({ owner: null }), 2, "invariant_error").hint, null, "an unlisted site has no hint");
 });
 
 describe("delivery ledger acceptance", { concurrency: Math.max(2, Math.min(6, os.availableParallelism?.() ?? 4)) }, () => {

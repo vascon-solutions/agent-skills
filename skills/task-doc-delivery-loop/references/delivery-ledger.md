@@ -21,7 +21,7 @@ node <skill-dir>/scripts/delivery-ledger.mjs <command> (--repo DIR [--branch NAM
 
 - Every mutation after `init` takes `--runtime claude|codex|gemini --session LABEL --claim-id ID --expected-revision N` (`claim` takes no claim ID unless it is a same-owner reclaim). The session label is any stable identifier the session reuses for all its writes; it is coordination, not authentication.
 - Flags ending in `-file` take absolute paths, never inline JSON. Input files hold one JSON value, except the Markdown files used by `summary-body`. `--output-file` creates a new manifest. Only `update` and `append FIELD` read stdin; every other command refuses stdin input. Parsing is strict: unknown or duplicate flags, missing values, extra positionals and invalid enums are argument errors.
-- Output is exactly one JSON line. Success: `{ok:true, command, changed, revision, data}`. Failure: `{ok:false, command, code, message, path, id, expected, observed}`, with no `data`. Diagnostics go to stderr.
+- Output is exactly one JSON line. Success: `{ok:true, command, changed, revision, data}`. Failure: `{ok:false, command, code, message, path, id, expected, observed, hint}`, with no `data`. `hint` is a string naming the usual fix for a known failure site (a stale revision, a schema-guess rejection, a bound or publication-target refusal, a missing sweep before a push), otherwise `null`. Diagnostics go to stderr.
 
 | Exit | Codes | Meaning |
 | --- | --- | --- |

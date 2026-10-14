@@ -46,21 +46,42 @@ const EXIT_BY_CODE = {
 };
 
 export class LedgerError extends Error {
-  constructor(code, message, { path: errorPath = null, id = null, expected = null, observed = null } = {}) {
+  constructor(code, message, { path: errorPath = null, id = null, expected = null, observed = null } = {}, site = null) {
     super(message);
     if (!(code in EXIT_BY_CODE)) {
       throw new Error(`unknown error code ${code}`);
     }
+    if (site !== null && !hasOwn(HINTS, site)) throw new Error(`unknown failure site ${site}`);
     this.code = code;
     this.path = errorPath;
     this.id = id;
     this.expected = expected;
     this.observed = observed;
+    this.site = site;
   }
 }
 
-const fail = (code, message, details) => {
-  throw new LedgerError(code, message, details);
+// Hints are keyed by failure site, not by code: most refusals share
+// invariant_error. Only the fail() calls that pass a site carry a hint.
+export const HINTS = {
+  "stale-revision": "Re-read the revision with `show --field /revision`, then retry the same write once. Stop if it is stale again.",
+  "append-shape": "Print the record's fields, enums and nullability with `template FIELD`. Text fields marked nonempty (for example role_runs.runtime_version) need a string, never null.",
+  "append-item-problems": "Check the cross-field rules `template FIELD` lists. A completed command needs content_manifest and input_fingerprint from `content-manifest --output-file`.",
+  "write-invariant": "The write would break a ledger invariant listed in `observed`. A successor (supersedes_id) keeps the subject fields `template FIELD` names; otherwise record a new item.",
+  "review-finding-shape": "Give every finding a shape label, proposing a new label when none in the risk classes fits.",
+  "bound-measure-first": "Use `freeze --review-bound FILE`, which measures and installs the bound in one revision, or run `measure` first.",
+  "bound-ancestor-packages": "List only the affected leaf package or app roots, never a directory that contains another listed root; use [\".\"] for a root-only repository.",
+  "bound-size-mismatch": "Let `freeze --review-bound FILE` derive size and max_rounds from the measured files and packages.",
+  "publication-frozen": "Freeze the candidate before publishing; `begin-change` and `freeze` again after any change.",
+  "publication-target": "Generate the event with `publication prepare --kind KIND`, which fills the target and precondition from the ledger.",
+  "push-before-pr-create": "Verify the candidate's push (`publication verify --id OPERATION_ID --from-check`) before preparing the PR.",
+  "unresolved-operation": "Inspect remote state and finish the open operation with `publication verify`: verified if the object exists, otherwise --failed \"not attempted\".",
+  "prepared-first": "Record the prepared step (`publication prepare`) before the external write, then verify it after the read-back.",
+  "sweep-before-push": "Record a done `defect_shapes` sweep for each fixed shape on this candidate (`template defect_shapes`) before preparing the push.",
+};
+
+const fail = (code, message, details, site = null) => {
+  throw new LedgerError(code, message, details, site);
 };
 
 // ---------------------------------------------------------------------------
@@ -322,10 +343,10 @@ export function validateShape(value, defName = null) {
   return errors;
 }
 
-function requireShape(value, defName, label) {
+function requireShape(value, defName, label, site = null) {
   const errors = validateShape(value, defName);
   if (errors.length > 0) {
-    fail("schema_error", `${label} is schema-invalid: ${errors.slice(0, 5).join("; ")}`, { observed: errors.slice(0, 20) });
+    fail("schema_error", `${label} is schema-invalid: ${errors.slice(0, 5).join("; ")}`, { observed: errors.slice(0, 20) }, site);
   }
 }
 
@@ -1000,7 +1021,7 @@ function readLedger(ctx, { required = true } = {}) {
   return ledger;
 }
 
-function checkLedger(ledger, ctx) {
+function checkLedger(ledger, ctx, site = null) {
   if (!isObject(ledger)) fail("schema_error", "the ledger must be a JSON object");
   if (ledger.schema_version !== 1) {
     fail("schema_error", "unsupported schema_version; only 1 is supported", { expected: 1, observed: ledger.schema_version ?? null });
@@ -1008,7 +1029,7 @@ function checkLedger(ledger, ctx) {
   requireShape(ledger, null, "ledger");
   const problems = ledgerInvariants(ledger);
   if (problems.length > 0) {
-    fail("invariant_error", `ledger invariant violated: ${problems.slice(0, 5).join("; ")}`, { observed: problems.slice(0, 20) });
+    fail("invariant_error", `ledger invariant violated: ${problems.slice(0, 5).join("; ")}`, { observed: problems.slice(0, 20) }, site);
   }
   if (ctx && branchKey(ledger.candidate.branch) !== ctx.key) {
     fail("identity_mismatch", "the ledger's branch does not match its file name", { observed: ledger.candidate.branch });
@@ -1077,7 +1098,7 @@ function mutate(ctx, options, command, operation) {
         path: ctx.ledgerPath,
         expected: options["expected-revision"],
         observed: ledger.revision,
-      });
+      }, "stale-revision");
     }
     const draft = clone(ledger);
     const result = operation(draft, ledger) ?? {};
@@ -1098,7 +1119,7 @@ function mutate(ctx, options, command, operation) {
       operation: result.operation ?? command,
       detail: result.detail ?? {},
     });
-    checkLedger(draft, ctx);
+    checkLedger(draft, ctx, "write-invariant");
     writeLedger(ctx, draft);
     return envelope(command, true, draft.revision, data);
   });
@@ -2540,7 +2561,7 @@ function appendReviewChecks(ctx, ledger, item) {
     fail("invariant_error", "set the review bound before recording a frozen-candidate review cycle or fix");
   }
   if (ledger.review_bound) {
-    if (item.findings.some((finding) => !finding.shape?.trim())) fail("invariant_error", "every finding needs a defect shape");
+    if (item.findings.some((finding) => !finding.shape?.trim())) fail("invariant_error", "every finding needs a defect shape", undefined, "review-finding-shape");
     if (item.mode === "implementation" && !item.batch && item.cycle_id === null) {
       const invalidated = invalidatedRefs(ledger);
       const localVerification = item.source === "inline" && currentItems(ledger.reviews).some((prior) =>
@@ -2615,7 +2636,7 @@ function checkBody(file, expectedHash, deliveryId) {
 function checkPrTarget(ledger, item) {
   const pr = ledger.pr;
   if (!pr) fail("invariant_error", "this publication needs a recorded PR");
-  if (item.target.pr_number !== pr.number || item.target.pr_url !== pr.url) fail("identity_mismatch", "the publication targets another PR", { expected: { pr_number: pr.number, pr_url: pr.url }, observed: item.target });
+  if (item.target.pr_number !== pr.number || item.target.pr_url !== pr.url) fail("identity_mismatch", "the publication targets another PR", { expected: { pr_number: pr.number, pr_url: pr.url }, observed: item.target }, "publication-target");
 }
 
 function publicationAuthority(ledger, item) {
@@ -2635,7 +2656,7 @@ function publicationAuthority(ledger, item) {
 
 function prepareChecks(ctx, ledger, item) {
   const { candidate, repo } = ledger;
-  if (candidate.state !== "frozen" || item.candidate_oid !== candidate.oid) fail("invariant_error", "publication uses the frozen candidate unchanged", { expected: candidate.oid, observed: item.candidate_oid });
+  if (candidate.state !== "frozen" || item.candidate_oid !== candidate.oid) fail("invariant_error", "publication uses the frozen candidate unchanged", { expected: candidate.oid, observed: item.candidate_oid }, "publication-frozen");
   publicationAuthority(ledger, item);
   if (item.kind === "push") requireShapeSweeps(ctx, ledger, item.candidate_oid);
   const drift = localIdentity(ctx, ledger, "frozen");
@@ -2644,7 +2665,7 @@ function prepareChecks(ctx, ledger, item) {
   const github = repo.github;
   if (item.kind === "push") {
     if (repo.remote_name === null) fail("invariant_error", "no remote is configured for this delivery");
-    if (item.target.remote_name !== repo.remote_name || item.target.remote_url !== repo.remote_url) fail("identity_mismatch", "the push targets another remote", { expected: { remote_name: repo.remote_name, remote_url: repo.remote_url }, observed: item.target });
+    if (item.target.remote_name !== repo.remote_name || item.target.remote_url !== repo.remote_url) fail("identity_mismatch", "the push targets another remote", { expected: { remote_name: repo.remote_name, remote_url: repo.remote_url }, observed: item.target }, "publication-target");
     if (item.target.host !== (github?.host ?? null) || item.target.repository !== githubRepository(github)) {
       fail("identity_mismatch", "push host/repository must be this delivery's GitHub identity, or null for a non-GitHub remote", { observed: item.target });
     }
@@ -2659,7 +2680,7 @@ function prepareChecks(ctx, ledger, item) {
   } else {
     if (!github) fail("invariant_error", "GitHub publication needs a GitHub repository identity");
     if (item.target.host !== github.host || item.target.repository !== githubRepository(github)) {
-      fail("identity_mismatch", "the publication targets another repository", { expected: { host: github.host, repository: githubRepository(github) }, observed: { host: item.target.host, repository: item.target.repository } });
+      fail("identity_mismatch", "the publication targets another repository", { expected: { host: github.host, repository: githubRepository(github) }, observed: { host: item.target.host, repository: item.target.repository } }, "publication-target");
     }
   }
   const remoteHead = expectedRemote(ledger).oid;
@@ -2670,7 +2691,7 @@ function prepareChecks(ctx, ledger, item) {
       if (!isDeepStrictEqual(item.intended.head_repository, github) || item.intended.head_branch !== candidate.branch || item.intended.base !== baseBranchName(ledger)) {
         fail("identity_mismatch", "the PR must be opened from this delivery's branch onto its verified base", { expected: { head_repository: github, head_branch: candidate.branch, base: baseBranchName(ledger) }, observed: item.intended });
       }
-      if (remoteHead !== item.candidate_oid || item.precondition.head_oid !== item.candidate_oid) fail("identity_mismatch", "push the candidate before opening its PR", { expected: item.candidate_oid, observed: remoteHead });
+      if (remoteHead !== item.candidate_oid || item.precondition.head_oid !== item.candidate_oid) fail("identity_mismatch", "push the candidate before opening its PR", { expected: item.candidate_oid, observed: remoteHead }, "push-before-pr-create");
       checkSummaryCandidate(checkBody(item.intended.body_file, item.intended.body_sha256), ledger.delivery_id, item.candidate_oid);
       break;
     }
@@ -2699,7 +2720,7 @@ function prepareChecks(ctx, ledger, item) {
   }
   for (const { operationId, first, last } of lastSteps(ledger)) {
     if (first.kind === item.kind && isDeepStrictEqual(first.target, item.target) && !TERMINAL_STEPS.has(last.step)) {
-      fail("invariant_error", "the same action has an unresolved operation; inspect remote state and finish it before starting another", { id: operationId });
+      fail("invariant_error", "the same action has an unresolved operation; inspect remote state and finish it before starting another", { id: operationId }, "unresolved-operation");
     }
   }
 }
@@ -2786,7 +2807,7 @@ function publicationChecks(ctx, ledger, item) {
     prepareChecks(ctx, ledger, item);
     return;
   }
-  if (!events) fail("invariant_error", "record a prepared step before observing an operation", { id: item.operation_id });
+  if (!events) fail("invariant_error", "record a prepared step before observing an operation", { id: item.operation_id }, "prepared-first");
   for (const field of operationFields) {
     if (!isDeepStrictEqual(item[field], events[0][field])) fail("invariant_error", `an operation keeps its ${field} across steps`, { expected: events[0][field], observed: item[field] });
   }
@@ -2842,9 +2863,9 @@ function checkAppendItems(field, items) {
   items.forEach((item, index) => {
     const label = items.length === 1 ? field : `${field}/${index}`;
     if (!isObject(item)) fail("schema_error", "append takes one JSON object or an array of objects", { path: label });
-    requireShape(item, ITEM_DEFS[field], label);
+    requireShape(item, ITEM_DEFS[field], label, "append-shape");
     const problems = itemProblems(field, item, label);
-    if (problems.length > 0) fail("invariant_error", problems.join("; "), { id: item.id ?? null });
+    if (problems.length > 0) fail("invariant_error", problems.join("; "), { id: item.id ?? null }, "append-item-problems");
     if (ids.has(item.id)) fail("invariant_error", "an append array repeats an ID", { id: item.id });
     ids.add(item.id);
   });
@@ -2947,7 +2968,7 @@ function prTargetOf(ledger) {
 
 function buildPrepared(ledger, kind, params, at) {
   const { candidate, repo } = ledger;
-  if (candidate.state !== "frozen") fail("invariant_error", "publication uses the frozen candidate unchanged", { expected: "frozen", observed: candidate.state });
+  if (candidate.state !== "frozen") fail("invariant_error", "publication uses the frozen candidate unchanged", { expected: "frozen", observed: candidate.state }, "publication-frozen");
   const remoteHead = expectedRemote(ledger).oid;
   const precondition = { head_oid: remoteHead, body_sha256: null, state: null, observed_at: at };
   let target;
@@ -3483,18 +3504,18 @@ function installReviewBound(ctx, ledger, draft, bound) {
     if (ledger.candidate.state !== "frozen" || bound.measured_oid !== ledger.candidate.oid) fail("identity_mismatch", "review bound must identify the frozen candidate");
     const drift = localIdentity(ctx, ledger, "frozen");
     if (drift.mismatches.length || drift.environment.length) fail("identity_mismatch", "cannot set a bound on a drifted candidate", { observed: drift });
-    if (ledger.measurements.measured_oid !== bound.measured_oid || ledger.measurements.diff_base_oid !== ledger.repo.diff_base_oid || ledger.measurements.files !== bound.basis.files) fail("invariant_error", "measure this candidate against diff_base_oid before setting its bound");
+    if (ledger.measurements.measured_oid !== bound.measured_oid || ledger.measurements.diff_base_oid !== ledger.repo.diff_base_oid || ledger.measurements.files !== bound.basis.files) fail("invariant_error", "measure this candidate against diff_base_oid before setting its bound", undefined, "bound-measure-first");
     const decisions = ledger.sources.decisions;
     if (!decisions.some((item) => item.id === bound.basis.workspace_decision)) fail("invariant_error", "workspace evidence must reference a recorded decision");
     if (bound.delegated_limit !== null && !decisions.some((item) => item.id === bound.basis.delegated_decision)) fail("invariant_error", "a delegated limit needs its recorded policy source");
     const packages = bound.basis.packages;
     if (packages !== null && (new Set(packages).size !== packages.length || packages.some((item) => item !== "." && !validManifestPath(item)))) fail("invariant_error", "packages are unique repository-relative leaf boundaries");
-    if (packages !== null && packages.some((a) => packages.some((b) => a !== b && (a === "." || b.startsWith(`${a}/`))))) fail("invariant_error", "count affected leaf packages only, not their ancestors");
+    if (packages !== null && packages.some((a) => packages.some((b) => a !== b && (a === "." || b.startsWith(`${a}/`))))) fail("invariant_error", "count affected leaf packages only, not their ancestors", undefined, "bound-ancestor-packages");
     const calculated = baseReviewClass(bound.basis.files, packages);
     const previous = ledger.review_bound;
     // Retain the larger finalized allowance across replacement candidates.
     const base = Math.max(calculated.max_rounds, previous?.max_rounds ?? 0);
-    if (bound.size !== calculated.size || bound.max_rounds !== base) fail("invariant_error", "size/base allowance differs from recorded size/workspace evidence", { expected: { size: calculated.size, max_rounds: base } });
+    if (bound.size !== calculated.size || bound.max_rounds !== base) fail("invariant_error", "size/base allowance differs from recorded size/workspace evidence", { expected: { size: calculated.size, max_rounds: base } }, "bound-size-mismatch");
     const ids = new Set();
     for (const grant of bound.overrides) {
       if (ids.has(grant.id) || !ledger.authorization.grants.some((recorded) => isDeepStrictEqual(recorded, grant))) fail("invariant_error", "overrides need unique, already recorded grants");
@@ -3572,9 +3593,9 @@ function requireShapeSweeps(ctx, ledger, oid) {
   );
   if (fixed.length > 0 && !ledger.review_bound) fail("invariant_error", "set the review bound before pushing fixes; their shape sweeps are checked against it");
   for (const finding of fixed) {
-    if (!finding.shape?.trim()) fail("invariant_error", "fixed findings need shape labels before publication");
+    if (!finding.shape?.trim()) fail("invariant_error", "fixed findings need shape labels before publication", undefined, "review-finding-shape");
     const sweep = currentItems(ledger.defect_shapes).find((item) => item.shape === finding.shape && item.candidate_oid === oid && item.sweep === "done");
-    if (!sweep || !sweep.evidence?.trim() || !sweep.searched_scope.length) fail("invariant_error", `complete the ${finding.shape} sweep for this candidate before pushing`);
+    if (!sweep || !sweep.evidence?.trim() || !sweep.searched_scope.length) fail("invariant_error", `complete the ${finding.shape} sweep for this candidate before pushing`, undefined, "sweep-before-push");
   }
 }
 
@@ -4135,6 +4156,7 @@ export async function main(argv = process.argv.slice(2)) {
       id: known ? error.id : null,
       expected: known ? error.expected : null,
       observed: known ? error.observed : null,
+      hint: known && error.site !== null ? HINTS[error.site] : null,
     };
     exitCode = known ? EXIT_BY_CODE[error.code] : 1;
     if (!known) process.stderr.write(`${String(error?.stack ?? error).replace(/(gh[opsu]_|github_pat_)\w+/g, "$1[redacted]")}\n`);
