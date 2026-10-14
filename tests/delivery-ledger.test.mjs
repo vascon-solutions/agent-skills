@@ -4224,6 +4224,171 @@ test("B4 same-call checks see earlier items: one reply per thread and delegated 
   ok(appendMany(bounded.owner, "role_runs", [dispatch()]));
 });
 
+function publication(owner, action, args = [], options = {}) {
+  return owner.owned("publication", [action, ...args], options);
+}
+
+// Generated IDs and timestamps differ by construction; everything else must
+// equal the hand-built event.
+function normalizeEvent(event) {
+  const { id, operation_id, at, ...rest } = event;
+  return {
+    ...rest,
+    precondition: { ...rest.precondition, observed_at: "<at>" },
+    observed: rest.observed === null ? null : { ...rest.observed, observed_at: "<at>" },
+  };
+}
+
+function generated(result) {
+  const json = ok(result);
+  return json.data.events;
+}
+
+test("B1 generated push, pr_create, pr_body and pr_state events equal hand-built ones", () => {
+  const repo = makeRepo();
+  const owner = initDelivery(repo, { endpoint: "ready_pr" });
+  deliverToFrozen(repo, owner);
+  const oid = owner.ledger().candidate.oid;
+
+  const [push] = generated(publication(owner, "prepare", ["--kind", "push"]));
+  assert.deepEqual(normalizeEvent(push), normalizeEvent(pushEvent(repo, owner)));
+  git(repo.work, "push", "-q", "origin", `HEAD:refs/heads/${repo.branch}`);
+  const [pushVerified] = generated(publication(owner, "verify", ["--id", push.operation_id, "--from-check"], { env: { FAKE_GH_DIR: repo.gh } }));
+  assert.equal(pushVerified.step, "verified");
+  assert.deepEqual(normalizeEvent(pushVerified), normalizeEvent(step(push, "verified", { observed: observedFor(push, { oid }) })));
+
+  const body = summaryBody(repo, owner, "Delivery summary: validation passed.");
+  const [create] = generated(publication(owner, "prepare", ["--kind", "pr-create", "--body-file", body.bodyFile, "--draft", "true"]));
+  const handCreate = {
+    ...pushEvent(repo, owner),
+    kind: "pr_create",
+    target: { host: "github.com", repository: `${repo.github.owner}/${repo.github.name}`, pr_number: null, pr_url: null },
+    intended: { head_repository: { ...repo.github }, head_branch: repo.branch, base: "main", draft: true, body_file: body.bodyFile, body_sha256: body.body_sha256 },
+    precondition: { head_oid: oid, body_sha256: null, state: null, observed_at: nowIso() },
+  };
+  assert.deepEqual(normalizeEvent(create), normalizeEvent(handCreate));
+  const pr = prRecord(repo, owner, { number: 7, draft: true });
+  const createObserved = observedFor(create, { object_id: "PR_7", url: pr.url, target: { ...create.target, pr_number: 7, pr_url: pr.url, head_repository: { ...repo.github }, head_branch: repo.branch, base: "main" }, oid, body_sha256: body.body_sha256, draft: true, state: "OPEN" });
+  const [createVerified] = generated(publication(owner, "verify", ["--id", create.operation_id, "--observed-file", input(repo, "observed", createObserved)]));
+  assert.deepEqual(normalizeEvent(createVerified), normalizeEvent(step(create, "verified", { observed: createObserved })));
+  ok(owner.recordContext({ pr }));
+  ghPull(repo, pr);
+
+  const next = summaryBody(repo, owner, "Delivery summary: updated.", fs.readFileSync(body.bodyFile, "utf8"));
+  const [bodyEvent] = generated(publication(owner, "prepare", ["--kind", "pr-body", "--body-file", next.bodyFile, "--current-body-sha256", next.current_body_sha256]));
+  const prTarget = { host: "github.com", repository: pr.repository, pr_number: pr.number, pr_url: pr.url };
+  const handBody = { ...pushEvent(repo, owner), kind: "pr_body", target: prTarget, intended: { body_file: next.bodyFile, body_sha256: next.body_sha256 }, precondition: { head_oid: oid, body_sha256: next.current_body_sha256, state: "OPEN", observed_at: nowIso() } };
+  assert.deepEqual(normalizeEvent(bodyEvent), normalizeEvent(handBody));
+  assert.equal(generated(publication(owner, "verify", ["--id", bodyEvent.operation_id, "--observed-file", input(repo, "observed", { target: prTarget, oid, body_sha256: next.body_sha256 })]))[0].step, "verified", "nullable observation fields default to null");
+
+  const [state] = generated(publication(owner, "prepare", ["--kind", "pr-state", "--draft", "false"]));
+  const handState = { ...pushEvent(repo, owner), kind: "pr_state", target: prTarget, intended: { draft: false }, precondition: { head_oid: oid, body_sha256: null, state: "OPEN", observed_at: nowIso() } };
+  assert.deepEqual(normalizeEvent(state), normalizeEvent(handState));
+  ghPull(repo, { ...pr, draft: false });
+  const [stateVerified] = generated(publication(owner, "verify", ["--id", state.operation_id, "--from-check"], { env: { FAKE_GH_DIR: repo.gh } }));
+  assert.deepEqual(normalizeEvent(stateVerified), normalizeEvent(step(state, "verified", { observed: observedFor(state, { url: pr.url, oid, draft: false, state: "OPEN" }) })));
+});
+
+test("B1 generated reply and resolve events equal hand-built ones", () => {
+  const repo = makeRepo();
+  const { reviewer, threads, batch } = reviewRound(repo);
+  const body = bodyFile(repo, "Fixed in the latest push.");
+  const [reply] = generated(publication(reviewer, "prepare", ["--kind", "reply", "--thread", threads[0].thread_graphql_id, "--body-file", body.file]));
+  assert.deepEqual(normalizeEvent(reply), normalizeEvent(replyEvent(repo, reviewer, batch, threads[0], body)));
+  const observed = observedFor(reply, { object_id: "5001", url: `${reply.target.pr_url}#discussion_r5001`, body_sha256: body.sha256 });
+  const [replyVerified] = generated(publication(reviewer, "verify", ["--id", reply.operation_id, "--observed-file", input(repo, "observed", observed)]));
+  assert.deepEqual(normalizeEvent(replyVerified), normalizeEvent(verifiedReply(reply)));
+  const [resolve] = generated(publication(reviewer, "prepare", ["--kind", "resolve", "--thread", threads[0].thread_graphql_id]));
+  assert.deepEqual(normalizeEvent(resolve), normalizeEvent(resolveEvent(reviewer, batch, threads[0], reply.operation_id)));
+  const [resolved] = generated(publication(reviewer, "verify", ["--id", resolve.operation_id, "--observed-file", input(repo, "observed", { target: resolve.target, resolved: true })]));
+  assert.equal(resolved.step, "verified");
+});
+
+test("B1 a batch keeps per-item identity: one mismatched read-back leaves the others verified", () => {
+  const repo = makeRepo();
+  const { reviewer, threads, batch } = reviewRound(repo);
+  const bodies = threads.map((_, index) => bodyFile(repo, `Reply ${index}.`));
+  const before = reviewer.ledger();
+  const prepared = ok(publication(reviewer, "prepare", ["--kind", "reply", "--batch", input(repo, "batch", threads.map((thread, index) => ({ thread: thread.thread_graphql_id, body_file: bodies[index].file })))]));
+  const after = reviewer.ledger();
+  assert.equal(after.revision, before.revision + 1, "one revision for the batch");
+  assert.equal(after.history.at(-1).detail.batch.id, prepared.data.batch_id, "the batch identity lives in history detail");
+  const events = prepared.data.events;
+  assert.ok(events.every((event) => event.batch_id === batch.id), "batch_id keeps its frozen review-batch meaning");
+  assert.equal(new Set(events.map((event) => event.operation_id)).size, 2);
+  const good = observedFor(events[0], { object_id: "6001", url: `${events[0].target.pr_url}#discussion_r6001`, body_sha256: bodies[0].sha256 });
+  const bad = observedFor(events[1], { object_id: "6002", url: `${events[1].target.pr_url}#discussion_r6002`, body_sha256: "0".repeat(64) });
+  const verified = ok(publication(reviewer, "verify", ["--batch", input(repo, "batch", [{ id: events[0].operation_id, observed_file: input(repo, "observed", good) }, { id: events[1].operation_id, observed_file: input(repo, "observed", bad) }])]));
+  assert.deepEqual(verified.data.items.map((item) => item.step), ["verified", "mismatch"]);
+  const last = (operation) => reviewer.ledger().publications.filter((event) => event.operation_id === operation).at(-1);
+  assert.equal(last(events[0].operation_id).step, "verified");
+  assert.equal(last(events[1].operation_id).step, "mismatch");
+  assert.match(last(events[1].operation_id).error, /body differs/);
+  refused(publication(reviewer, "verify", ["--batch", input(repo, "batch", [{ id: events[1].operation_id, failed: "x" }, { id: events[1].operation_id, failed: "y" }])]), 2, "invariant_error", "a verify batch names each operation once");
+});
+
+test("B1 recovery and refusals: not-attempted items fail, reply and resolve never share a prepare batch, --from-check covers push and pr-state only", () => {
+  const repo = makeRepo();
+  const { reviewer, threads } = reviewRound(repo);
+  const body = bodyFile(repo, "Fixed.");
+  const [reply] = generated(publication(reviewer, "prepare", ["--kind", "reply", "--thread", threads[0].thread_graphql_id, "--body-file", body.file]));
+  refused(publication(reviewer, "verify", ["--id", reply.operation_id, "--from-check"]), 1, "argument_error", "reply read-back comes from an observed file");
+  refused(publication(reviewer, "prepare", ["--kind", "resolve", "--thread", threads[0].thread_graphql_id]), 2, "invariant_error", "resolve needs a verified reply");
+  refused(publication(reviewer, "prepare", ["--kind", "reply", "--batch", input(repo, "batch", [{ thread: threads[1].thread_graphql_id, body_file: body.file, kind: "resolve" }])]), 1, "argument_error", "a batch holds one kind");
+  const [failedStep] = generated(publication(reviewer, "verify", ["--id", reply.operation_id, "--failed", "not attempted"]));
+  assert.equal(failedStep.step, "failed");
+  assert.equal(failedStep.error, "not attempted");
+  refused(publication(reviewer, "verify", ["--id", reply.operation_id, "--failed", "again"]), 2, "invariant_error", "a failed operation has ended");
+  refused(publication(reviewer, "verify", ["--id", "no-such-operation", "--uncertain", "?"]), 2, "invariant_error");
+  const [retry] = generated(publication(reviewer, "prepare", ["--kind", "reply", "--thread", threads[0].thread_graphql_id, "--body-file", body.file]));
+  const [uncertain] = generated(publication(reviewer, "verify", ["--id", retry.operation_id, "--uncertain", "the POST timed out"]));
+  assert.equal(uncertain.step, "uncertain");
+  refused(publication(reviewer, "prepare", ["--kind", "reply", "--thread", threads[0].thread_graphql_id, "--body-file", body.file]), 2, "invariant_error", "an unresolved operation blocks another");
+  refused(publication(reviewer, "prepare", ["--kind", "push", "--id", "x"]), 1, "argument_error");
+  refused(publication(reviewer, "verify", ["--id", "x"]), 1, "argument_error");
+  refused(publication(reviewer, "sideways", ["--kind", "push"]), 1, "argument_error");
+});
+
+test("B1 --from-check issues only read requests to git and GitHub", () => {
+  const repo = makeRepo();
+  const owner = initDelivery(repo, { endpoint: "ready_pr" });
+  const { pr } = draftPrDelivery(repo, owner);
+  const realGit = spawnSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).stdout.trim();
+  const bin = path.join(repo.dir, "recording-bin");
+  const log = path.join(repo.dir, "git-calls.jsonl");
+  fs.mkdirSync(bin);
+  fs.writeFileSync(path.join(bin, "git"), `#!${process.execPath}\nconst fs = require("fs");\nfs.appendFileSync(${JSON.stringify(log)}, JSON.stringify(process.argv.slice(2)) + "\\n");\nconst r = require("child_process").spawnSync(${JSON.stringify(realGit)}, process.argv.slice(2), { stdio: "inherit" });\nprocess.exit(r.status ?? 1);\n`, { mode: 0o755 });
+  const env = { FAKE_GH_DIR: repo.gh, PATH: `${bin}:${FAKE_BIN}:${process.env.PATH}` };
+  const [state] = generated(publication(owner, "prepare", ["--kind", "pr-state", "--draft", "false"]));
+  ghPull(repo, { ...pr, draft: false });
+  fs.rmSync(path.join(repo.gh, "calls.jsonl"), { force: true });
+  assert.equal(generated(publication(owner, "verify", ["--id", state.operation_id, "--from-check"], { env }))[0].step, "verified");
+  ok(owner.owned("begin-change"));
+  deliverToFrozen(repo, owner, { "src/app.js": "export const v = 3;\n" });
+  ok(owner.append("reviews", review(owner)));
+  const [push] = generated(publication(owner, "prepare", ["--kind", "push"]));
+  git(repo.work, "push", "-q", "origin", `HEAD:refs/heads/${repo.branch}`);
+  fs.rmSync(log, { force: true });
+  assert.equal(generated(publication(owner, "verify", ["--id", push.operation_id, "--from-check"], { env }))[0].step, "verified");
+  const subcommand = (args) => {
+    for (let i = 0; i < args.length; i += 1) {
+      if (["-C", "-c"].includes(args[i])) i += 1;
+      else if (!args[i].startsWith("-")) return args[i];
+    }
+    return null;
+  };
+  const gitCalls = fs.readFileSync(log, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line));
+  assert.ok(gitCalls.some((args) => subcommand(args) === "ls-remote"), "the push read-back uses ls-remote");
+  const mutating = ["push", "fetch", "commit", "update-ref", "reset", "checkout", "switch", "tag", "branch", "merge", "rebase", "gc", "add", "rm", "mv", "stash", "pull", "update-index"];
+  for (const args of gitCalls) {
+    assert.ok(!mutating.includes(subcommand(args)), `git ${args.join(" ")} is not a read`);
+    if (subcommand(args) === "config") assert.ok(args.includes("--get"), `git ${args.join(" ")} only reads config`);
+  }
+  const ghRequests = ghCalls(repo);
+  assert.ok(ghRequests.length > 0);
+  for (const args of ghRequests) assert.equal(args[args.indexOf("--method") + 1], "GET");
+});
+
 describe("delivery ledger acceptance", { concurrency: Math.max(2, Math.min(6, os.availableParallelism?.() ?? 4)) }, () => {
   for (const { name, fn } of suite) serialTest(name, fn);
 });

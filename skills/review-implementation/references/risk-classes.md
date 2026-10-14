@@ -14,7 +14,9 @@ For protected reads and mutations:
 - **Authorization (`authorization-leak`):** verify server-enforced actor, tenant, and object scope; UI hiding is not enforcement. Include stale-permission, wrong-actor, and denied-transition behavior where relevant.
 
 Also consider `stale-cache-after-mutation` for affected cached reads and
-`batch-publication-verification` for per-item publication identity and read-back.
+`batch-publication-verification` for per-item publication identity and read-back,
+including batched writes: every item keeps its own operation, target and
+read-back, and no item is verified in the call that prepared it.
 The vocabulary is deliberately short and may grow. Give every finding a shape,
 including a proposed new label when none fits. Keep proposals in the delivery
 ledger, or the delivery summary without one; promotion to this checklist requires user acceptance and separate

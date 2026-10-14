@@ -534,6 +534,27 @@ const COMMANDS = {
     required: ["runtime", "session", "kind", "reason"],
   },
   "set-review-bound": { flags: { ...SELECTION, ...OWNED, "bound-file": "string" }, required: [...OWNED_REQUIRED, "bound-file"] },
+  publication: {
+    flags: {
+      ...SELECTION,
+      ...OWNED,
+      kind: "string",
+      batch: "string",
+      "body-file": "string",
+      draft: "string",
+      "current-body-sha256": "string",
+      thread: "string",
+      "review-batch": "string",
+      "reply-operation": "string",
+      id: "string",
+      "observed-file": "string",
+      "from-check": "boolean",
+      failed: "string",
+      uncertain: "string",
+    },
+    required: OWNED_REQUIRED,
+    positional: 1,
+  },
   "summary-body": {
     flags: { ...SELECTION, "current-body-file": "string", "summary-file": "string", "expected-current-sha256": "string" },
     required: ["current-body-file", "summary-file"],
@@ -642,6 +663,7 @@ export function parseArgs(argv) {
     }
     options.field = field;
   }
+  if (command === "publication") parsePublicationArgs(options, positionals[0]);
   if (command === "freeze" && !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(options.oid)) {
     fail("argument_error", "--oid must be a full lowercase object ID");
   }
@@ -653,6 +675,50 @@ export function parseArgs(argv) {
     for (const value of options[name] ?? []) requireAbsolute(value, `--${name}`);
   }
   return { command, options };
+}
+
+const PUBLICATION_KINDS = { push: "push", "pr-create": "pr_create", "pr-body": "pr_body", "pr-state": "pr_state", reply: "reply", resolve: "resolve" };
+const PREPARE_PARAMS = {
+  push: { required: [], optional: [] },
+  pr_create: { required: ["body_file", "draft"], optional: [] },
+  pr_body: { required: ["body_file", "current_body_sha256"], optional: [] },
+  pr_state: { required: ["draft"], optional: [] },
+  reply: { required: ["thread", "body_file"], optional: ["review_batch"] },
+  resolve: { required: ["thread"], optional: ["review_batch", "reply_operation"] },
+};
+const PREPARE_FLAGS = ["body-file", "draft", "current-body-sha256", "thread", "review-batch", "reply-operation"];
+const VERIFY_SOURCES = ["observed-file", "from-check", "failed", "uncertain"];
+const flagKey = (flag) => flag.replaceAll("-", "_");
+
+function parsePublicationArgs(options, action) {
+  if (!["prepare", "verify"].includes(action)) fail("argument_error", "publication takes prepare or verify");
+  options.action = action;
+  if (options.batch !== undefined) requireAbsolute(options.batch, "--batch");
+  const present = (names) => names.filter((name) => hasOwn(options, name));
+  if (action === "prepare") {
+    if (!hasOwn(PUBLICATION_KINDS, options.kind ?? "")) fail("argument_error", `--kind must be one of ${Object.keys(PUBLICATION_KINDS).join(", ")}`);
+    const stray = present(["id", ...VERIFY_SOURCES]);
+    if (stray.length) fail("argument_error", `publication prepare does not take --${stray[0]}`);
+    const supplied = present(PREPARE_FLAGS);
+    if (options.batch !== undefined && supplied.length) fail("argument_error", "give item fields in the --batch file or as flags, not both");
+    if (options.batch === undefined) options.items = [Object.fromEntries(supplied.map((name) => [flagKey(name), options[name]]))];
+    return;
+  }
+  const stray = present(["kind", ...PREPARE_FLAGS]);
+  if (stray.length) fail("argument_error", `publication verify does not take --${stray[0]}`);
+  const sources = present(VERIFY_SOURCES);
+  if (options.batch !== undefined) {
+    if (sources.length || hasOwn(options, "id")) fail("argument_error", "give verify items in the --batch file or as flags, not both");
+    return;
+  }
+  if (!hasOwn(options, "id")) fail("argument_error", "publication verify needs --id OPERATION_ID or --batch FILE");
+  if (sources.length !== 1) fail("argument_error", "publication verify needs exactly one of --observed-file, --from-check, --failed or --uncertain");
+  const item = { id: options.id };
+  if (options["observed-file"]) item.observed_file = options["observed-file"];
+  if (options["from-check"]) item.from_check = true;
+  if (options.failed) item.failed = options.failed;
+  if (options.uncertain) item.uncertain = options.uncertain;
+  options.items = [item];
 }
 
 // Only update and append read stdin; everything else refuses input it
@@ -2826,6 +2892,234 @@ function commandAppend(options, stdin) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Publication payload generation (prepare / verify). The helper still never
+// writes externally; it builds the same events a caller would append.
+
+function readPublicationBatch(file, action) {
+  const items = readJsonFile(file, "--batch");
+  if (!Array.isArray(items) || items.length === 0) fail("schema_error", `a publication ${action} batch is a nonempty JSON array`, { path: file });
+  for (const item of items) if (!isObject(item)) fail("schema_error", "each batch item is a JSON object", { path: file });
+  return items;
+}
+
+function prepareParams(kind, params) {
+  const spec = PREPARE_PARAMS[kind];
+  const allowed = [...spec.required, ...spec.optional];
+  for (const key of Object.keys(params)) {
+    if (!allowed.includes(key)) fail("argument_error", `${kind} preparation does not take ${key}`, { observed: key });
+    if (typeof params[key] !== "string" || params[key].length === 0) fail("argument_error", `${key} must be a nonempty string`, { observed: params[key] });
+  }
+  for (const key of spec.required) if (!hasOwn(params, key)) fail("argument_error", `${kind} preparation needs ${key}`);
+  if (hasOwn(params, "draft") && !["true", "false"].includes(params.draft)) fail("argument_error", "draft must be true or false", { observed: params.draft });
+  if (hasOwn(params, "body_file")) requireAbsolute(params.body_file, "body_file");
+  if (hasOwn(params, "current_body_sha256") && !/^[0-9a-f]{64}$/.test(params.current_body_sha256)) fail("argument_error", "current_body_sha256 must be 64 lowercase hex characters");
+  return params;
+}
+
+function bodySha(file) {
+  try {
+    return sha256(fs.readFileSync(file));
+  } catch (error) {
+    return fail("io_error", `cannot read the body file: ${error.code}`, { path: file });
+  }
+}
+
+function threadReview(ledger, thread, batchId) {
+  if (batchId) return batchReview(ledger, batchId);
+  const reviews = currentItems(ledger.reviews).filter((review) => review.batch && review.findings.some((finding) => finding.thread_id === thread));
+  if (reviews.length === 0) fail("invariant_error", "no current review batch pairs a finding with this thread", { observed: thread });
+  return batchReview(ledger, reviews[reviews.length - 1].batch.id);
+}
+
+function prTargetOf(ledger) {
+  const { github } = ledger.repo;
+  if (!github) fail("invariant_error", "GitHub publication needs a GitHub repository identity");
+  if (!ledger.pr) fail("invariant_error", "this publication needs a recorded PR");
+  return { host: github.host, repository: githubRepository(github), pr_number: ledger.pr.number, pr_url: ledger.pr.url };
+}
+
+function buildPrepared(ledger, kind, params, at) {
+  const { candidate, repo } = ledger;
+  if (candidate.state !== "frozen") fail("invariant_error", "publication uses the frozen candidate unchanged", { expected: "frozen", observed: candidate.state });
+  const remoteHead = expectedRemote(ledger).oid;
+  const precondition = { head_oid: remoteHead, body_sha256: null, state: null, observed_at: at };
+  let target;
+  let intended;
+  let batchId = null;
+  switch (kind) {
+    case "push":
+      if (repo.remote_name === null) fail("invariant_error", "no remote is configured for this delivery");
+      target = { remote_name: repo.remote_name, remote_url: repo.remote_url, ref: destinationRef(ledger), host: repo.github?.host ?? null, repository: githubRepository(repo.github) };
+      intended = { oid: candidate.oid };
+      break;
+    case "pr_create":
+      if (!repo.github) fail("invariant_error", "GitHub publication needs a GitHub repository identity");
+      target = { host: repo.github.host, repository: githubRepository(repo.github), pr_number: null, pr_url: null };
+      intended = { head_repository: clone(repo.github), head_branch: candidate.branch, base: baseBranchName(ledger), draft: params.draft === "true", body_file: params.body_file, body_sha256: bodySha(params.body_file) };
+      break;
+    case "pr_body":
+      target = prTargetOf(ledger);
+      intended = { body_file: params.body_file, body_sha256: bodySha(params.body_file) };
+      Object.assign(precondition, { head_oid: remoteHead ?? ledger.pr.head, body_sha256: params.current_body_sha256, state: ledger.pr.state });
+      break;
+    case "pr_state":
+      target = prTargetOf(ledger);
+      intended = { draft: params.draft === "true" };
+      Object.assign(precondition, { head_oid: remoteHead ?? ledger.pr.head, state: ledger.pr.state });
+      break;
+    case "reply":
+    case "resolve": {
+      target = prTargetOf(ledger);
+      const review = threadReview(ledger, params.thread, params.review_batch);
+      batchId = review.batch.id;
+      const thread = readBatchSnapshot(review.batch, ledger).threads.find((entry) => entry.thread_graphql_id === params.thread);
+      if (!thread) fail("identity_mismatch", "the thread is not in the frozen batch", { observed: params.thread });
+      Object.assign(precondition, { head_oid: remoteHead ?? ledger.pr.head, state: ledger.pr.state });
+      if (kind === "reply") {
+        Object.assign(target, { root_comment_database_id: thread.root_comment_database_id, thread_graphql_id: thread.thread_graphql_id });
+        intended = { body_file: params.body_file, body_sha256: bodySha(params.body_file) };
+      } else {
+        target.thread_graphql_id = thread.thread_graphql_id;
+        let replyOperation = params.reply_operation;
+        if (!replyOperation) {
+          const replies = lastSteps(ledger).filter(({ first, last }) => first.kind === "reply" && first.batch_id === batchId && first.target.thread_graphql_id === thread.thread_graphql_id && last.step === "verified");
+          if (replies.length === 0) fail("invariant_error", "resolve only after this thread's reply is verified");
+          replyOperation = replies[replies.length - 1].operationId;
+        }
+        intended = { resolved: true, reply_operation_id: replyOperation };
+      }
+      break;
+    }
+    default:
+      break;
+  }
+  return { id: `pub-${randomUUID()}`, operation_id: `${kind.replace("_", "-")}-${randomUUID()}`, step: "prepared", kind, at, candidate_oid: candidate.oid, target, intended, precondition, batch_id: batchId, observed: null, error: null };
+}
+
+const OBSERVED_KEYS = ["object_id", "url", "target", "oid", "body_sha256", "draft", "resolved", "state", "observed_at"];
+
+function readObservedFile(file) {
+  const value = readJsonFile(file, "observed_file");
+  if (!isObject(value)) fail("schema_error", "an observed file holds one JSON object", { path: file });
+  for (const key of Object.keys(value)) if (!OBSERVED_KEYS.includes(key)) fail("schema_error", `unknown observed field ${key}`, { path: file });
+  if (!isObject(value.target)) fail("schema_error", "an observation names the target it read back", { path: file });
+  const observed = { object_id: null, url: null, target: value.target, oid: null, body_sha256: null, draft: null, resolved: null, state: null, observed_at: now(), ...value };
+  requireShape(observed, "Observed", "observed");
+  return observed;
+}
+
+// --from-check uses the raw GET readers. The identity comparators behind
+// `check` compare against the ledger's current expectation, which is still the
+// state before this write.
+function observeFromCheck(ctx, ledger, first) {
+  const at = now();
+  if (first.kind === "push") {
+    const url = configuredRemoteUrl(ctx.worktree, first.target.remote_name);
+    if (url === null) fail("environment_error", "the recorded remote is not configured here", { expected: first.target.remote_name });
+    const live = lsRemote(ctx.worktree, first.target.remote_name, first.target.ref);
+    if (!live.ok) fail("network_error", "the remote ref could not be read; nothing was recorded", { observed: live.error });
+    return { object_id: null, url: null, target: { ...first.target, remote_url: url }, oid: live.oid, body_sha256: null, draft: null, resolved: null, state: null, observed_at: at };
+  }
+  if (first.kind === "pr_state") {
+    if (!ledger.pr) fail("invariant_error", "this publication needs a recorded PR");
+    const live = readGitHubPr(ledger.pr);
+    if (!live.ok) fail("network_error", "the PR could not be read; nothing was recorded", { observed: live.error });
+    const pr = live.pr;
+    return { object_id: null, url: pr.url, target: { host: pr.host, repository: pr.repository, pr_number: pr.number, pr_url: pr.url }, oid: pr.head, body_sha256: null, draft: pr.draft, resolved: null, state: pr.state, observed_at: at };
+  }
+  return fail("argument_error", "--from-check verifies only push and pr-state; supply the read-back with an observed file", { observed: first.kind });
+}
+
+function verifyParams(item) {
+  const sources = ["observed_file", "from_check", "failed", "uncertain"].filter((key) => hasOwn(item, key));
+  for (const key of Object.keys(item)) if (!["id", ...sources].includes(key)) fail("argument_error", `a verify item does not take ${key}`, { observed: key });
+  if (typeof item.id !== "string" || !item.id) fail("argument_error", "a verify item names its operation id");
+  if (sources.length !== 1) fail("argument_error", "a verify item needs exactly one of observed_file, from_check, failed or uncertain", { id: item.id });
+  const source = sources[0];
+  if (source === "from_check" && item.from_check !== true) fail("argument_error", "from_check is true when present", { id: item.id });
+  if (["failed", "uncertain"].includes(source) && (typeof item[source] !== "string" || !item[source].trim())) fail("argument_error", `${source} gives its reason`, { id: item.id });
+  if (source === "observed_file") requireAbsolute(item.observed_file, "observed_file");
+  return source;
+}
+
+function operationStart(ledger, id) {
+  const events = operations(ledger).get(id);
+  if (!events) fail("invariant_error", "no prepared publication has this operation id", { id });
+  return events[0];
+}
+
+function buildObservationStep(first, observation) {
+  const { supersedes_id: _ignored, ...base } = first;
+  const event = { ...base, id: `pub-${randomUUID()}`, at: now(), observed: null, error: null };
+  if (observation.failed !== undefined) return { ...event, step: "failed", error: observation.failed };
+  if (observation.uncertain !== undefined) return { ...event, step: "uncertain", error: observation.uncertain };
+  const verified = { ...event, step: "verified", observed: observation.observed };
+  try {
+    verifiedObservationChecks(null, verified);
+  } catch (error) {
+    if (!(error instanceof LedgerError) || error.code !== "identity_mismatch") throw error;
+    return { ...event, step: "mismatch", observed: observation.observed, error: error.message };
+  }
+  return verified;
+}
+
+function commandPublication(options) {
+  const ctx = resolveContext(options, { mutation: true });
+  const action = options.action;
+  const batched = options.batch !== undefined;
+  const items = batched ? readPublicationBatch(options.batch, action) : options.items;
+  const kind = action === "prepare" ? PUBLICATION_KINDS[options.kind] : null;
+  const batchId = batched ? `publication-batch-${randomUUID()}` : null;
+  let observations = null;
+  let observedFrom = null;
+  if (action === "verify") {
+    const ids = new Set();
+    const sources = items.map((item) => {
+      const source = verifyParams(item);
+      if (ids.has(item.id)) fail("invariant_error", "a verify batch names each operation once", { id: item.id });
+      ids.add(item.id);
+      return source;
+    });
+    // Reads happen before the lock: network latency never holds the branch mutex.
+    const snapshot = readLedger(ctx);
+    observedFrom = new Map();
+    observations = items.map((item, index) => {
+      const first = operationStart(snapshot, item.id);
+      observedFrom.set(item.id, first);
+      if (sources[index] === "observed_file") return { observed: readObservedFile(item.observed_file) };
+      if (sources[index] === "from_check") return { observed: observeFromCheck(ctx, snapshot, first) };
+      return { [sources[index]]: item[sources[index]] };
+    });
+  } else {
+    for (const item of items) prepareParams(kind, item);
+  }
+  return mutate(ctx, options, "publication", (draft, ledger) => {
+    const owner = requireOwner(ledger, options);
+    forbidDuringRecovery(ledger, "publication");
+    let events;
+    if (action === "prepare") {
+      const at = now();
+      events = items.map((item) => buildPrepared(ledger, kind, item, at));
+    } else {
+      events = items.map((item, index) => {
+        const first = operationStart(ledger, item.id);
+        if (!isDeepStrictEqual(first, observedFrom.get(item.id))) fail("stale_revision", "the operation changed while it was being read back; re-read and retry", { id: item.id });
+        return buildObservationStep(first, observations[index]);
+      });
+    }
+    checkAppendItems("publications", events);
+    const added = appendInto(ctx, draft, "publications", events);
+    const summary = events.map((event) => ({ operation_id: event.operation_id, event_id: event.id, kind: event.kind, step: event.step, error: event.error }));
+    return {
+      actor: owner,
+      operation: `publication ${action}`,
+      data: { batch_id: batchId, items: summary, events },
+      detail: { collection: "publications", ids: added, batch: batchId === null ? null : { id: batchId, action, kind: events[0].kind, size: events.length } },
+    };
+  });
+}
+
 function applyGrantEffect(draft, grant) {
   if (grant.scope === "endpoint") draft.authorization.endpoint = grant.endpoint;
   if (grant.scope === "monitor_observe") draft.authorization.monitoring = "observe";
@@ -3634,6 +3928,7 @@ const HANDLERS = {
   "recover-lock": commandRecoverLock,
   "set-review-bound": commandSetReviewBound,
   "summary-body": commandSummaryBody,
+  publication: commandPublication,
 };
 
 export async function run(argv) {
