@@ -212,6 +212,12 @@ bin/link-agents.sh --apply --plan /tmp/agents-plan.json
 
 Run the pack's tests with `npm ci && npm test`.
 
+## Agent Scripts And Guard Hook
+
+`templates/agent-scripts/` holds the cross-repository agent command contract: a dependency-free `agent-scripts.mjs` that repositories vendor unmodified and expose as `agent:fix`, `agent:lint`, `agent:gate` and `agent:serve`. Its README states the `agentScripts` config, the adoption steps and the `--verify` drift check. The delivery loop's [validation reference](skills/task-doc-delivery-loop/references/validation.md) uses these commands when a repository defines them.
+
+`hooks/block-whole-tree-fixers.mjs` is an optional Claude Code `PreToolUse` hook that refuses whole-tree formatter and fixer runs. `hooks/README.md` has the `~/.claude/settings.json` snippet and the rollout order; nothing installs it automatically.
+
 ## Typical Usage
 
 Documentation audits and reviews report findings without editing. Existing cleanup authorization carries through to the editing skills; a report-only request stops at findings. These are optional routes, not mandatory passes for every doc edit.
