@@ -86,12 +86,12 @@ Current `main`, after `docs/tasks/2026-10-06-delivery-audit-and-review-defaults.
 Replace the unconditional sentence at `SKILL.md:24` with this precedence:
 
 1. **The current prompt's explicit wording**, in either direction ("use the delivery ledger" / "no ledger").
-2. **A user-level standing instruction** counts as user wording, below the current prompt. Examples: a line in `~/.claude/CLAUDE.md` or `~/.codex/AGENTS.md`.
-3. **An unfinished ledger for this branch** means ledger mode. Detect it in two reads: `path` reports `data.exists`; when true, `show` supplies `phase` and `blocker`. Unfinished means `phase` is not `done` and there is no blocker whose `reason` starts with `abandoned:`. Unfinished covers owned, unowned and blocked ledgers. A `done` ledger, or one abandoned this way, is reported, and the user's choice is followed. A `done` ledger needs no abandonment write.
+2. **A user-level standing instruction** counts as user wording, below the current prompt, only when rule 4 does not require a ledger. Inspect the repository policy before applying this rule. Examples: a line in `~/.claude/CLAUDE.md` or `~/.codex/AGENTS.md`.
+3. **An unfinished ledger for this branch** means ledger mode. Detect it in two reads: `path` reports `data.exists`; when true, `show` supplies `phase` and `blocker`. Unfinished means `phase` is not `done` and there is no blocker whose `reason` starts with `abandoned:`. Unfinished covers owned, unowned and blocked ledgers. Report a `done` or abandoned ledger and continue to the remaining rules. A `done` ledger needs no abandonment write.
 4. **A repository rule**: an `AGENTS.md` line, then `.agent/delivery-policy.json` `delivery_ledger: "required" | "optional"`, with `AGENTS.md` winning. `required` is a floor that only the **current prompt's** explicit wording overrides. A standing user-level "no ledger" instruction does not override it. A prompt override is recorded as a limitation.
 5. **Pack default: lightweight.**
 
-**Suggestion, not switching.** When the agent sees risk signals, it recommends the ledger in one line and never enables it without user wording. The signals are: multi-session work, a requested phase split, an expected handoff to another runtime, or concurrent sessions on one branch.
+**Suggestion, not switching.** Risk signals alone never select ledger mode; the agent recommends it in one line. Required repository policy and unfinished ledgers still select the mode under the rules above. The signals are: multi-session work, a requested phase split, an expected handoff to another runtime, or concurrent sessions on one branch.
 
 ### Abandoning a ledger
 

@@ -357,7 +357,7 @@ test("the delivery ledger stays opt-in with a fixed mode precedence and a lightw
     at = match.index;
   }
   assert.match(mode, /`required` is a floor that only the current prompt's explicit wording overrides, never a standing user instruction/);
-  assert.match(mode, /Never enable the ledger without user wording/);
+  assert.match(mode, /Never enable the ledger from risk signals alone/);
   assert.match(mode, /plain `## Delivery summary` section in the PR body, with no `agent-delivery-\*` markers/);
   assert.doesNotMatch(loop, /^Keep the delivery in a \[delivery ledger\]/m);
 });

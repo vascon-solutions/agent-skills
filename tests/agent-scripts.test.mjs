@@ -41,6 +41,58 @@ if (mode === "never") setInterval(() => {}, 1000);
 
 const tool = (name) => path.join(tools, name);
 
+// Schedule real CLI invocations at the two lifecycle race windows without production test hooks.
+fs.writeFileSync(tool("serve-race.cjs"), `const fs = require("node:fs");
+const cp = require("node:child_process");
+const { syncBuiltinESMExports } = require("node:module");
+const originalRename = fs.renameSync;
+fs.renameSync = function(from, to) {
+  originalRename(from, to);
+  if (process.env.RACE_HOLD && to.endsWith("/state.json") && JSON.parse(fs.readFileSync(to)).children.length === 0) {
+    fs.writeFileSync(process.env.RACE_HOLD, "held");
+    const deadline = Date.now() + 10000;
+    while (!fs.existsSync(process.env.RACE_RELEASE) && Date.now() < deadline) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
+  }
+};
+const originalSpawn = cp.spawn;
+let count = 0;
+cp.spawn = function(...args) {
+  const child = originalSpawn(...args);
+  if (child.pid) fs.appendFileSync(process.env.RACE_PIDS, String(child.pid) + "\\n");
+  count += 1;
+  if (process.env.RACE_SIGNAL && count === 2) {
+    const emit = child.emit.bind(child);
+    child.emit = function(event, ...values) {
+      if (event === "spawn") {
+        process.kill(process.pid, process.env.RACE_SIGNAL);
+        setTimeout(() => emit(event, ...values), 100);
+        return true;
+      }
+      return emit(event, ...values);
+    };
+  }
+  return child;
+};
+syncBuiltinESMExports();
+`);
+
+function raceCli(dir, args, env) {
+  const child = spawn(process.execPath, ["--require", tool("serve-race.cjs"), script, ...args], { cwd: dir, env: { ...process.env, ...env }, stdio: ["ignore", "pipe", "pipe"] });
+  let stderr = "";
+  child.stderr.on("data", (chunk) => (stderr += chunk));
+  child.stdout.resume();
+  const timer = setTimeout(() => child.kill("SIGKILL"), 20000);
+  const done = new Promise((resolve) => child.once("close", (status, signal) => {
+    clearTimeout(timer);
+    resolve({ status, signal, stderr });
+  }));
+  return { child, done };
+}
+
+function recordedPids(file) {
+  return fs.existsSync(file) ? fs.readFileSync(file, "utf8").trim().split("\n").filter(Boolean).map(Number) : [];
+}
+
 function git(cwd, ...args) {
   const result = spawnSync("git", args, { cwd, encoding: "utf8" });
   assert.equal(result.status, 0, `git ${args.join(" ")}: ${result.stderr}`);
@@ -462,6 +514,62 @@ test("serve --detach returns only when ready, resolves placeholders and port ove
   } finally {
     cli(dir, ["serve", "--stop"]);
     fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("concurrent same-worktree starts preserve the first run's state and processes", async () => {
+  const [api, web] = [await freePort(), await freePort()];
+  const dir = makeRepo(serveConfig({ api, web }), { "out/.keep": "" });
+  const hold = path.join(dir, ".git", "race-hold");
+  const release = path.join(dir, ".git", "race-release");
+  const pids = path.join(dir, ".git", "race-pids");
+  const first = raceCli(dir, ["serve", "api", "--detach"], { RACE_HOLD: hold, RACE_RELEASE: release, RACE_PIDS: pids });
+  const otherPids = [];
+  try {
+    assert.ok(await waitFor(() => fs.existsSync(hold)), "first start reached state initialization");
+    const second = cli(dir, ["serve", "api", "--detach"]);
+    const statePath = path.join(dir, ".git", "agent-serve", "state.json");
+    if (fs.existsSync(statePath)) otherPids.push(...JSON.parse(fs.readFileSync(statePath)).children.map(c => c.pid));
+    assert.equal(second.status, 2, second.stderr);
+    assert.match(second.stderr, /lifecycle operation is in progress/);
+    fs.writeFileSync(release, "go");
+    const started = await first.done;
+    assert.equal(started.status, 0, started.stderr);
+    const state = JSON.parse(fs.readFileSync(statePath));
+    assert.equal(state.supervisor_pid, first.child.pid);
+    assert.ok(alive(state.children[0].pid), "the winning run's child survives");
+    assert.equal(cli(dir, ["serve", "--stop"]).status, 0);
+    assert.deepEqual(listeners(api), []);
+  } finally {
+    fs.writeFileSync(release, "go");
+    await first.done;
+    cli(dir, ["serve", "--stop"]);
+    for (const pid of [...recordedPids(pids), ...otherPids]) { try { process.kill(-pid, "SIGKILL"); } catch {} }
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("signals during child registration stop the racing child and prevent later spawns", async () => {
+  for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
+    const [api, web, late] = [await freePort(), await freePort(), await freePort()];
+    const config = serveConfig({ api, web }, { webMode: "serve" });
+    config.serve.commands.push({ name: "late", command: ["node", tool("server.mjs"), "serve", String(late)], ports: { late: { default: late } }, ready: `http://127.0.0.1:${late}/` });
+    const dir = makeRepo(config, { "out/.keep": "" });
+    const pids = path.join(dir, ".git", "race-pids");
+    const run = raceCli(dir, ["serve", "api", "web", "late", "--detach"], { RACE_SIGNAL: signal, RACE_PIDS: pids });
+    try {
+      const result = await run.done;
+      assert.equal(result.status, 128 + os.constants.signals[signal], result.stderr);
+      const spawned = recordedPids(pids);
+      assert.equal(spawned.length, 2, `${signal} must prevent the third spawn`);
+      assert.ok(await waitFor(() => spawned.every(pid => !alive(pid))), `${signal} left an owned child running`);
+      assert.deepEqual([api, web, late].flatMap(listeners), []);
+      assert.equal(cli(dir, ["serve", "--status"]).stdout, "none\n");
+    } finally {
+      for (const pid of recordedPids(pids)) { try { process.kill(-pid, "SIGKILL"); } catch {} }
+      cli(dir, ["serve", "--stop"]);
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   }
 });
 

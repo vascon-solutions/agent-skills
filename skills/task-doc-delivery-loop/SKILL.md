@@ -26,12 +26,12 @@ Use the current checkout when task-appropriate and safe. Use `isolated-worktree`
 Choose the mode once, by the first rule that applies:
 
 1. The current prompt's explicit wording, either way ("use the delivery ledger", "no ledger").
-2. A user-level standing instruction, such as a line in `~/.claude/CLAUDE.md` or `~/.codex/AGENTS.md`. It counts as user wording, below the current prompt.
-3. An unfinished ledger for this branch means ledger mode. Run `path`; when `data.exists` is true, `show` supplies `phase` and `blocker`. Unfinished means `phase` is not `done` and no blocker `reason` starts with `abandoned:`, whether the ledger is owned, unowned or blocked. Report a `done` or abandoned ledger and follow the user's choice; a `done` ledger needs no abandonment write.
+2. A user-level standing instruction applies only when rule 4 does not require a ledger. Inspect repository policy before applying this rule. Examples include a line in `~/.claude/CLAUDE.md` or `~/.codex/AGENTS.md`. It counts as user wording, below the current prompt.
+3. An unfinished ledger for this branch means ledger mode. Run `path`; when `data.exists` is true, `show` supplies `phase` and `blocker`. Unfinished means `phase` is not `done` and no blocker `reason` starts with `abandoned:`, whether the ledger is owned, unowned or blocked. Report a `done` or abandoned ledger and continue to the remaining rules; a `done` ledger needs no abandonment write.
 4. A repository rule: an `AGENTS.md` line, then `.agent/delivery-policy.json` `delivery_ledger: "required" | "optional"`, with `AGENTS.md` winning. `required` is a floor that only the current prompt's explicit wording overrides, never a standing user instruction; record that override as a limitation.
 5. Otherwise, lightweight mode.
 
-Never enable the ledger without user wording. When you see multi-session work, a requested phase split, an expected handoff to another runtime, or concurrent sessions on one branch, recommend it in one line.
+Never enable the ledger from risk signals alone. A required repository policy or an unfinished ledger can also select ledger mode under the rules above. When you see multi-session work, a requested phase split, an expected handoff to another runtime, or concurrent sessions on one branch, recommend it in one line.
 
 **Ledger mode.** Keep the delivery in a [delivery ledger](references/delivery-ledger.md) through its helper, `scripts/delivery-ledger.mjs`, never by editing its JSON. Use the [worked examples](references/delivery-examples.md) for first use, a resume, or a findings batch. The owner handles this bookkeeping; the user can ask to deliver or continue without supplying JSON, hashes, revisions or claim IDs. When the user says "no ledger" while an unfinished one exists, [abandon it](references/delivery-ledger.md#abandoning-a-ledger) as a recorded state change before the ledger-free session changes the branch. Steps below marked "in ledger mode" apply only here.
 

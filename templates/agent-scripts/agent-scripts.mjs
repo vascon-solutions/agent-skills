@@ -1,8 +1,8 @@
-// agent-scripts v1 sha256:884b7c30602eecbe57d56359d978acf1f19acd35cdebbd05c8b0e4e69682db29
+// agent-scripts v1 sha256:a04083efff05b49bf209b674561a45d20f8989bcb96f97eeff9a0487459fb944
 // Canonical copy: vascon-solutions/agent-skills templates/agent-scripts/agent-scripts.mjs.
 // Vendor this file unmodified; see the README next to the canonical copy.
 import { spawn, spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -590,7 +590,47 @@ function describeProcess(pid) {
 
 function servePaths(root) {
   const dir = path.join(gitDir(root), "agent-serve");
-  return { dir, state: path.join(dir, "state.json") };
+  return { dir, state: path.join(dir, "state.json"), lock: path.join(dir, "lifecycle.lock") };
+}
+
+function tryServeLock(paths) {
+  fs.mkdirSync(paths.dir, { recursive: true, mode: 0o700 });
+  let fd;
+  try {
+    fd = fs.openSync(paths.lock, "wx", 0o600);
+  } catch (error) {
+    if (error.code === "EEXIST") return null;
+    throw error;
+  }
+  const token = randomUUID();
+  try {
+    fs.writeFileSync(fd, JSON.stringify({ token, pid: process.pid, start_time: startTime(process.pid) }));
+  } catch (error) {
+    fs.unlinkSync(paths.lock);
+    throw error;
+  } finally {
+    fs.closeSync(fd);
+  }
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    if (readState(paths.lock)?.token === token) fs.unlinkSync(paths.lock);
+  };
+}
+
+function busyServeLock(paths) {
+  fail(`server lifecycle operation is in progress (${paths.lock}); retry after it finishes; remove a stale lock only after verifying its recorded PID and start time are gone`);
+}
+
+async function waitForServeLock(paths, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  do {
+    const release = tryServeLock(paths);
+    if (release) return release;
+    await sleep(50);
+  } while (Date.now() < deadline);
+  busyServeLock(paths);
 }
 
 function readState(file) {
@@ -675,20 +715,19 @@ async function probeReady(url) {
 
 async function serveStart(root, options, config) {
   const paths = servePaths(root);
-  fs.mkdirSync(paths.dir, { recursive: true, mode: 0o700 });
-  const existing = readState(paths.state);
-  if (existing?.children?.some((child) => childStatus(child) === "live")) fail(`servers from an earlier start are still live; run serve --stop first (${paths.state})`);
-  const commands = effectiveServe(config, options.positionals, options.port);
-  for (const command of commands) {
-    for (const [name, port] of Object.entries(command.ports)) {
-      const holders = listenerPids(port);
-      if (holders.length > 0) fail(`port ${name}=${port} already has a listener: ${holders.map(describeProcess).join("; ")}`);
-    }
-  }
-  const state = { supervisor_pid: process.pid, started_at: new Date().toISOString(), children: [] };
-  writeState(paths.state, state);
+  const release = tryServeLock(paths) ?? busyServeLock(paths);
+  const state = { run_id: randomUUID(), supervisor_pid: process.pid, started_at: new Date().toISOString(), children: [] };
+  let finishRegistration;
+  const registered = new Promise((resolve) => { finishRegistration = resolve; });
+  let stopRequested = false;
   let stopping = null;
-  const stopOnce = (quiet) => (stopping ??= serveStop(root, config, { quiet }));
+  const stopOnce = (quiet) => {
+    stopRequested = true;
+    return stopping ??= (async () => {
+      await registered;
+      return serveStop(root, config, { quiet, state });
+    })();
+  };
   const signals = ["SIGINT", "SIGTERM", "SIGHUP"];
   const onSignal = (signal) => {
     stopOnce(false).finally(() => process.exit(128 + os.constants.signals[signal]));
@@ -696,63 +735,101 @@ async function serveStart(root, options, config) {
   for (const signal of signals) process.on(signal, onSignal);
   const handles = [];
   let exited = null;
-  for (const command of commands) {
-    const logFile = path.join(paths.dir, `${command.name}.log`);
-    const fd = fs.openSync(logFile, "w", 0o600);
-    const child = spawn(command.argv[0], command.argv.slice(1), {
-      cwd: path.join(root, command.cwd),
-      env: { ...process.env, ...SERVE_ENV_DEFAULTS, ...command.env },
-      stdio: ["ignore", fd, fd],
-      detached: true,
-      shell: false,
-    });
-    fs.closeSync(fd);
-    const spawnError = await new Promise((resolve) => {
-      child.once("error", resolve);
-      child.once("spawn", () => resolve(null));
-    });
-    if (spawnError) {
+  try {
+    let registrationError = null;
+    try {
+      const existing = readState(paths.state);
+      if (existing?.children?.some((child) => childStatus(child) === "live")) fail(`servers from an earlier start are still live; run serve --stop first (${paths.state})`);
+      const commands = effectiveServe(config, options.positionals, options.port);
+      for (const command of commands) {
+        for (const [name, port] of Object.entries(command.ports)) {
+          const holders = listenerPids(port);
+          if (holders.length > 0) fail(`port ${name}=${port} already has a listener: ${holders.map(describeProcess).join("; ")}`);
+        }
+      }
       writeState(paths.state, state);
+      for (const command of commands) {
+        if (stopRequested) break;
+        const logFile = path.join(paths.dir, `${command.name}.log`);
+        const fd = fs.openSync(logFile, "w", 0o600);
+        let child;
+        try {
+          child = spawn(command.argv[0], command.argv.slice(1), {
+            cwd: path.join(root, command.cwd),
+            env: { ...process.env, ...SERVE_ENV_DEFAULTS, ...command.env },
+            stdio: ["ignore", fd, fd],
+            detached: true,
+            shell: false,
+          });
+        } finally {
+          fs.closeSync(fd);
+        }
+        const handle = { command, child, logFile };
+        child.once("exit", (code, signal) => (exited ??= { handle, code, signal }));
+        const spawnError = await new Promise((resolve) => {
+          child.once("error", resolve);
+          child.once("spawn", () => resolve(null));
+        });
+        if (spawnError) fail(`cannot start ${command.name}: ${spawnError.message}`);
+        state.children.push({ name: command.name, pid: child.pid, pgid: child.pid, start_time: startTime(child.pid), command: command.argv, ports: command.ports, log: logFile });
+        handles.push(handle);
+        writeState(paths.state, state);
+      }
+    } catch (error) {
+      registrationError = error;
+    } finally {
+      // Signals wait for this point, including registration of a racing spawn.
+      release();
+      finishRegistration();
+    }
+    if (registrationError) {
+      if (state.children.length > 0) await stopOnce(true);
+      throw registrationError;
+    }
+    if (stopRequested) {
+      await stopOnce(false);
+      return 1;
+    }
+    const timeout = (config.serve.readyTimeoutSeconds ?? DEFAULT_READY_TIMEOUT_SECONDS) * 1000;
+    const deadline = Date.now() + timeout;
+    const pending = new Set(handles);
+    while (pending.size > 0 && !exited && !stopRequested && Date.now() < deadline) {
+      for (const handle of [...pending]) if (await probeReady(handle.command.ready)) pending.delete(handle);
+      if (pending.size > 0) await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    if (stopRequested) {
+      await stopOnce(false);
+      return 1;
+    }
+    if (pending.size > 0 || exited) {
+      const reason = exited ? `${exited.handle.command.name} exited (${exited.signal ?? exited.code}) before it was ready` : `not ready after ${timeout / 1000}s: ${[...pending].map((handle) => handle.command.name).join(", ")}`;
+      log(reason);
+      for (const handle of handles) process.stderr.write(`--- ${handle.command.name} log tail (${handle.logFile})\n${logTail(handle.logFile)}\n`);
       await stopOnce(true);
-      fail(`cannot start ${command.name}: ${spawnError.message}`);
+      return 1;
     }
-    state.children.push({ name: command.name, pid: child.pid, pgid: child.pid, start_time: startTime(child.pid), command: command.argv, ports: command.ports, log: logFile });
-    writeState(paths.state, state);
-    const handle = { command, child, logFile };
-    child.once("exit", (code, signal) => (exited ??= { handle, code, signal }));
-    handles.push(handle);
-  }
-  const timeout = (config.serve.readyTimeoutSeconds ?? DEFAULT_READY_TIMEOUT_SECONDS) * 1000;
-  const deadline = Date.now() + timeout;
-  const pending = new Set(handles);
-  while (pending.size > 0 && !exited && Date.now() < deadline) {
-    for (const handle of [...pending]) if (await probeReady(handle.command.ready)) pending.delete(handle);
-    if (pending.size > 0) await new Promise((resolve) => setTimeout(resolve, 250));
-  }
-  if (pending.size > 0 || exited) {
-    const reason = exited ? `${exited.handle.command.name} exited (${exited.signal ?? exited.code}) before it was ready` : `not ready after ${timeout / 1000}s: ${[...pending].map((handle) => handle.command.name).join(", ")}`;
-    log(reason);
-    for (const handle of handles) process.stderr.write(`--- ${handle.command.name} log tail (${handle.logFile})\n${logTail(handle.logFile)}\n`);
-    await stopOnce(true);
-    return 1;
-  }
-  for (const handle of handles) log(`${handle.command.name} ready at ${handle.command.ready} (pid ${handle.child.pid}, log ${handle.logFile})`);
-  if (options.detach) {
+    for (const handle of handles) log(`${handle.command.name} ready at ${handle.command.ready} (pid ${handle.child.pid}, log ${handle.logFile})`);
+    if (options.detach) {
+      for (const signal of signals) process.off(signal, onSignal);
+      for (const handle of handles) handle.child.unref();
+      log(`detached; stop with serve --stop (state ${paths.state})`);
+      return 0;
+    }
+    return await new Promise((resolve) => {
+      for (const handle of handles) {
+        handle.child.once("exit", async (code, signal) => {
+          if (stopping) return;
+          log(`${handle.command.name} exited (${signal ?? code}); stopping the rest`);
+          const stopStatus = await stopOnce(false);
+          resolve((code ?? 1) || stopStatus);
+        });
+      }
+    });
+  } finally {
+    release();
+    finishRegistration();
     for (const signal of signals) process.off(signal, onSignal);
-    for (const handle of handles) handle.child.unref();
-    log(`detached; stop with serve --stop (state ${paths.state})`);
-    return 0;
   }
-  return await new Promise((resolve) => {
-    for (const handle of handles) {
-      handle.child.once("exit", async (code, signal) => {
-        if (stopping) return;
-        log(`${handle.command.name} exited (${signal ?? code}); stopping the rest`);
-        const stopStatus = await stopOnce(false);
-        resolve((code ?? 1) || stopStatus);
-      });
-    }
-  });
 }
 
 function descendantsOf(table, roots) {
@@ -782,9 +859,18 @@ async function terminate(pid, timeoutMs) {
   }
 }
 
-async function serveStop(root, config, { quiet } = { quiet: false }) {
+async function serveStop(root, config, { quiet = false, state = null } = {}) {
   const paths = servePaths(root);
-  const state = readState(paths.state);
+  const release = await waitForServeLock(paths, ((config?.serve?.stopTimeoutSeconds ?? DEFAULT_STOP_TIMEOUT_SECONDS) + 5) * 1000);
+  try {
+    return await stopRecordedServers(root, config, { quiet, state: state ?? readState(paths.state) });
+  } finally {
+    release();
+  }
+}
+
+async function stopRecordedServers(root, config, { quiet, state }) {
+  const paths = servePaths(root);
   const say = quiet ? () => {} : log;
   if (!state || !Array.isArray(state.children)) {
     say("no recorded servers");
@@ -831,7 +917,8 @@ async function serveStop(root, config, { quiet } = { quiet: false }) {
   }
   const survivors = [...owned].filter(([pid, start]) => startTime(pid) === start);
   for (const [pid] of survivors) log(`residue: owned ${describeProcess(pid)} survived`);
-  if (survivors.length === 0) fs.rmSync(paths.state, { force: true });
+  const current = readState(paths.state);
+  if (survivors.length === 0 && current?.run_id === state.run_id && current?.supervisor_pid === state.supervisor_pid && current?.started_at === state.started_at) fs.rmSync(paths.state, { force: true });
   return foreign > 0 || survivors.length > 0 ? 1 : 0;
 }
 
