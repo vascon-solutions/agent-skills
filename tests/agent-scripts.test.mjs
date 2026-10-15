@@ -584,7 +584,8 @@ test("serve refuses a bound port and stops everything on a ready timeout", async
     assert.match(refused.stderr, new RegExp(`port web=${web} already has a listener: pid ${process.pid}`));
 
     // Probes that cannot see the owner: lsof finds nothing and ss reports the socket without a pid.
-    const blind = fs.mkdtempSync(path.join(os.tmpdir(), "agent-scripts-blind-"));
+    const blind = path.join(dir, ".git", "blind-bin");
+    fs.mkdirSync(blind);
     fs.writeFileSync(path.join(blind, "lsof"), "#!/bin/sh\nexit 1\n", { mode: 0o755 });
     fs.writeFileSync(path.join(blind, "ss"), `#!/bin/sh\necho "LISTEN 0 511 127.0.0.1:${web} 0.0.0.0:*"\n`, { mode: 0o755 });
     const blindEnv = { PATH: `${blind}${path.delimiter}${process.env.PATH}` };
@@ -595,7 +596,6 @@ test("serve refuses a bound port and stops everything on a ready timeout", async
     const hiddenStop = cli(dir, ["serve", "--stop"], blindEnv);
     assert.equal(hiddenStop.status, 1, hiddenStop.stderr);
     assert.match(hiddenStop.stderr, new RegExp(`port web=${web} still accepts connections from a process this user cannot identify`));
-    fs.rmSync(blind, { recursive: true, force: true });
     await new Promise((resolve) => blocker.close(resolve));
 
     const timedOut = cli(dir, ["serve", "api", "--detach"]);
