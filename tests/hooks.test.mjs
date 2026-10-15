@@ -1,0 +1,223 @@
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import test from "node:test";
+
+import { decide } from "../hooks/block-whole-tree-fixers.mjs";
+
+const root = path.resolve(new URL("..", import.meta.url).pathname);
+const hook = path.join(root, "hooks", "block-whole-tree-fixers.mjs");
+
+function fixture() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-hooks-"));
+  const write = (relative, text) => {
+    fs.mkdirSync(path.dirname(path.join(dir, relative)), { recursive: true });
+    fs.writeFileSync(path.join(dir, relative), text);
+  };
+  write("with-agent/package.json", JSON.stringify({ scripts: { "agent:fix": "node tools/agent-scripts.mjs fix", fix: "ultracite fix", format: "biome format --write .", "lint:fix": "eslint --fix src", "fix:file": "ultracite fix src/a.ts", chain: "pnpm fix", check: "biome check .", test: "eslint --fix", start: "prettier --write", t: "biome check .", tst: "biome check .", "workspace:fix": "eslint --fix ." } }));
+  write("with-agent/pnpm-workspace.yaml", "packages:\n  - apps/*\n");
+  write("with-agent/src/a.ts", "export const a = 1;\n");
+  write("with-agent/apps/web/src/b.ts", "export const b = 1;\n");
+  write("with-agent/apps/web/package.json", JSON.stringify({ scripts: { "agent:fix": "node tools/agent-scripts.mjs fix", fix: "ultracite fix", "nested:fix": "eslint --fix .", "workspace:fix": "eslint src" } }));
+  write("plain/package.json", JSON.stringify({ scripts: { fix: "ultracite fix", "lint:fix": "eslint \"{src,apps}/**/*.ts\" --fix", test: "eslint src", start: "prettier --check ." } }));
+  write("plain/src/a.ts", "export const a = 1;\n");
+  return dir;
+}
+
+const run = (command, cwd) => decide({ tool_name: "Bash", tool_input: { command }, cwd });
+
+test("the hook denies whole-tree fixer invocations and allows path-scoped or unparseable ones", () => {
+  const dir = fixture();
+  const agent = path.join(dir, "with-agent");
+  const plain = path.join(dir, "plain");
+  try {
+    const denied = [
+      ["ultracite fix", agent],
+      ["pnpm exec ultracite fix", agent],
+      ["pnpm exec -- eslint --fix .", agent],
+      ["pnpm exec -- prettier --write .", agent],
+      ["pnpm dlx ultracite fix", agent],
+      ["npx ultracite fix", agent],
+      ["npx -y ultracite@latest fix --unsafe", agent],
+      ["FOO=1 BAR=2 pnpm exec ultracite fix", agent],
+      ["env CI=1 ultracite fix", agent],
+      ["env -u FOO eslint --fix .", agent],
+      ["env --unset FOO eslint --fix .", agent],
+      ["env --unset=FOO eslint --fix .", agent],
+      ["env -iu FOO eslint --fix .", agent],
+      ["env -uFOO eslint --fix .", agent],
+      ["/usr/bin/env -u FOO eslint --fix .", agent],
+      ["env -C with-agent eslint --fix src", dir],
+      ["env --chdir=with-agent eslint --fix src", dir],
+      ["env -C with-agent --chdir with-agent eslint --fix src", dir],
+      ["exec -a worker eslint --fix .", agent],
+      ["exec -ca worker eslint --fix .", agent],
+      ["time -o lint.log eslint --fix .", agent],
+      ["time --format '%E' eslint --fix .", agent],
+      ["env -u FOO exec -a worker eslint --fix .", agent],
+      ["ultracite fix .", agent],
+      ['ultracite fix > "lint log"', agent],
+      ["ultracite fix 2>> 'lint log'", agent],
+      ['ultracite fix > lint\\ log', agent],
+      ['ultracite fix > "lint"\\ log 2>&1', agent],
+      ['echo start > "start log"; ultracite fix', agent],
+      ["biome check --write", agent],
+      ["biome format --write .", agent],
+      ["biome lint --fix src apps", agent],
+      ["pnpm exec biome check --write --reporter json", agent],
+      ["npx @biomejs/biome check --write .", agent],
+      ["./node_modules/.bin/biome check --write src", agent],
+      ["eslint --fix", agent],
+      ["eslint --fix src", agent],
+      ["eslint 'src/**/*.ts' --fix", agent],
+      ["prettier --write .", agent],
+      ["prettier -w 'src/**/*.ts'", agent],
+      ["prettier --write src --print-width 100", agent],
+      ["pnpm fix", agent],
+      ["pnpm run fix", agent],
+      ["pnpm format", agent],
+      ["pnpm lint:fix", agent],
+      ["pnpm chain", agent],
+      ["pnpm test", agent],
+      ["pnpm run -- test", agent],
+      ["pnpm run-script -- start", agent],
+      ["pnpm t", agent],
+      ["pnpm tst", agent],
+      ["pnpm start", agent],
+      ["cd with-agent && pnpm fix", dir],
+      ["cd with-agent; ultracite fix src", dir],
+      ["cd missing || eslint --fix src", agent],
+      ["mkdir missing && cd missing && ultracite fix", agent],
+      ["cd missing; eslint --fix src", agent],
+      ["echo start && cd missing || eslint --fix src", agent],
+      ["echo start || cd apps/web; eslint --fix src", agent],
+      ["cd apps/web || eslint --fix src", agent],
+      ["cd apps/web | cat; eslint --fix src", agent],
+      ["cd apps/web && echo ready & eslint --fix src", agent],
+      ["git status && pnpm exec ultracite fix 2>&1 | tail -20", agent],
+      ["echo start; biome check --write .", agent],
+      ["pnpm -C with-agent fix", dir],
+      ["pnpm --dir=apps/web nested:fix", agent],
+      ["pnpm run --dir=apps/web nested:fix", agent],
+      ["pnpm run -C apps/web nested:fix", agent],
+      ["pnpm --dir=apps run --dir=apps/web nested:fix", agent],
+      ["pnpm -C=apps/web nested:fix", agent],
+      ["pnpm --reporter=silent --dir=apps/web nested:fix", agent],
+      ["pnpm --workspace-root exec eslint --fix .", agent],
+      ["pnpm --workspace-root workspace:fix", path.join(agent, "apps/web")],
+      ["pnpm -w workspace:fix", path.join(agent, "apps/web")],
+      ["pnpm --workspace-root --dir=apps/web workspace:fix", agent],
+      ["pnpm --dir=apps/web --workspace-root workspace:fix", agent],
+      ["pnpm fix", plain],
+      ["pnpm lint:fix", plain],
+    ];
+    for (const [command, cwd] of denied) {
+      const output = run(command, cwd);
+      assert.equal(output?.hookSpecificOutput?.permissionDecision, "deny", `${command} in ${path.relative(dir, cwd) || "."}`);
+      assert.equal(output.hookSpecificOutput.hookEventName, "PreToolUse");
+    }
+    const allowed = [
+      ["ultracite fix src/a.ts", agent],
+      ['ultracite fix > "lint log" src/a.ts', agent],
+      ["ultracite fix src/a.ts 2>> 'lint log'", agent],
+      ['echo start > "start log"; ultracite fix src/a.ts', agent],
+      ['ultracite fix > "unterminated', agent],
+      ["pnpm exec ultracite fix src/a.ts apps/web/src/b.ts", agent],
+      ["pnpm exec -- eslint --fix src/a.ts", agent],
+      ["biome check --write src/a.ts", agent],
+      ["biome check --write --changed", agent],
+      ["biome check --write --staged", agent],
+      ["biome check .", agent],
+      ["pnpm check", agent],
+      ["eslint --fix src/a.ts", agent],
+      ["env -u FOO eslint --fix src/a.ts", agent],
+      ["env --unset=FOO eslint --fix src/a.ts", agent],
+      ["env -u eslint node --fix .", agent],
+      ["exec -a eslint node --fix .", agent],
+      ["time -o eslint node --fix .", agent],
+      ["env -C with-agent echo done; eslint --fix src", dir],
+      ["env -S 'eslint --fix .'", agent],
+      ["pnpm --dir=apps/web fix src/b.ts", agent],
+      ["pnpm -C=apps/web fix src/b.ts", agent],
+      ["pnpm --filter=web fix", agent],
+      ["pnpm workspace:fix", path.join(agent, "apps/web")],
+      ["cd missing || eslint --fix src/a.ts", agent],
+      ["cd missing && eslint --fix src", agent],
+      ["cd apps/web && eslint --fix src/b.ts", agent],
+      ["cd apps/web && pnpm fix src/b.ts", agent],
+      ["eslint src", agent],
+      ["prettier --write src/a.ts", agent],
+      ["prettier --check .", agent],
+      ["pnpm fix:file", agent],
+      ["pnpm fix src/a.ts", agent],
+      ["pnpm fix -- src/a.ts", agent],
+      ["pnpm agent:fix", agent],
+      ["pnpm install", agent],
+      ["pnpm test src/a.ts", agent],
+      ["pnpm t -- src/a.ts", agent],
+      ["pnpm tst src/a.ts", agent],
+      ["pnpm start src/a.ts", agent],
+      ["pnpm run t", agent],
+      ["pnpm run -- t", agent],
+      ["pnpm run tst", agent],
+      ["pnpm test", plain],
+      ["pnpm t", plain],
+      ["pnpm start", plain],
+      ["pnpm --filter web fix", agent],
+      ["bash -c 'ultracite fix'", agent],
+      ["sh -c \"pnpm fix\"", agent],
+      ["eval ultracite fix", agent],
+      ["(cd src && ultracite fix)", agent],
+      ["echo $(ultracite fix)", agent],
+      ["cat <<EOF\nultracite fix\nEOF", agent],
+      ["git commit -m 'ultracite fix'", agent],
+      ["echo ultracite fix", agent],
+      ["rg -n 'biome check --write .' docs", agent],
+    ];
+    for (const [command, cwd] of allowed) assert.equal(run(command, cwd), null, `${command} should be allowed`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("the deny reason points at agent:fix only where the resolved package.json defines it", () => {
+  const dir = fixture();
+  try {
+    const withAgent = run("ultracite fix", path.join(dir, "with-agent")).hookSpecificOutput.permissionDecisionReason;
+    assert.match(withAgent, /`pnpm agent:fix`/);
+    const plain = run("ultracite fix", path.join(dir, "plain")).hookSpecificOutput.permissionDecisionReason;
+    assert.doesNotMatch(plain, /agent:fix/);
+    assert.match(plain, /explicit changed paths/);
+    const nested = run("pnpm fix", path.join(dir, "with-agent", "apps", "web")).hookSpecificOutput.permissionDecisionReason;
+    assert.match(nested, /`pnpm agent:fix`/);
+    for (const command of ["cd with-agent && pnpm exec ultracite fix", "pnpm -C with-agent fix"]) {
+      assert.match(run(command, dir).hookSpecificOutput.permissionDecisionReason, /`pnpm agent:fix`/, command);
+    }
+    assert.match(run("cd ../plain && ultracite fix", path.join(dir, "with-agent")).hookSpecificOutput.permissionDecisionReason, /explicit changed paths/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("the hook reads Claude Code PreToolUse JSON on stdin and fails open on other input", () => {
+  const dir = fixture();
+  try {
+    const invoke = (input) => spawnSync(process.execPath, [hook], { input, encoding: "utf8" });
+    const denied = invoke(JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "pnpm exec ultracite fix" }, cwd: path.join(dir, "with-agent") }));
+    assert.equal(denied.status, 0, denied.stderr);
+    assert.deepEqual(Object.keys(JSON.parse(denied.stdout).hookSpecificOutput).sort(), ["hookEventName", "permissionDecision", "permissionDecisionReason"]);
+    for (const input of [
+      JSON.stringify({ tool_name: "Bash", tool_input: { command: "ultracite fix src/a.ts" }, cwd: path.join(dir, "with-agent") }),
+      JSON.stringify({ tool_name: "Edit", tool_input: { file_path: "x" }, cwd: dir }),
+      "not json",
+    ]) {
+      const result = invoke(input);
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(result.stdout, "");
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

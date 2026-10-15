@@ -30,7 +30,6 @@ Resolve scope in this order:
 
 1. explicit user instructions
 2. supplied audit brief or acceptance criteria, including a delivery role brief
-   derived from the ledger
 3. OpenAPI/Swagger contract
 4. authoritative repository docs and code
 5. observed runtime behavior
@@ -59,7 +58,7 @@ the required outcome is materially unclear.
 
 ## Resolve The Execution Environment
 
-Reuse a supplied environment when its URLs, candidate source identities and ownership match the requested audit. If none was supplied and an available agent-devbox installation supports the repository, use [docker-app-verify](../docker-app-verify/SKILL.md) to resolve only the required components and then resume this audit. When called from that lifecycle owner, do not invoke it again. If the runner is absent or the project is unsupported, retain the documented standalone path unless Docker verification was explicitly required. Do not bypass a configured run's admission, readiness or ownership failure.
+Reuse a supplied environment when its URLs, candidate source identities and ownership match the requested audit. If none was supplied and an available agent-devbox installation supports the repository, use [docker-app-verify](../docker-app-verify/SKILL.md) to resolve only the required components and then resume this audit. When called from that lifecycle owner, do not invoke it again. If the runner is absent, the project is unsupported, or no supported component can serve the candidate source ([docker-app-verify lifecycle](../docker-app-verify/references/lifecycle.md#before-starting), item 1), retain the documented standalone path unless Docker verification was explicitly required. Do not bypass a configured run's admission, readiness or ownership failure.
 
 The provider owns its application lifecycle; this auditor owns its interactions, session/lease closure and verdict. Do not start duplicate services or stop borrowed services. Adopt a supplied external evidence directory and complete its brief once, skipping workspace initialization below. Apply these rules to supplied environments from any provider, not only agent-devbox.
 

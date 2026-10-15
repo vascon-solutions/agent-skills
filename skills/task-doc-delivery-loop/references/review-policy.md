@@ -4,7 +4,9 @@ At bootstrap, record a provisional estimate as a source decision. Finalize it
 immediately before the first frozen-candidate implementation assessment. Use
 `measure`, then owner-only `set-review-bound --bound-file PATH` with the complete
 `ReviewBound` payload in the ledger schema. Repeat before assessing every
-replacement candidate. The helper never commits to obtain an OID.
+replacement candidate. `freeze --review-bound` does all three in one revision
+from the owner-attested fields, or `--review-bound reuse` when nothing they
+attest has changed. The helper never commits to obtain an OID.
 
 The `basis` is `{files, packages, workspace_decision, delegated_decision}`.
 `files` must match the helper's measurement against the recorded `diff_base_oid`.
@@ -46,6 +48,14 @@ successor, reserves a cycle until a `delegated` review cycle records its result,
 not merely until the run is marked complete. At exhaustion stop ungranted work
 and report blockers.
 
+With no repository delegate rule and no user instruction, `delegated_limit` is
+`null`: delegated reviews are bounded only by the size cycles. Generic wording
+such as "request independent review" is not a numeric limit. Record a decision
+that the repository sets none and cite it in `basis.delegated_decision`; the
+helper does not require one for a null limit, but the record keeps the choice
+visible. A non-null limit needs a cited repository rule or user wording that
+names a number. A permitted delegated review is not an expected one.
+
 `extension_rounds` starts at 0. `overrides` contains exact copies of recorded
 review/remediation grants, each with positive `additional_cycles`; their sum is
 the extension. A specific request to fix one further findings batch gives one
@@ -62,8 +72,8 @@ new frozen implementation assessment or a fixing batch, under the same claim.
 Without one, the helper refuses any frozen-candidate cycle and any committed
 fix, with or without a `cycle_id`. A PR batch takes only a `post_pr_fix` cycle, and only when
 it causes a fix.
-Local-only deliveries use the same policy in their owner ledger decisions and
-report an unmeasured limitation; they never commit just to finalize this helper's
+Local-only deliveries use the same policy in their owner decisions (the ledger,
+or the delivery summary without one) and report an unmeasured limitation; they never commit just to finalize this helper's
 frozen-OID bound. The owner enforces dispatch timing and natural-language scope;
 helper mutations enforce installed bounds atomically, not external agent actions.
 
@@ -77,5 +87,10 @@ Pending or earlier-candidate sweeps do not pass, and the helper rechecks sweeps
 when the push is verified. Recovery of an interrupted push records the observed
 remote outcome without that recheck; complete any reopened sweep before the next
 push.
-Proposed vocabulary stays in the delivery ledger until accepted in separately
-authorized skill-pack work.
+Proposed vocabulary stays in the delivery ledger, or the delivery summary
+without one, until accepted in separately authorized skill-pack work.
+
+Without a ledger, the [lightweight path](../SKILL.md#ledger-or-lightweight-mode)
+applies this policy as owner rules: measure a committed candidate with the
+same `git diff` invocation as `measure`, record the bound and delegate limit
+in the delivery summary, and complete the sweep before pushing remediation.

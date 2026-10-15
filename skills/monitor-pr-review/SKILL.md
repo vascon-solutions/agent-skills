@@ -13,7 +13,7 @@ Use `address-review-findings` for one current batch. Require affirmative user in
 
 [Authorization](../task-doc-delivery-loop/references/authorization.md) is the shared endpoint, monitoring and merge table; observe-only and remediating watches are distinct grants. An explicit request to run this review/remediation skill authorizes scoped fixes, focused validation, commits/pushes, replies, and verified thread resolutions on the named PR. It does not authorize merging, closing/reopening, force-pushing, rewriting history, bypassing hooks, or unrelated CI fixes. Preserve any narrower user instruction.
 
-Run inline. Do not delegate the timer, ledger, GitHub mutations, or branch ownership. Apply [orchestration](../task-doc-delivery-loop/references/orchestration.md#watching) to each observation: read small results directly, and dispatch the canonical `watcher` for one bounded read only when interpreting or reducing the material warrants it. A bounded delivery-review-mode reviewer may assess material changes when authorized; it does not run duplicate validation or mutate anything.
+Run inline. Do not delegate the timer, any delivery ledger, GitHub mutations, or branch ownership. Apply [orchestration](../task-doc-delivery-loop/references/orchestration.md#watching) to each observation: read small results directly, and dispatch the canonical `watcher` for one bounded read only when interpreting or reducing the material warrants it. A bounded delivery-review-mode reviewer may assess material changes when authorized; it does not run duplicate validation or mutate anything.
 
 ## Establish State
 
@@ -47,4 +47,4 @@ If reply succeeds but resolution fails, record `reply_sent: true`, refresh remot
 
 Measure quiet from the later of the last handled substantive review event and pushed remediation commit. At the end take a final complete snapshot; any unseen substantive review event resets the window. Non-review bot chatter and usage notices do not. Waiting must follow the runtime's scheduling/waiting facilities; do not leave an unmanaged background loop after the turn ends.
 
-Return the terminal result and ledger to the delivery owner once, without starting another remediation cycle there. Report PR/head, monitor start time, final activity checkpoint, quiet duration, dispositions, pushed fixes, validation gaps, reply/resolution state, and remaining dependencies. A ready PR becoming draft does not end an explicitly active monitor, but must be reported to the owner.
+Return the terminal result, and the ledger when there is one, to the delivery owner once, without starting another remediation cycle there. Report PR/head, monitor start time, final activity checkpoint, quiet duration, dispositions, pushed fixes, validation gaps, reply/resolution state, and remaining dependencies. A ready PR becoming draft does not end an explicitly active monitor, but must be reported to the owner.

@@ -339,12 +339,35 @@ test("R1 skills route delivery state through the ledger helper and one shared au
   assert.match(authorization, /A ready PR does not authorize monitoring/);
 });
 
+test("the delivery ledger stays opt-in with a fixed mode precedence and a lightweight default", () => {
+  const loop = read("skills", "task-doc-delivery-loop", "SKILL.md");
+  const mode = loop.split("### Ledger Or Lightweight Mode")[1]?.split("### Bootstrap")[0] ?? "";
+  const order = [
+    /1\. The current prompt's explicit wording, either way/,
+    /2\. A user-level standing instruction/,
+    /3\. An unfinished ledger for this branch means ledger mode/,
+    /4\. A repository rule: an `AGENTS\.md` line, then `\.agent\/delivery-policy\.json` `delivery_ledger: "required" \| "optional"`/,
+    /5\. Otherwise, lightweight mode\./,
+  ];
+  let at = -1;
+  for (const rule of order) {
+    const match = rule.exec(mode);
+    assert.ok(match, `missing ${rule}`);
+    assert.ok(match.index > at, `out of order: ${rule}`);
+    at = match.index;
+  }
+  assert.match(mode, /`required` is a floor that only the current prompt's explicit wording overrides, never a standing user instruction/);
+  assert.match(mode, /Never enable the ledger from risk signals alone/);
+  assert.match(mode, /plain `## Delivery summary` section in the PR body, with no `agent-delivery-\*` markers/);
+  assert.doesNotMatch(loop, /^Keep the delivery in a \[delivery ledger\]/m);
+});
+
 test("R1 carries the accepted audit-delegation and fresh-reviewer wording with its corrections", () => {
   const loop = read("skills", "task-doc-delivery-loop", "SKILL.md");
   assert.match(loop, /available test personas and secure credential sources/);
   assert.doesNotMatch(loop, /free personas/);
   assert.match(loop, /If the runtime cannot select the role, perform the audit inline and record that limitation/);
-  assert.match(loop, /Where repo policy permits another delegated review, use a fresh reviewer with the remediation diff, original findings, claimed dispositions, affected requirements and candidate identity\. Otherwise verify remediation locally and state the independence limit\./);
+  assert.match(loop, /Where the effective cycle bound and delegate limit permit another delegated review \(a `null` limit means size cycles only\), use a fresh reviewer with the remediation diff, original findings, claimed dispositions, affected requirements and candidate identity\. Otherwise verify remediation locally and state the independence limit\./);
   assert.match(loop, /self-review is only ever supplementary/);
 });
 

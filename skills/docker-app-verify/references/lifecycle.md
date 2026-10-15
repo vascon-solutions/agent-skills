@@ -9,7 +9,21 @@ Use the installed runner's documented invocation. The examples below use `node <
 3. Follow the adapter's documented routing to reuse a matching environment or start only required components. For an owned foreground start, retain the process handle and first environment ID, including queued or failed starts. Wait for ready, then verify URLs and source receipts against the candidate.
 4. Adopt the emitted external evidence directory. Complete its brief once; do not initialize a competing audit workspace. If no directory is supplied, use the selected audit skill's initializer and record that directory in the handoff.
 
-Never assume every installation supports the same components, data lifecycle or remote execution. Project recipes and supported capabilities belong to the runner, not to this generic skill. Absence or unsupported mapping permits the established execution path when Docker was optional. Ambiguous mappings, invalid configuration or a selected run's guard failure remain blockers until resolved.
+Never assume every installation supports the same components, data lifecycle or remote execution. Project recipes and supported capabilities belong to the runner, not to this generic skill. Absence, an unsupported mapping, or a configured project where no supported component can serve the candidate ([before starting](#before-starting), item 1) permits the established execution path when Docker was optional. Ambiguous mappings, invalid configuration or a selected run's guard failure remain blockers until resolved.
+
+## Before starting
+
+Settle each item from discovery, the adapter's documentation and the protected config before any start, and record the outcome in the brief. An unmet item is a selection decision or a recorded gap, not something to find mid-audit.
+
+1. Compare the task's required API, shared and UI inputs (refs or merged PRs) with what the selected environment runs, through the adapter's documented source-comparison mechanism. For agent-devbox that is `route` for a managed-stack base, the `base-verify` source receipt for a persistent base, and the served source digest a disposable candidate component emits at `up`; components that do not support `route` refuse it. Where the mechanism reports only after start, the pre-start check confirms from the adapter docs that the component builds from the candidate worktree, and the comparison runs immediately after readiness, before any audit handoff.
+   - A borrowed base behind a required ref cannot serve the task; choose an isolated component and record why.
+   - When no supported component can serve the candidate source at all, for example an adapter whose only component is a persistent base pinned to another ref, or a project configuration with no candidate build input, the project is unsupported for this candidate. Record a limitation naming the reason and the adapter evidence, and use the caller's established execution path unless Docker verification was explicitly required.
+   - This is decided before any start. An environment expected to serve the candidate whose source receipts do not match after start is a reported blocker, not this fallback. A candidate-serving environment with a limited executor leaves the affected checks unverified and does not trigger it either.
+2. Confirm the environment lifetime covers the planned audit, including fixture preparation and every actor session. Raise the limit in the protected config before starting rather than rebuilding after expiry.
+3. Prepare the complete fixture batch the audit needs before the auditor handoff, through the authorized data path, and record the identifiers in the brief. The provider duty stated under execution below covers the whole batch, not only the first record.
+4. Confirm the selected component exposes the testing controls or endpoints the checkpoints rely on. If it does not, select another supported component or record the gap against those checkpoints.
+5. Check pinned or persistent reservations against the host budget. Stopping a persistent base to make room needs explicit user authorization, and restoring it afterwards is part of the owner's cleanup.
+6. Plan one browser/audit lease per actor session and end every lease with the documented logout receipt. A lost lease is recovered through the runner's documented path, not re-opened beside the old one.
 
 ## Supply a complete audit brief
 

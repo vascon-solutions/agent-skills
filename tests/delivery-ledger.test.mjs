@@ -1539,7 +1539,7 @@ test("F14 read and lock-only commands refuse unexpected stdin; update and append
 test("F14 exact exit codes and a single parseable JSON envelope for every error class", () => {
   const repo = makeRepo();
   const owner = initDelivery(repo);
-  const envelopeKeys = ["ok", "command", "code", "message", "path", "id", "expected", "observed"];
+  const envelopeKeys = ["ok", "command", "code", "message", "path", "id", "expected", "observed", "hint"];
   const failures = [
     [run(["show", "--repo", repo.work, "--nope"]), 1, "argument_error"],
     [run(["show", "--repo", path.join(repo.dir, "missing")]), 1, "environment_error"],
@@ -2509,7 +2509,7 @@ test("V3 a completed command cannot submit an arbitrary fingerprint; rerun count
 
 // A completed draft-PR delivery, then an authorized review_round owner with
 // a frozen two-thread findings batch.
-function reviewRound(repo, { dispositions = ["fixed", "rejected"] } = {}) {
+function reviewRound(repo, { dispositions = ["fixed", "rejected"], arrayAppend = false } = {}) {
   const owner = initDelivery(repo);
   const delivered = draftPrDelivery(repo, owner);
   ok(owner.release("complete", { next: nextStep("review_round", "review", { authorization_required: true }), completion: completion(owner, ["validation:" + delivered.gate.id, "publications:" + delivered.push.id, "publications:" + delivered.prCreate.id]), blocker: null }));
@@ -2526,7 +2526,7 @@ function reviewRound(repo, { dispositions = ["fixed", "rejected"] } = {}) {
   );
   const cycle = dispositions.includes("fixed") ? { cycle_id: "batch-fix", cycle_kind: "post_pr_fix" } : {};
   const batchReview = review(reviewer, { source: "codex-bot", verdict: "pass-with-fixes", findings, batch, ...cycle });
-  ok(reviewer.append("reviews", batchReview));
+  ok(reviewer.append("reviews", arrayAppend ? [batchReview] : batchReview));
   return { owner, reviewer, delivered, threads, batch, batchReview };
 }
 
@@ -4159,6 +4159,557 @@ test("R3 local remediation verification matches content identity, never two null
   assert.notEqual(next.content_id, first.content_id);
   refused(owner.append("reviews", review(owner, { source: "inline", candidate_oid: null, content_id: next.content_id, content_manifest: nextManifest.source })), 2, "invariant_error");
   assert.equal(owner.ledger().review_bound.rounds_used, 1);
+});
+
+// Ergonomics (docs/tasks/2026-10-06-delivery-ledger-ergonomics.md): B1-B6.
+function appendMany(owner, field, items, options = {}) {
+  return owner.owned("append", [field], { stdin: JSON.stringify(items), ...options });
+}
+
+function refusedUnchanged(repo, result, exit, code, message) {
+  const before = fs.readFileSync(repo.ledgerPath, "utf8");
+  refused(result(), exit, code, message);
+  assert.equal(fs.readFileSync(repo.ledgerPath, "utf8"), before, `${message}: nothing is written`);
+}
+
+test("B4 an append array is written whole, in one revision with one history event", () => {
+  const repo = makeRepo();
+  const owner = initDelivery(repo);
+  const first = limitation();
+  ok(owner.append("limitations", first));
+  const before = owner.ledger();
+  const second = limitation();
+  const third = limitation();
+  const result = ok(appendMany(owner, "limitations", [first, second, third]));
+  assert.deepEqual(result.data.ids, [first.id, second.id, third.id]);
+  assert.deepEqual(result.data.added, [second.id, third.id], "an identical existing item is a no-op");
+  const after = owner.ledger();
+  assert.equal(after.revision, before.revision + 1);
+  assert.equal(after.history.length, before.history.length + 1);
+  assert.deepEqual(after.history.at(-1).detail, { collection: "limitations", ids: [second.id, third.id] });
+  assert.equal(ok(appendMany(owner, "limitations", [first, second])).changed, false, "an all-identical array changes nothing");
+  refusedUnchanged(repo, () => appendMany(owner, "limitations", [limitation(), { ...first, reason: "different content" }]), 2, "invariant_error", "an existing ID with other content");
+  const duplicate = limitation();
+  refusedUnchanged(repo, () => appendMany(owner, "limitations", [duplicate, duplicate]), 2, "invariant_error", "duplicate IDs inside the array");
+  refusedUnchanged(repo, () => appendMany(owner, "limitations", [limitation(), { id: "broken" }]), 2, "schema_error", "one invalid item refuses the whole array");
+  refusedUnchanged(repo, () => appendMany(owner, "limitations", []), 2, "schema_error", "an empty array");
+});
+
+test("B4 same-call checks see earlier items: one open operation per target, prepared then verified never share a write", () => {
+  const repo = makeRepo();
+  const owner = initDelivery(repo);
+  deliverToFrozen(repo, owner);
+  const one = pushEvent(repo, owner);
+  const two = pushEvent(repo, owner);
+  refusedUnchanged(repo, () => appendMany(owner, "publications", [one, two]), 2, "invariant_error", "two prepared operations on one target");
+  git(repo.work, "push", "-q", "origin", `HEAD:refs/heads/${repo.branch}`);
+  const verified = step(one, "verified", { observed: observedFor(one, { oid: owner.ledger().candidate.oid }) });
+  refusedUnchanged(repo, () => appendMany(owner, "publications", [one, verified]), 2, "invariant_error", "a prepared step and its verified step in one array");
+  ok(owner.append("publications", one));
+  ok(appendMany(owner, "publications", [verified]));
+});
+
+test("B4 same-call checks see earlier items: one reply per thread and delegated reservations", () => {
+  const repo = makeRepo();
+  const { reviewer, threads, batch } = reviewRound(repo);
+  const first = replyEvent(repo, reviewer, batch, threads[0], bodyFile(repo, "Fixed."));
+  ok(reviewer.append("publications", first));
+  const second = replyEvent(repo, reviewer, batch, threads[0], bodyFile(repo, "Fixed again."));
+  refusedUnchanged(repo, () => appendMany(reviewer, "publications", [verifiedReply(first), second]), 2, "invariant_error", "a second reply after a verified reply in the same call");
+
+  const bounded = r3Fixture(1);
+  ok(setR3(bounded.owner, r3Bound(bounded.owner)));
+  const dispatch = () => roleRun(bounded.owner, { status: "running", execution: "delegated", fallback_reason: null, ended_at: null });
+  refusedUnchanged(bounded.repo, () => appendMany(bounded.owner, "role_runs", [dispatch(), dispatch()]), 2, "invariant_error", "two dispatches that together exceed a one-cycle bound");
+  ok(appendMany(bounded.owner, "role_runs", [dispatch()]));
+});
+
+function publication(owner, action, args = [], options = {}) {
+  return owner.owned("publication", [action, ...args], options);
+}
+
+// Generated IDs and timestamps differ by construction; everything else must
+// equal the hand-built event.
+function normalizeEvent(event) {
+  const { id, operation_id, at, ...rest } = event;
+  return {
+    ...rest,
+    precondition: { ...rest.precondition, observed_at: "<at>" },
+    observed: rest.observed === null ? null : { ...rest.observed, observed_at: "<at>" },
+  };
+}
+
+function generated(result) {
+  const json = ok(result);
+  return json.data.events;
+}
+
+test("B1 generated push, pr_create, pr_body and pr_state events equal hand-built ones", () => {
+  const repo = makeRepo();
+  const owner = initDelivery(repo, { endpoint: "ready_pr" });
+  deliverToFrozen(repo, owner);
+  const oid = owner.ledger().candidate.oid;
+
+  const [push] = generated(publication(owner, "prepare", ["--kind", "push"]));
+  assert.deepEqual(normalizeEvent(push), normalizeEvent(pushEvent(repo, owner)));
+  git(repo.work, "push", "-q", "origin", `HEAD:refs/heads/${repo.branch}`);
+  const [pushVerified] = generated(publication(owner, "verify", ["--id", push.operation_id, "--from-check"], { env: { FAKE_GH_DIR: repo.gh } }));
+  assert.equal(pushVerified.step, "verified");
+  assert.deepEqual(normalizeEvent(pushVerified), normalizeEvent(step(push, "verified", { observed: observedFor(push, { oid }) })));
+
+  const body = summaryBody(repo, owner, "Delivery summary: validation passed.");
+  const [create] = generated(publication(owner, "prepare", ["--kind", "pr-create", "--body-file", body.bodyFile, "--draft", "true"]));
+  const handCreate = {
+    ...pushEvent(repo, owner),
+    kind: "pr_create",
+    target: { host: "github.com", repository: `${repo.github.owner}/${repo.github.name}`, pr_number: null, pr_url: null },
+    intended: { head_repository: { ...repo.github }, head_branch: repo.branch, base: "main", draft: true, body_file: body.bodyFile, body_sha256: body.body_sha256 },
+    precondition: { head_oid: oid, body_sha256: null, state: null, observed_at: nowIso() },
+  };
+  assert.deepEqual(normalizeEvent(create), normalizeEvent(handCreate));
+  const pr = prRecord(repo, owner, { number: 7, draft: true });
+  const createObserved = observedFor(create, { object_id: "PR_7", url: pr.url, target: { ...create.target, pr_number: 7, pr_url: pr.url, head_repository: { ...repo.github }, head_branch: repo.branch, base: "main" }, oid, body_sha256: body.body_sha256, draft: true, state: "OPEN" });
+  const [createVerified] = generated(publication(owner, "verify", ["--id", create.operation_id, "--observed-file", input(repo, "observed", createObserved)]));
+  assert.deepEqual(normalizeEvent(createVerified), normalizeEvent(step(create, "verified", { observed: createObserved })));
+  ok(owner.recordContext({ pr }));
+  ghPull(repo, pr);
+
+  const next = summaryBody(repo, owner, "Delivery summary: updated.", fs.readFileSync(body.bodyFile, "utf8"));
+  const [bodyEvent] = generated(publication(owner, "prepare", ["--kind", "pr-body", "--body-file", next.bodyFile, "--current-body-sha256", next.current_body_sha256]));
+  const prTarget = { host: "github.com", repository: pr.repository, pr_number: pr.number, pr_url: pr.url };
+  const handBody = { ...pushEvent(repo, owner), kind: "pr_body", target: prTarget, intended: { body_file: next.bodyFile, body_sha256: next.body_sha256 }, precondition: { head_oid: oid, body_sha256: next.current_body_sha256, state: "OPEN", observed_at: nowIso() } };
+  assert.deepEqual(normalizeEvent(bodyEvent), normalizeEvent(handBody));
+  assert.equal(generated(publication(owner, "verify", ["--id", bodyEvent.operation_id, "--observed-file", input(repo, "observed", { target: prTarget, oid, body_sha256: next.body_sha256 })]))[0].step, "verified", "nullable observation fields default to null");
+
+  const [state] = generated(publication(owner, "prepare", ["--kind", "pr-state", "--draft", "false"]));
+  const handState = { ...pushEvent(repo, owner), kind: "pr_state", target: prTarget, intended: { draft: false }, precondition: { head_oid: oid, body_sha256: null, state: "OPEN", observed_at: nowIso() } };
+  assert.deepEqual(normalizeEvent(state), normalizeEvent(handState));
+  ghPull(repo, { ...pr, draft: false });
+  const [stateVerified] = generated(publication(owner, "verify", ["--id", state.operation_id, "--from-check"], { env: { FAKE_GH_DIR: repo.gh } }));
+  assert.deepEqual(normalizeEvent(stateVerified), normalizeEvent(step(state, "verified", { observed: observedFor(state, { url: pr.url, oid, draft: false, state: "OPEN" }) })));
+});
+
+test("B1 generated reply and resolve events equal hand-built ones", () => {
+  const repo = makeRepo();
+  const { reviewer, threads, batch } = reviewRound(repo);
+  const body = bodyFile(repo, "Fixed in the latest push.");
+  const [reply] = generated(publication(reviewer, "prepare", ["--kind", "reply", "--thread", threads[0].thread_graphql_id, "--body-file", body.file]));
+  assert.deepEqual(normalizeEvent(reply), normalizeEvent(replyEvent(repo, reviewer, batch, threads[0], body)));
+  const observed = observedFor(reply, { object_id: "5001", url: `${reply.target.pr_url}#discussion_r5001`, body_sha256: body.sha256 });
+  const [replyVerified] = generated(publication(reviewer, "verify", ["--id", reply.operation_id, "--observed-file", input(repo, "observed", observed)]));
+  assert.deepEqual(normalizeEvent(replyVerified), normalizeEvent(verifiedReply(reply)));
+  const [resolve] = generated(publication(reviewer, "prepare", ["--kind", "resolve", "--thread", threads[0].thread_graphql_id]));
+  assert.deepEqual(normalizeEvent(resolve), normalizeEvent(resolveEvent(reviewer, batch, threads[0], reply.operation_id)));
+  const [resolved] = generated(publication(reviewer, "verify", ["--id", resolve.operation_id, "--observed-file", input(repo, "observed", { target: resolve.target, resolved: true })]));
+  assert.equal(resolved.step, "verified");
+});
+
+test("B1 a batch keeps per-item identity: one mismatched read-back leaves the others verified", () => {
+  const repo = makeRepo();
+  const { reviewer, threads, batch } = reviewRound(repo);
+  const bodies = threads.map((_, index) => bodyFile(repo, `Reply ${index}.`));
+  const before = reviewer.ledger();
+  const prepared = ok(publication(reviewer, "prepare", ["--kind", "reply", "--batch", input(repo, "batch", threads.map((thread, index) => ({ thread: thread.thread_graphql_id, body_file: bodies[index].file })))]));
+  const after = reviewer.ledger();
+  assert.equal(after.revision, before.revision + 1, "one revision for the batch");
+  assert.equal(after.history.at(-1).detail.batch.id, prepared.data.batch_id, "the batch identity lives in history detail");
+  const events = prepared.data.events;
+  assert.ok(events.every((event) => event.batch_id === batch.id), "batch_id keeps its frozen review-batch meaning");
+  assert.equal(new Set(events.map((event) => event.operation_id)).size, 2);
+  const good = observedFor(events[0], { object_id: "6001", url: `${events[0].target.pr_url}#discussion_r6001`, body_sha256: bodies[0].sha256 });
+  const bad = observedFor(events[1], { object_id: "6002", url: `${events[1].target.pr_url}#discussion_r6002`, body_sha256: "0".repeat(64) });
+  const verified = ok(publication(reviewer, "verify", ["--batch", input(repo, "batch", [{ id: events[0].operation_id, observed_file: input(repo, "observed", good) }, { id: events[1].operation_id, observed_file: input(repo, "observed", bad) }])]));
+  assert.deepEqual(verified.data.items.map((item) => item.step), ["verified", "mismatch"]);
+  const last = (operation) => reviewer.ledger().publications.filter((event) => event.operation_id === operation).at(-1);
+  assert.equal(last(events[0].operation_id).step, "verified");
+  assert.equal(last(events[1].operation_id).step, "mismatch");
+  assert.match(last(events[1].operation_id).error, /body differs/);
+  refused(publication(reviewer, "verify", ["--batch", input(repo, "batch", [{ id: events[1].operation_id, failed: "x" }, { id: events[1].operation_id, failed: "y" }])]), 2, "invariant_error", "a verify batch names each operation once");
+});
+
+test("B1 recovery and refusals: not-attempted items fail, reply and resolve never share a prepare batch, --from-check covers push and pr-state only", () => {
+  const repo = makeRepo();
+  const { reviewer, threads } = reviewRound(repo);
+  const body = bodyFile(repo, "Fixed.");
+  const [reply] = generated(publication(reviewer, "prepare", ["--kind", "reply", "--thread", threads[0].thread_graphql_id, "--body-file", body.file]));
+  refused(publication(reviewer, "verify", ["--id", reply.operation_id, "--from-check"]), 1, "argument_error", "reply read-back comes from an observed file");
+  refused(publication(reviewer, "prepare", ["--kind", "resolve", "--thread", threads[0].thread_graphql_id]), 2, "invariant_error", "resolve needs a verified reply");
+  refused(publication(reviewer, "prepare", ["--kind", "reply", "--batch", input(repo, "batch", [{ thread: threads[1].thread_graphql_id, body_file: body.file, kind: "resolve" }])]), 1, "argument_error", "a batch holds one kind");
+  const [failedStep] = generated(publication(reviewer, "verify", ["--id", reply.operation_id, "--failed", "not attempted"]));
+  assert.equal(failedStep.step, "failed");
+  assert.equal(failedStep.error, "not attempted");
+  refused(publication(reviewer, "verify", ["--id", reply.operation_id, "--failed", "again"]), 2, "invariant_error", "a failed operation has ended");
+  refused(publication(reviewer, "verify", ["--id", "no-such-operation", "--uncertain", "?"]), 2, "invariant_error");
+  const [retry] = generated(publication(reviewer, "prepare", ["--kind", "reply", "--thread", threads[0].thread_graphql_id, "--body-file", body.file]));
+  const [uncertain] = generated(publication(reviewer, "verify", ["--id", retry.operation_id, "--uncertain", "the POST timed out"]));
+  assert.equal(uncertain.step, "uncertain");
+  refused(publication(reviewer, "prepare", ["--kind", "reply", "--thread", threads[0].thread_graphql_id, "--body-file", body.file]), 2, "invariant_error", "an unresolved operation blocks another");
+  refused(publication(reviewer, "prepare", ["--kind", "push", "--id", "x"]), 1, "argument_error");
+  refused(publication(reviewer, "verify", ["--id", "x"]), 1, "argument_error");
+  refused(publication(reviewer, "sideways", ["--kind", "push"]), 1, "argument_error");
+});
+
+test("B4 a batch review appended as an array still satisfies the review-round completion gate", () => {
+  const repo = makeRepo();
+  const { reviewer, threads, batch, batchReview, delivered } = reviewRound(repo, { dispositions: ["rejected", "rejected"], arrayAppend: true });
+  assert.deepEqual(reviewer.ledger().history.at(-1).detail.ids, [batchReview.id]);
+  for (const thread of threads) {
+    const prepared = replyEvent(repo, reviewer, batch, thread, bodyFile(repo, `Not changing ${thread.path}.`));
+    ok(reviewer.append("publications", prepared));
+    ok(reviewer.append("publications", verifiedReply(prepared, { object_id: `r-${thread.root_comment_database_id}` })));
+  }
+  ok(reviewer.release("complete", { next: null, completion: completion(reviewer, [`validation:${delivered.gate.id}`, `reviews:${batchReview.id}`]), blocker: null }));
+});
+
+test("B1 a verify batch holds one kind, and an ambiguous reply default asks for --review-batch", () => {
+  const repo = makeRepo();
+  const { reviewer, threads, batchReview } = reviewRound(repo);
+  const body = bodyFile(repo, "Fixed in the latest push.");
+  const [reply] = generated(publication(reviewer, "prepare", ["--kind", "reply", "--thread", threads[0].thread_graphql_id, "--body-file", body.file]));
+  const observed = observedFor(reply, { object_id: "7001", url: `${reply.target.pr_url}#discussion_r7001`, body_sha256: body.sha256 });
+  ok(publication(reviewer, "verify", ["--id", reply.operation_id, "--observed-file", input(repo, "observed", observed)]));
+  const [resolve] = generated(publication(reviewer, "prepare", ["--kind", "resolve", "--thread", threads[0].thread_graphql_id]));
+  const [second] = generated(publication(reviewer, "prepare", ["--kind", "reply", "--thread", threads[1].thread_graphql_id, "--body-file", body.file]));
+  const mixed = input(repo, "batch", [{ id: resolve.operation_id, failed: "x" }, { id: second.operation_id, failed: "y" }]);
+  refusedUnchanged(repo, () => publication(reviewer, "verify", ["--batch", mixed]), 2, "invariant_error", "a verify batch holds operations of one kind");
+  assert.match(publication(reviewer, "verify", ["--batch", mixed]).json.message, /one kind/);
+  const later = batchFile(repo, reviewer, [threads[1]]);
+  ok(reviewer.append("reviews", review(reviewer, { source: "codex-bot", verdict: "pass-with-fixes", findings: [{ ...batchReview.findings[1], id: "f9" }], batch: later })));
+  ok(publication(reviewer, "verify", ["--id", second.operation_id, "--failed", "not attempted"]));
+  const ambiguous = publication(reviewer, "prepare", ["--kind", "reply", "--thread", threads[1].thread_graphql_id, "--body-file", body.file]);
+  refused(ambiguous, 1, "argument_error", "two current batches pair this thread");
+  assert.match(ambiguous.json.message, /--review-batch/);
+  const [chosen] = generated(publication(reviewer, "prepare", ["--kind", "reply", "--thread", threads[1].thread_graphql_id, "--body-file", body.file, "--review-batch", later.id]));
+  assert.equal(chosen.batch_id, later.id);
+});
+
+test("B1 --from-check issues only read requests to git and GitHub", () => {
+  const repo = makeRepo();
+  const owner = initDelivery(repo, { endpoint: "ready_pr" });
+  const { pr } = draftPrDelivery(repo, owner);
+  const realGit = spawnSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).stdout.trim();
+  const bin = path.join(repo.dir, "recording-bin");
+  const log = path.join(repo.dir, "git-calls.jsonl");
+  fs.mkdirSync(bin);
+  fs.writeFileSync(path.join(bin, "git"), `#!${process.execPath}\nconst fs = require("fs");\nfs.appendFileSync(${JSON.stringify(log)}, JSON.stringify(process.argv.slice(2)) + "\\n");\nconst r = require("child_process").spawnSync(${JSON.stringify(realGit)}, process.argv.slice(2), { stdio: "inherit" });\nprocess.exit(r.status ?? 1);\n`, { mode: 0o755 });
+  const env = { FAKE_GH_DIR: repo.gh, PATH: `${bin}:${FAKE_BIN}:${process.env.PATH}` };
+  const [state] = generated(publication(owner, "prepare", ["--kind", "pr-state", "--draft", "false"]));
+  ghPull(repo, { ...pr, draft: false });
+  fs.rmSync(path.join(repo.gh, "calls.jsonl"), { force: true });
+  assert.equal(generated(publication(owner, "verify", ["--id", state.operation_id, "--from-check"], { env }))[0].step, "verified");
+  ok(owner.owned("begin-change"));
+  deliverToFrozen(repo, owner, { "src/app.js": "export const v = 3;\n" });
+  ok(owner.append("reviews", review(owner)));
+  const [push] = generated(publication(owner, "prepare", ["--kind", "push"]));
+  git(repo.work, "push", "-q", "origin", `HEAD:refs/heads/${repo.branch}`);
+  fs.rmSync(log, { force: true });
+  assert.equal(generated(publication(owner, "verify", ["--id", push.operation_id, "--from-check"], { env }))[0].step, "verified");
+  const subcommand = (args) => {
+    for (let i = 0; i < args.length; i += 1) {
+      if (["-C", "-c"].includes(args[i])) i += 1;
+      else if (!args[i].startsWith("-")) return args[i];
+    }
+    return null;
+  };
+  const gitCalls = fs.readFileSync(log, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line));
+  assert.ok(gitCalls.some((args) => subcommand(args) === "ls-remote"), "the push read-back uses ls-remote");
+  const mutating = ["push", "fetch", "commit", "update-ref", "reset", "checkout", "switch", "tag", "branch", "merge", "rebase", "gc", "add", "rm", "mv", "stash", "pull", "update-index"];
+  for (const args of gitCalls) {
+    assert.ok(!mutating.includes(subcommand(args)), `git ${args.join(" ")} is not a read`);
+    if (subcommand(args) === "config") assert.ok(args.includes("--get"), `git ${args.join(" ")} only reads config`);
+  }
+  const ghRequests = ghCalls(repo);
+  assert.ok(ghRequests.length > 0);
+  for (const args of ghRequests) assert.equal(args[args.indexOf("--method") + 1], "GET");
+});
+
+function freezeWithBound(owner, oid, spec, { intended = ["src", "README.md"] } = {}) {
+  const evidence = { prior_head: owner.ledger().candidate.working_head_oid, reason: "commit the authorized change", source: "delivery owner", intended_paths: intended, excluded_paths: [] };
+  const bound = typeof spec === "string" ? spec : input(owner.repo, "partial-bound", spec);
+  return owner.owned("freeze", ["--oid", oid, "--evidence-file", input(owner.repo, "freeze", evidence), "--review-bound", bound]);
+}
+
+function workspaceDecisions(owner, { limit = false } = {}) {
+  ok(owner.append("decisions", { id: "workspace", text: "Inspected fixture workspace configuration and affected leaf roots; root-only when no workspace is configured.", source: "fixture workspace evidence" }));
+  if (limit) ok(owner.append("decisions", { id: "delegate-policy", text: "Repository permits at most one delegated implementation review.", source: "fixture repository policy" }));
+}
+
+const B2_FILES = Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`src/file-${i}.js`, `export const n = ${i};\n`]));
+
+test("B2 freeze --review-bound derives exactly the bound measure and set-review-bound install, in one revision", () => {
+  for (const limit of [null, 1]) {
+    const separateRepo = makeRepo();
+    const separate = initDelivery(separateRepo);
+    deliverToFrozen(separateRepo, separate, B2_FILES);
+    ok(setR3(separate, r3Bound(separate, { limit })));
+    const expected = separate.ledger();
+
+    const combinedRepo = makeRepo();
+    const combined = initDelivery(combinedRepo);
+    workspaceDecisions(combined, { limit: limit !== null });
+    const oid = commit(combinedRepo, B2_FILES);
+    const before = combined.ledger();
+    const result = ok(freezeWithBound(combined, oid, { basis: { packages: ["."], workspace_decision: "workspace", delegated_decision: limit === null ? null : "delegate-policy" }, delegated_limit: limit, overrides: [] }));
+    const after = combined.ledger();
+    assert.equal(after.revision, before.revision + 1, "one revision");
+    assert.equal(after.history.at(-1).operation, "freeze");
+    assert.equal(after.candidate.state, "frozen");
+    const strip = ({ measured_oid, ...rest }) => rest;
+    assert.deepEqual(strip(after.review_bound), strip(expected.review_bound), `limit ${limit}`);
+    assert.equal(after.review_bound.measured_oid, oid);
+    for (const field of ["files", "additions", "deletions", "binary_files"]) assert.equal(after.measurements[field], expected.measurements[field], field);
+    assert.deepEqual(result.data.review_bound, after.review_bound);
+  }
+});
+
+test("B2 --review-bound reuse copies attested fields only when every changed path stays under the recorded roots", () => {
+  const repo = makeRepo();
+  const owner = initDelivery(repo);
+  workspaceDecisions(owner);
+  refused(freezeWithBound(owner, commit(repo, { "src/a.js": "a\n" }), "reuse"), 2, "invariant_error", "no prior bound");
+  assert.equal(owner.ledger().candidate.state, "working", "a refused freeze writes nothing");
+  ok(freezeWithBound(owner, git(repo.work, "rev-parse", "HEAD"), { basis: { packages: ["src"], workspace_decision: "workspace", delegated_decision: null }, delegated_limit: null, overrides: [] }));
+  ok(owner.owned("begin-change"));
+  const second = commit(repo, { "src/b.js": "b\n" });
+  ok(freezeWithBound(owner, second, "reuse"));
+  const bound = owner.ledger().review_bound;
+  assert.deepEqual(bound.basis, { files: 2, packages: ["src"], workspace_decision: "workspace", delegated_decision: null });
+  assert.equal(bound.measured_oid, second);
+
+  ok(owner.owned("begin-change"));
+  refused(freezeWithBound(owner, commit(repo, { "README.md": "changed\n" }), "reuse"), 2, "invariant_error", "a path outside the recorded roots");
+  ok(freezeWithBound(owner, git(repo.work, "rev-parse", "HEAD"), { basis: { packages: ["."], workspace_decision: "workspace", delegated_decision: null }, delegated_limit: null, overrides: [] }));
+  ok(owner.authorize(grant("review_round", { wording: '"fix one further findings batch"', additional_cycles: 1 })));
+  ok(owner.owned("begin-change"));
+  refused(freezeWithBound(owner, commit(repo, { "src/c.js": "c\n" }), "reuse"), 2, "invariant_error", "a new extension grant needs the file form");
+
+  const unknown = makeRepo();
+  const unknownOwner = initDelivery(unknown);
+  workspaceDecisions(unknownOwner);
+  ok(freezeWithBound(unknownOwner, commit(unknown, { "src/a.js": "a\n" }), { basis: { packages: null, workspace_decision: "workspace", delegated_decision: null }, delegated_limit: null, overrides: [] }));
+  ok(unknownOwner.owned("begin-change"));
+  refused(freezeWithBound(unknownOwner, commit(unknown, { "src/b.js": "b\n" }), "reuse"), 2, "invariant_error", "null packages cannot be reused");
+  refused(freezeWithBound(unknownOwner, git(unknown.work, "rev-parse", "HEAD"), { basis: { packages: ["src/a.js", "src"], workspace_decision: "workspace", delegated_decision: null }, delegated_limit: null, overrides: [] }), 2, "invariant_error", "ancestor packages are refused as in set-review-bound");
+  refused(freezeWithBound(unknownOwner, git(unknown.work, "rev-parse", "HEAD"), { packages: ["."], workspace_decision: "workspace", delegated_decision: null, delegated_limit: null, overrides: [] }), 2, "schema_error", "flat partial bound keys");
+});
+
+function template(name) {
+  return ok(run(["template", name])).data;
+}
+
+// Fills a template the way an owner would: explicit values replace
+// placeholders; an unfilled placeholder is a test failure.
+function fillTemplate(skeleton, values) {
+  const filled = { ...skeleton, ...values };
+  for (const [key, value] of Object.entries(filled)) {
+    if (typeof value === "string" && value.startsWith("<")) assert.fail(`placeholder ${key} left unfilled: ${value}`);
+  }
+  assert.deepEqual(Object.keys(filled).sort(), Object.keys(skeleton).sort(), "a filled template keeps exactly the template's fields");
+  return filled;
+}
+
+test("B3 templates list every required field and their filled forms pass the helper's checks", () => {
+  for (const name of ["validation", "audits", "reviews", "defect_shapes", "publications", "role_runs", "sessions", "limitations", "decisions", "finding", "grant", "authorization", "bootstrap", "commit-evidence", "release", "reconcile", "review-bound", "observed"]) {
+    const data = template(name);
+    const def = SCHEMA.$defs[data.schema_def];
+    assert.deepEqual(Object.keys(data.skeleton).sort(), [...def.required].sort(), `${name} skeleton fields`);
+    assert.ok(data.rules.length > 0, `${name} states its cross-field rules`);
+  }
+  refused(run(["template", "nonsense"]), 1, "argument_error");
+  assert.match(template("role_runs").rules.join(" "), /runtime_version is a nonempty string/);
+  assert.match(template("validation").rules.join(" "), /content_manifest and input_fingerprint/);
+
+  const { repo, owner } = r3Fixture(1);
+  workspaceDecisions(owner);
+  const at = nowIso();
+  ok(owner.append("limitations", fillTemplate(template("limitations").skeleton, { id: "lim-template", kind: "note", phase: "delivery", reason: "from a template", at })));
+  ok(owner.append("decisions", fillTemplate(template("decisions").skeleton, { id: "decision-template", text: "From a template.", source: "owner" })));
+  const runTemplate = template("role_runs").skeleton;
+  ok(owner.append("role_runs", fillTemplate(runTemplate, { id: "run-template", role: "reviewer", mode: "implementation", phase: "delivery", candidate_oid: owner.ledger().candidate.oid, execution: "inline", runtime: "claude", runtime_version: "2.1.287", client: "claude-code", session_label: owner.session, requested_tier: "deep", enforcement: { tools: "not applicable: inline", filesystem: "instructional", github: "instructional", delegation: "instructional" }, status: "complete", fallback_reason: "role_unavailable", started_at: at })));
+  const manifest = manifestFile(repo, owner, [entry(repo, "src/file-0.js")]);
+  const identity = contentId(repo, manifest);
+  ok(owner.append("validation", fillTemplate(template("validation").skeleton, { id: "val-template", kind: "command", command: "node --test", cwd: repo.work, scope: "focused", content_id: identity.content_id, content_manifest: manifest.source, result: "pass", exit_code: 0, at, log: path.join(repo.inputs, "test.log"), input_fingerprint: identity.input_fingerprint })));
+  ok(owner.append("audits", fillTemplate(template("audits").skeleton, { id: "audit-template", mode: "ui", runtime: "claude", verdict: "PASS", report: path.join(repo.inputs, "audit.md"), oid: owner.ledger().candidate.oid, at })));
+  ok(owner.append("sessions", fillTemplate(template("sessions").skeleton, { id: "session-template", label: owner.session, runtime: "claude", runtime_version: "2.1.287", client: "claude-code", phase: "delivery", started_at: at, measurement_state: "unavailable" })));
+  ok(setR3(owner, r3Bound(owner)));
+  const findingTemplate = template("reviews").items.findings;
+  const reviewed = fillTemplate(template("reviews").skeleton, {
+    id: "review-template", mode: "implementation", candidate_oid: owner.ledger().candidate.oid, runtime: "claude", source: "inline", verdict: "pass-with-fixes", at, cycle_id: "cycle-template", cycle_kind: "implementation_review",
+    findings: [fillTemplate(findingTemplate, { id: "f-template", severity: "minor", shape: "identity-reset", location: "src/file-0.js:1", disposition: "deferred", reason: "follow-up" })],
+  });
+  ok(owner.append("reviews", reviewed));
+  ok(owner.append("defect_shapes", fillTemplate(template("defect_shapes").skeleton, { id: "shape-template", shape: "identity-reset", first_seen: at, candidate_oid: owner.ledger().candidate.oid, sweep: "done", searched_scope: ["src"], evidence: "Searched src; none." })));
+  ok(owner.authorize(fillTemplate(template("grant").skeleton, { id: "grant-template", scope: "merge", wording: '"merge it when green"', source: "user message", at })));
+
+  const fresh = makeRepo();
+  const freshOwner = initDelivery(fresh);
+  workspaceDecisions(freshOwner);
+  const oid = commit(fresh, { "src/app.js": "export const v = 9;\n" });
+  const evidence = fillTemplate(template("commit-evidence").skeleton, { prior_head: freshOwner.ledger().candidate.working_head_oid, reason: "commit the change", source: "owner", intended_paths: ["src"] });
+  const partial = template("review-bound-partial").skeleton;
+  ok(freshOwner.owned("freeze", ["--oid", oid, "--evidence-file", input(fresh, "evidence", evidence), "--review-bound", input(fresh, "partial", { ...partial, basis: { ...partial.basis, packages: ["."], workspace_decision: "workspace" } })]));
+});
+
+test("B5 every hinted failure site carries its hint; other failures carry hint null", async () => {
+  const { HINTS } = await import(pathToHelper());
+  const frozen = () => {
+    const repo = makeRepo();
+    const owner = initDelivery(repo);
+    deliverToFrozen(repo, owner);
+    return { repo, owner };
+  };
+  const triggers = {
+    "stale-revision": () => {
+      const { owner } = frozen();
+      return owner.append("limitations", limitation(), { revision: 0 });
+    },
+    "append-shape": () => {
+      const { owner } = frozen();
+      return owner.append("role_runs", roleRun(owner, { runtime_version: null }));
+    },
+    "append-item-problems": () => {
+      const { repo, owner } = frozen();
+      return owner.append("validation", commandValidation(repo, { oid: owner.ledger().candidate.oid }));
+    },
+    "write-invariant": () => {
+      const { owner } = frozen();
+      const first = limitation();
+      ok(owner.append("limitations", first));
+      return owner.append("limitations", limitation({ supersedes_id: first.id, kind: "another kind" }));
+    },
+    "review-finding-shape": () => {
+      const { owner } = r3Fixture(1);
+      ok(setR3(owner, r3Bound(owner)));
+      return owner.append("reviews", r3Cycle(owner, { findings: [finding()] }));
+    },
+    "bound-measure-first": () => {
+      const { owner } = frozen();
+      workspaceDecisions(owner);
+      const oid = owner.ledger().candidate.oid;
+      return setR3(owner, { max_rounds: 1, rounds_used: 0, size: "small", measured_oid: oid, basis: { files: 1, packages: ["."], workspace_decision: "workspace", delegated_decision: null }, delegated_limit: null, delegated_used: 0, extension_rounds: 0, overrides: [] });
+    },
+    "bound-ancestor-packages": () => {
+      const { owner } = r3Fixture(1);
+      return setR3(owner, r3Bound(owner, { packages: [".", "src"] }));
+    },
+    "bound-size-mismatch": () => {
+      const { owner } = r3Fixture(1);
+      return setR3(owner, r3Bound(owner, { size: "large" }));
+    },
+    "publication-frozen": () => {
+      const repo = makeRepo();
+      const owner = initDelivery(repo);
+      return publication(owner, "prepare", ["--kind", "push"]);
+    },
+    "publication-target": () => {
+      const { repo, owner } = frozen();
+      const event = pushEvent(repo, owner);
+      return owner.append("publications", { ...event, target: { ...event.target, remote_url: "https://example.com/elsewhere.git" } });
+    },
+    "push-before-pr-create": () => {
+      const { repo, owner } = frozen();
+      const body = summaryBody(repo, owner, "Summary.");
+      return publication(owner, "prepare", ["--kind", "pr-create", "--body-file", body.bodyFile, "--draft", "true"]);
+    },
+    "unresolved-operation": () => {
+      const { owner } = frozen();
+      ok(publication(owner, "prepare", ["--kind", "push"]));
+      return publication(owner, "prepare", ["--kind", "push"]);
+    },
+    "prepared-first": () => {
+      const { repo, owner } = frozen();
+      const event = pushEvent(repo, owner);
+      return owner.append("publications", step(event, "verified", { observed: observedFor(event, { oid: event.intended.oid }) }));
+    },
+    "sweep-before-push": () => {
+      const { repo, owner } = r3Fixture(1);
+      ok(setR3(owner, r3Bound(owner)));
+      ok(owner.append("reviews", r3Cycle(owner, { findings: [finding({ shape: "identity-reset", disposition: "fixed", fix_oid: owner.ledger().candidate.oid })] })));
+      return owner.append("publications", pushEvent(repo, owner));
+    },
+  };
+  assert.deepEqual(Object.keys(triggers).sort(), Object.keys(HINTS).sort(), "every hint site has a trigger");
+  for (const [site, trigger] of Object.entries(triggers)) {
+    const result = trigger();
+    assert.notEqual(result.status, 0, site);
+    assert.equal(result.json.hint, HINTS[site], `${site}: ${JSON.stringify(result.json)}`);
+  }
+  assert.equal(refused(run(["show", "--repo", SANDBOX, "--nope"]), 1, "argument_error").hint, null);
+  const { owner } = frozen();
+  assert.equal(refused(owner.update({ owner: null }), 2, "invariant_error").hint, null, "an unlisted site has no hint");
+});
+
+// The examples' write wrapper, run as written against a stub helper that
+// replays scripted envelopes and records each invocation and its stdin.
+function ownedWrapper() {
+  const examples = fs.readFileSync(path.join(root, "skills", "task-doc-delivery-loop", "references", "delivery-examples.md"), "utf8");
+  const section = examples.split("\n## Owned Writes\n")[1];
+  assert.ok(section, "delivery-examples.md keeps its Owned Writes section");
+  const block = section.match(/```bash\n([\s\S]*?)```/);
+  assert.ok(block, "the Owned Writes section holds one bash block");
+  return block[1];
+}
+
+function runOwned(responses, script) {
+  const dir = fs.mkdtempSync(path.join(SANDBOX, "owned-"));
+  const stub = path.join(dir, "stub-helper.mjs");
+  fs.writeFileSync(path.join(dir, "responses.json"), JSON.stringify(responses));
+  fs.writeFileSync(stub, `import fs from "node:fs";
+const dir = ${JSON.stringify(dir)};
+const responses = JSON.parse(fs.readFileSync(dir + "/responses.json", "utf8"));
+const calls = fs.existsSync(dir + "/calls.json") ? JSON.parse(fs.readFileSync(dir + "/calls.json", "utf8")) : [];
+let stdin = "";
+try { stdin = fs.readFileSync(0, "utf8"); } catch {}
+calls.push({ args: process.argv.slice(2), stdin });
+fs.writeFileSync(dir + "/calls.json", JSON.stringify(calls));
+const response = responses[calls.length - 1] ?? { status: 99, body: { ok: false, code: "unexpected_call" } };
+process.stdout.write(JSON.stringify(response.body) + "\\n");
+process.exit(response.status);
+`);
+  fs.writeFileSync(path.join(dir, "claim-id"), "claim-1\n");
+  fs.writeFileSync(path.join(dir, "revision"), "5\n");
+  const program = `helper=${JSON.stringify(stub)}\nrepo=${JSON.stringify(dir)}\nevidence=${JSON.stringify(dir)}\nruntime=claude\nsession=owner\n${ownedWrapper()}\n${script}\n`;
+  const result = spawnSync("bash", ["-c", program], { encoding: "utf8", env: baseEnv });
+  const calls = fs.existsSync(path.join(dir, "calls.json")) ? JSON.parse(fs.readFileSync(path.join(dir, "calls.json"), "utf8")) : [];
+  return { status: result.status, stdout: result.stdout, stderr: result.stderr, calls, dir, revision: fs.readFileSync(path.join(dir, "revision"), "utf8").trim() };
+}
+
+const stale = { status: 3, body: { ok: false, command: "append", code: "stale_revision" } };
+const revisionFlag = (call) => call.args[call.args.indexOf("--expected-revision") + 1];
+
+test("B6 the examples' owned wrapper stops on failure and retries exactly once on stale_revision", () => {
+  const guarded = 'printf %s "{\\"id\\":\\"x\\"}" | owned append limitations && touch "$evidence/guarded-write"; echo "exit=$?"';
+  const failedWrite = runOwned([{ status: 2, body: { ok: false, command: "append", code: "invariant_error" } }], guarded);
+  assert.equal(failedWrite.calls.length, 1);
+  assert.equal(fs.existsSync(path.join(failedWrite.dir, "guarded-write")), false, "a guarded write never follows a failed helper call");
+  assert.match(failedWrite.stdout, /exit=2/);
+
+  const retried = runOwned([stale, { status: 0, body: { ok: true, data: { value: 7 } } }, { status: 0, body: { ok: true, command: "append", changed: true, revision: 8, data: {} } }], guarded);
+  assert.equal(retried.calls.length, 3, "write, re-read, one retry");
+  assert.deepEqual(retried.calls.map((call) => call.args[0]), ["append", "show", "append"]);
+  assert.equal(revisionFlag(retried.calls[0]), "5");
+  assert.equal(revisionFlag(retried.calls[2]), "7", "the retry uses the re-read revision");
+  assert.equal(retried.calls[2].stdin, retried.calls[0].stdin, "the retry sends the same input");
+  assert.equal(retried.revision, "8", "the new revision is saved for the next tool call");
+  assert.ok(fs.existsSync(path.join(retried.dir, "guarded-write")));
+  assert.equal(retried.stdout.trim().split("\n").filter((line) => line.startsWith("{")).length, 1, "only the final envelope is printed");
+
+  const twice = runOwned([stale, { status: 0, body: { ok: true, data: { value: 7 } } }, stale], guarded);
+  assert.equal(twice.calls.length, 3, "a second stale revision stops");
+  assert.match(twice.stdout, /exit=3/);
+  assert.equal(fs.existsSync(path.join(twice.dir, "guarded-write")), false);
+
+  for (const code of ["claim_mismatch", "mutex_held", "owner_conflict"]) {
+    const other = runOwned([{ status: 3, body: { ok: false, command: "append", code } }], guarded);
+    assert.equal(other.calls.length, 1, `${code} is never retried`);
+    assert.match(other.stdout, /exit=3/);
+  }
+
+  const plain = runOwned([{ status: 0, body: { ok: true, command: "measure", changed: true, revision: 6, data: {} } }], 'owned measure; echo "exit=$?"');
+  assert.deepEqual(plain.calls[0].args.slice(0, 1), ["measure"]);
+  assert.equal(plain.calls[0].stdin, "", "commands that take no stdin get none");
+  assert.ok(plain.calls[0].args.includes("--claim-id") && plain.calls[0].args[plain.calls[0].args.indexOf("--claim-id") + 1] === "claim-1");
+  assert.equal(plain.revision, "6");
 });
 
 describe("delivery ledger acceptance", { concurrency: Math.max(2, Math.min(6, os.availableParallelism?.() ?? 4)) }, () => {

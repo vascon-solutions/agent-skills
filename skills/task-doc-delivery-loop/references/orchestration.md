@@ -26,13 +26,22 @@ A required check does not automatically require a separate agent. Explicit user 
 
 Limits: one implementation owner; at most two independent read-only support jobs at once, fewer when the runtime or repository says so; no recursive delegation. Serialize audits that share an application, persona or fixture set, including across repositories that point at the same stack. Keep inputs stable while support work runs, or identify and recheck the conclusions a change affects.
 
+## Audits A Task Doc Requires
+
+A requested audit is an explicit user or repository request, or a runtime acceptance checkpoint in an approved task doc: an acceptance criterion or completion-verification row that requires observing UI, API or accessibility behavior in the running application. An explicit "none needed", an optional check or an illustrative mention does not count. When it is unclear whether a row counts, ask before bootstrap; do not default to required.
+
+- **Bootstrap.** In ledger mode, such a checkpoint sets `audit_policy` to `{required: true, state: pending, reason: <checkpoint reference>}`. After recording the passing audit, set `state: complete` with `update`. In lightweight mode, the delivery summary names the checkpoint and its required modes.
+- **Coverage.** The helper checks only that at least one cited audit is `PASS`. The owner enforces one applicable `PASS` per required mode (`ui`, `api`, `a11y`) and coverage of every task checkpoint; implementation review checks both.
+- **Consequence.** In ledger mode, `required: true` cannot be undone in that ledger: `update` refuses `required: false`, and amending the task doc through `source-add` or `source_refresh` does not touch `audit_policy`. A checkpoint that cannot be observed (no browser or API capability, no credentials, no environment that serves the candidate) yields a `BLOCKED` or `PARTIAL` audit, never a `PASS`, and the delivery is released as blocked listing the unverified checkpoints. Removing the requirement takes a new authorized delivery on the amended task doc, with its own ledger bootstrapped from that doc; the old ledger stays blocked and the new one cites it. In lightweight mode, report the delivery blocked in the summary with the unverified checkpoints.
+- **Dispatch.** The order above still chooses between `auditor` and auditing inline. Either way the result is an audit record, in the ledger's `audits` or the delivery summary.
+
 ## Brief
 
 Send one brief per dispatch:
 
 `{run_id, role, mode, goal, candidate: {branch, oid, content_id, content_manifest}, source_paths, questions_or_scenarios, writable_paths, forbidden_actions, stop_condition, timeout_seconds, requested_tier, requested_model, requested_effort, allow_escalation}`
 
-- `candidate` names the frozen commit, or for local-only work the content identity and manifest described in the [ledger reference](delivery-ledger.md#evidence).
+- `candidate` names the frozen commit, or for local-only work the content identity and manifest described in the [ledger reference](delivery-ledger.md#evidence) (without a ledger, the changed paths and their state).
 - A UI, API or accessibility brief also carries the proven candidate URL, the environment, actors with a secure credential source (never the credential), fixtures, allowed application mutations, startup commands if needed, cleanup requirements and the coverage level. Prove which URL serves the candidate before dispatch.
 - Add the mode's extra fields from [role dispatch defaults](role-dispatch.md). Give facts the role would otherwise rediscover.
 - The purpose of a delegated job lives in `goal`; no separate decision artifact is needed.
@@ -48,7 +57,7 @@ Before dispatch, confirm the running client exposes the role and the tools the m
 
 **Observed settings.** Record only what the runtime exposes. Claude Code: the model on the child's messages when the transcript shows it. Codex: `model` and `effort` in the child thread's `turn_context` in its session rollout under the Codex home. Otherwise record `null`; never copy the requested value into an observed field.
 
-**Timeouts.** Defaults are 300 seconds for `reviewer`, `scout` and `watcher`, and 900 seconds for a requested audit; record a larger task-bound limit before dispatch. Check progress at least every 60 seconds with the runtime's waiting facilities. On timeout, stop the child (Claude Code: stop its task; Codex: `close_agent`) and confirm it ended before any inline work touches the same resources. If you cannot confirm termination, stop conflicting work and report the live handle.
+**Timeouts.** Defaults are 300 seconds for `reviewer`, `scout` and `watcher`, and 900 seconds for a requested audit; record a larger task-bound limit before dispatch. Check progress at least every 60 seconds through the completion notification or a wait facility with a timeout, never a foreground loop over a file or transcript. On timeout, stop the child (Claude Code: stop its task; Codex: `close_agent`) and confirm it ended before any inline work touches the same resources. If you cannot confirm termination, stop conflicting work and report the live handle.
 
 **Escalation.** Escalate at most once, and only when the brief allows it, the first result is `block_reason: judgment` with a concrete unresolved question, and a higher tier exists (`deep` has none). Missing facts, access, tools, time or a genuine product failure never justify escalation. Keep both runs; the second names the first in `parent_run_id`. A failed escalation returns to you without another automatic rerun.
 
@@ -72,15 +81,15 @@ Consume the result:
 
 ## Record What Happened
 
-Use the ledger's existing records; selection needs no new schema.
+In ledger mode, use the ledger's existing records; selection needs no new schema. Without a ledger, put the same dispatch, direct-choice and fallback facts in the [delivery summary](../SKILL.md#ledger-or-lightweight-mode).
 
 - **Delegated work.** Append a `role_runs` record before dispatch (`execution: delegated`, `status: running`) with the brief's requested tier, model and effort, and update it through a successor with the observed settings, status, block reason, `result_summary` and any saved report. Take `enforcement` from the [role dispatch defaults](role-dispatch.md) for that role and runtime. Save a report yourself when one is needed; roles do not write reports except an auditor's workspace.
 - **Delegated implementation review.** Dispatch only against the frozen candidate after `set-review-bound`. The helper reserves a cycle for the dispatch until a `delegated` review with that cycle records its result; a completed child does not release the reservation. Record the review with `source: delegated` and its `cycle_id`.
-- **Direct work.** Use ordinary validation, audit and review records: an owner review is `source: inline`, commands are validation records. Add a material direct-execution choice to the checkpoint summary only when it explains coverage or a limitation. Direct work has no `role_runs` record and is never labelled `role_unavailable`.
+- **Direct work.** Use ordinary validation, audit and review records: an owner review is `source: inline`, commands are validation records. Add a material direct-execution choice, with its reason, to the checkpoint summary when it explains coverage or a limitation, and always for a direct audit of a required task-doc checkpoint. Direct work has no `role_runs` record and is never labelled `role_unavailable`.
 - **Another approved independent agent.** A client discovers roles when its session starts, so a session that began before installation cannot select them. When you use another approved independent agent instead, record `execution: delegated`, `fallback_reason: role_unavailable` and that agent's own observed enforcement, not the role default.
 - **Actual fallback.** When a role you chose to use is absent or unusable, do the same bounded work inline when permitted and record `role_runs` with `execution: inline` and the real `fallback_reason`, such as `role_unavailable`, `model_unavailable`, `timeout` or `malformed_result`. Browser or API capability, a safe environment, authentication or the candidate URL cannot be invented by falling back; record the audit `BLOCKED` with the unverified scenarios.
-- **Independence unavailable.** Record `role_runs` with `execution: inline`, `status: blocked`, `block_reason: missing_capability` and `fallback_reason: independence_required`. Completion stays refused until an independent review of the final candidate is cited.
+- **Independence unavailable.** Record `role_runs` with `execution: inline`, `status: blocked`, `block_reason: missing_capability` and `fallback_reason: independence_required`. Completion stays refused until an independent review of the final candidate is cited; without a ledger, the owner enforces the same block.
 
 ## Watching
 
-An authorized monitoring owner applies the same order to each observation. Read small results directly with the monitoring skill's helper. Dispatch `watcher` for one bounded read when interpreting or reducing the material warrants it, passing the previous snapshot, the PR identity and the helper path. The owner keeps seen and pending IDs, timing, scheduling, ledger writes, fixes and every GitHub mutation. A watcher run is one read, not a polling loop, and never creates monitoring or remediation authority.
+An authorized monitoring owner applies the same order to each observation. Read small results directly with the monitoring skill's helper. Dispatch `watcher` for one bounded read when interpreting or reducing the material warrants it, passing the previous snapshot, the PR identity and the helper path. The owner keeps seen and pending IDs, timing, scheduling, any ledger writes, fixes and every GitHub mutation. A watcher run is one read, not a polling loop, and never creates monitoring or remediation authority.

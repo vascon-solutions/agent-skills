@@ -109,7 +109,7 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 
 Use `brainstorm` for research and unsettled design, `task-doc-intake` for delivery scope, `task-doc` for the durable task, and `task-doc-delivery-loop` for authorized execution. `review-task-docs` and `review-implementation` report findings; `address-review-findings` owns their authorized remediation. `publish-branch` owns publication. `monitor-pr-review` is explicitly requested ongoing work. `unslop` owns output readability: final reports, findings, PR bodies, and commit messages follow its surface shapes, and `unslop <target>` rewrites existing text.
 
-An approved task/spec satisfies discovery; one validation owner supplies reusable evidence to review and publication. Keep sequencing in the delivery ledger unless a separate durable plan is needed. Failure investigation uses the delivery skill's focused debugging reference. Core delivery has no Superpowers dependency. For skill authoring, use the host-provided `skill-creator` when available (it is not bundled in this pack), with focused checks and bounded scenario review when worthwhile.
+An approved task/spec satisfies discovery; one validation owner supplies reusable evidence to review and publication. Keep sequencing in the delivery ledger when the delivery uses one (it is opt-in), otherwise in the PR's delivery summary, unless a separate durable plan is needed. Failure investigation uses the delivery skill's focused debugging reference. Core delivery has no Superpowers dependency. For skill authoring, use the host-provided `skill-creator` when available (it is not bundled in this pack), with focused checks and bounded scenario review when worthwhile.
 
 `brainstorm` saves substantial briefs/specs automatically: user path first, then existing repo spec convention, then `docs/specs/<topic>.md`; repo-independent research goes under `~/agent-artifacts/<topic>/markdown/`. Short exploration stays in chat. Saved specs are proposed until accepted; saving does not authorize commits or implementation.
 
@@ -211,6 +211,12 @@ bin/link-agents.sh --apply --plan /tmp/agents-plan.json
 - `--home DIR` redirects every path for tests and probes and refuses symlinks that lead outside it. `--allow-unqualified` works only with `--home`. `--dispatch-reference` regenerates the delivery loop's `references/role-dispatch.md` after editing `agents/`.
 
 Run the pack's tests with `npm ci && npm test`.
+
+## Agent Scripts And Guard Hook
+
+`templates/agent-scripts/` holds the cross-repository agent command contract: a dependency-free `agent-scripts.mjs` that repositories vendor unmodified and expose as `agent:fix`, `agent:lint`, `agent:gate` and `agent:serve`. Its README states the `agentScripts` config, the adoption steps and the `--verify` drift check. The delivery loop's [validation reference](skills/task-doc-delivery-loop/references/validation.md) uses these commands when a repository defines them.
+
+`hooks/block-whole-tree-fixers.mjs` is an optional Claude Code `PreToolUse` hook that refuses whole-tree formatter and fixer runs. `hooks/README.md` has the `~/.claude/settings.json` snippet and the rollout order; nothing installs it automatically.
 
 ## Typical Usage
 

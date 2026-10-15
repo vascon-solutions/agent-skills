@@ -46,21 +46,42 @@ const EXIT_BY_CODE = {
 };
 
 export class LedgerError extends Error {
-  constructor(code, message, { path: errorPath = null, id = null, expected = null, observed = null } = {}) {
+  constructor(code, message, { path: errorPath = null, id = null, expected = null, observed = null } = {}, site = null) {
     super(message);
     if (!(code in EXIT_BY_CODE)) {
       throw new Error(`unknown error code ${code}`);
     }
+    if (site !== null && !hasOwn(HINTS, site)) throw new Error(`unknown failure site ${site}`);
     this.code = code;
     this.path = errorPath;
     this.id = id;
     this.expected = expected;
     this.observed = observed;
+    this.site = site;
   }
 }
 
-const fail = (code, message, details) => {
-  throw new LedgerError(code, message, details);
+// Hints are keyed by failure site, not by code: most refusals share
+// invariant_error. Only the fail() calls that pass a site carry a hint.
+export const HINTS = {
+  "stale-revision": "Re-read the revision with `show --field /revision`, then retry the same write once. Stop if it is stale again.",
+  "append-shape": "Print the record's fields, enums and nullability with `template FIELD`. Text fields marked nonempty (for example role_runs.runtime_version) need a string, never null.",
+  "append-item-problems": "Check the cross-field rules `template FIELD` lists. A completed command needs content_manifest and input_fingerprint from `content-manifest --output-file`.",
+  "write-invariant": "The write would break a ledger invariant listed in `observed`. A successor (supersedes_id) keeps the subject fields `template FIELD` names; otherwise record a new item.",
+  "review-finding-shape": "Give every finding a shape label, proposing a new label when none in the risk classes fits.",
+  "bound-measure-first": "Use `freeze --review-bound FILE`, which measures and installs the bound in one revision, or run `measure` first.",
+  "bound-ancestor-packages": "List only the affected leaf package or app roots, never a directory that contains another listed root; use [\".\"] for a root-only repository.",
+  "bound-size-mismatch": "Let `freeze --review-bound FILE` derive size and max_rounds from the measured files and packages.",
+  "publication-frozen": "Freeze the candidate before publishing; `begin-change` and `freeze` again after any change.",
+  "publication-target": "Generate the event with `publication prepare --kind KIND`, which fills the target and precondition from the ledger.",
+  "push-before-pr-create": "Verify the candidate's push (`publication verify --id OPERATION_ID --from-check`) before preparing the PR.",
+  "unresolved-operation": "Inspect remote state and finish the open operation with `publication verify`: verified if the object exists, otherwise --failed \"not attempted\".",
+  "prepared-first": "Record the prepared step (`publication prepare`) before the external write, then verify it after the read-back.",
+  "sweep-before-push": "Record a done `defect_shapes` sweep for each fixed shape on this candidate (`template defect_shapes`) before preparing the push.",
+};
+
+const fail = (code, message, details, site = null) => {
+  throw new LedgerError(code, message, details, site);
 };
 
 // ---------------------------------------------------------------------------
@@ -322,10 +343,10 @@ export function validateShape(value, defName = null) {
   return errors;
 }
 
-function requireShape(value, defName, label) {
+function requireShape(value, defName, label, site = null) {
   const errors = validateShape(value, defName);
   if (errors.length > 0) {
-    fail("schema_error", `${label} is schema-invalid: ${errors.slice(0, 5).join("; ")}`, { observed: errors.slice(0, 20) });
+    fail("schema_error", `${label} is schema-invalid: ${errors.slice(0, 5).join("; ")}`, { observed: errors.slice(0, 20) }, site);
   }
 }
 
@@ -524,7 +545,7 @@ const COMMANDS = {
   authorize: { flags: { ...SELECTION, ...OWNED, "grant-file": "string" }, required: [...OWNED_REQUIRED, "grant-file"] },
   "record-context": { flags: { ...SELECTION, ...OWNED, "context-file": "string", reason: "string" }, required: [...OWNED_REQUIRED, "context-file", "reason"] },
   "begin-change": { flags: { ...SELECTION, ...OWNED }, required: OWNED_REQUIRED },
-  freeze: { flags: { ...SELECTION, ...OWNED, oid: "string", "evidence-file": "string" }, required: [...OWNED_REQUIRED, "oid", "evidence-file"] },
+  freeze: { flags: { ...SELECTION, ...OWNED, oid: "string", "evidence-file": "string", "review-bound": "string" }, required: [...OWNED_REQUIRED, "oid", "evidence-file"] },
   reconcile: { flags: { ...SELECTION, ...OWNED, "evidence-file": "string" }, required: [...OWNED_REQUIRED, "evidence-file"] },
   "content-manifest": { flags: { ...SELECTION, "manifest-file": "string", "output-file": "string", "exclude-path": "repeat", "inputs-file": "string" } },
   measure: { flags: { ...SELECTION, ...OWNED }, required: OWNED_REQUIRED },
@@ -534,6 +555,28 @@ const COMMANDS = {
     required: ["runtime", "session", "kind", "reason"],
   },
   "set-review-bound": { flags: { ...SELECTION, ...OWNED, "bound-file": "string" }, required: [...OWNED_REQUIRED, "bound-file"] },
+  template: { flags: SELECTION, positional: 1 },
+  publication: {
+    flags: {
+      ...SELECTION,
+      ...OWNED,
+      kind: "string",
+      batch: "string",
+      "body-file": "string",
+      draft: "string",
+      "current-body-sha256": "string",
+      thread: "string",
+      "review-batch": "string",
+      "reply-operation": "string",
+      id: "string",
+      "observed-file": "string",
+      "from-check": "boolean",
+      failed: "string",
+      uncertain: "string",
+    },
+    required: OWNED_REQUIRED,
+    positional: 1,
+  },
   "summary-body": {
     flags: { ...SELECTION, "current-body-file": "string", "summary-file": "string", "expected-current-sha256": "string" },
     required: ["current-body-file", "summary-file"],
@@ -582,7 +625,7 @@ export function parseArgs(argv) {
   if (hasOwn(options, "ledger") && (hasOwn(options, "repo") || hasOwn(options, "branch"))) {
     fail("argument_error", "use --repo [--branch] or --ledger, not both");
   }
-  if (command !== "init" && !hasOwn(options, "ledger") && !hasOwn(options, "repo")) {
+  if (!["init", "template"].includes(command) && !hasOwn(options, "ledger") && !hasOwn(options, "repo")) {
     fail("argument_error", "select a ledger with --repo DIR [--branch NAME] or --ledger ABS_PATH");
   }
   for (const [name, value] of Object.entries(options)) {
@@ -642,6 +685,12 @@ export function parseArgs(argv) {
     }
     options.field = field;
   }
+  if (command === "publication") parsePublicationArgs(options, positionals[0]);
+  if (command === "template") {
+    if (!hasOwn(TEMPLATES, positionals[0])) fail("argument_error", `template NAME must be one of ${Object.keys(TEMPLATES).join(", ")}`);
+    options.name = positionals[0];
+  }
+  if (command === "freeze" && options["review-bound"] !== undefined && options["review-bound"] !== "reuse") requireAbsolute(options["review-bound"], "--review-bound");
   if (command === "freeze" && !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(options.oid)) {
     fail("argument_error", "--oid must be a full lowercase object ID");
   }
@@ -653,6 +702,50 @@ export function parseArgs(argv) {
     for (const value of options[name] ?? []) requireAbsolute(value, `--${name}`);
   }
   return { command, options };
+}
+
+const PUBLICATION_KINDS = { push: "push", "pr-create": "pr_create", "pr-body": "pr_body", "pr-state": "pr_state", reply: "reply", resolve: "resolve" };
+const PREPARE_PARAMS = {
+  push: { required: [], optional: [] },
+  pr_create: { required: ["body_file", "draft"], optional: [] },
+  pr_body: { required: ["body_file", "current_body_sha256"], optional: [] },
+  pr_state: { required: ["draft"], optional: [] },
+  reply: { required: ["thread", "body_file"], optional: ["review_batch"] },
+  resolve: { required: ["thread"], optional: ["review_batch", "reply_operation"] },
+};
+const PREPARE_FLAGS = ["body-file", "draft", "current-body-sha256", "thread", "review-batch", "reply-operation"];
+const VERIFY_SOURCES = ["observed-file", "from-check", "failed", "uncertain"];
+const flagKey = (flag) => flag.replaceAll("-", "_");
+
+function parsePublicationArgs(options, action) {
+  if (!["prepare", "verify"].includes(action)) fail("argument_error", "publication takes prepare or verify");
+  options.action = action;
+  if (options.batch !== undefined) requireAbsolute(options.batch, "--batch");
+  const present = (names) => names.filter((name) => hasOwn(options, name));
+  if (action === "prepare") {
+    if (!hasOwn(PUBLICATION_KINDS, options.kind ?? "")) fail("argument_error", `--kind must be one of ${Object.keys(PUBLICATION_KINDS).join(", ")}`);
+    const stray = present(["id", ...VERIFY_SOURCES]);
+    if (stray.length) fail("argument_error", `publication prepare does not take --${stray[0]}`);
+    const supplied = present(PREPARE_FLAGS);
+    if (options.batch !== undefined && supplied.length) fail("argument_error", "give item fields in the --batch file or as flags, not both");
+    if (options.batch === undefined) options.items = [Object.fromEntries(supplied.map((name) => [flagKey(name), options[name]]))];
+    return;
+  }
+  const stray = present(["kind", ...PREPARE_FLAGS]);
+  if (stray.length) fail("argument_error", `publication verify does not take --${stray[0]}`);
+  const sources = present(VERIFY_SOURCES);
+  if (options.batch !== undefined) {
+    if (sources.length || hasOwn(options, "id")) fail("argument_error", "give verify items in the --batch file or as flags, not both");
+    return;
+  }
+  if (!hasOwn(options, "id")) fail("argument_error", "publication verify needs --id OPERATION_ID or --batch FILE");
+  if (sources.length !== 1) fail("argument_error", "publication verify needs exactly one of --observed-file, --from-check, --failed or --uncertain");
+  const item = { id: options.id };
+  if (options["observed-file"]) item.observed_file = options["observed-file"];
+  if (options["from-check"]) item.from_check = true;
+  if (options.failed) item.failed = options.failed;
+  if (options.uncertain) item.uncertain = options.uncertain;
+  options.items = [item];
 }
 
 // Only update and append read stdin; everything else refuses input it
@@ -928,7 +1021,7 @@ function readLedger(ctx, { required = true } = {}) {
   return ledger;
 }
 
-function checkLedger(ledger, ctx) {
+function checkLedger(ledger, ctx, site = null) {
   if (!isObject(ledger)) fail("schema_error", "the ledger must be a JSON object");
   if (ledger.schema_version !== 1) {
     fail("schema_error", "unsupported schema_version; only 1 is supported", { expected: 1, observed: ledger.schema_version ?? null });
@@ -936,7 +1029,7 @@ function checkLedger(ledger, ctx) {
   requireShape(ledger, null, "ledger");
   const problems = ledgerInvariants(ledger);
   if (problems.length > 0) {
-    fail("invariant_error", `ledger invariant violated: ${problems.slice(0, 5).join("; ")}`, { observed: problems.slice(0, 20) });
+    fail("invariant_error", `ledger invariant violated: ${problems.slice(0, 5).join("; ")}`, { observed: problems.slice(0, 20) }, site);
   }
   if (ctx && branchKey(ledger.candidate.branch) !== ctx.key) {
     fail("identity_mismatch", "the ledger's branch does not match its file name", { observed: ledger.candidate.branch });
@@ -1005,7 +1098,7 @@ function mutate(ctx, options, command, operation) {
         path: ctx.ledgerPath,
         expected: options["expected-revision"],
         observed: ledger.revision,
-      });
+      }, "stale-revision");
     }
     const draft = clone(ledger);
     const result = operation(draft, ledger) ?? {};
@@ -1026,7 +1119,7 @@ function mutate(ctx, options, command, operation) {
       operation: result.operation ?? command,
       detail: result.detail ?? {},
     });
-    checkLedger(draft, ctx);
+    checkLedger(draft, ctx, "write-invariant");
     writeLedger(ctx, draft);
     return envelope(command, true, draft.revision, data);
   });
@@ -2468,7 +2561,7 @@ function appendReviewChecks(ctx, ledger, item) {
     fail("invariant_error", "set the review bound before recording a frozen-candidate review cycle or fix");
   }
   if (ledger.review_bound) {
-    if (item.findings.some((finding) => !finding.shape?.trim())) fail("invariant_error", "every finding needs a defect shape");
+    if (item.findings.some((finding) => !finding.shape?.trim())) fail("invariant_error", "every finding needs a defect shape", undefined, "review-finding-shape");
     if (item.mode === "implementation" && !item.batch && item.cycle_id === null) {
       const invalidated = invalidatedRefs(ledger);
       const localVerification = item.source === "inline" && currentItems(ledger.reviews).some((prior) =>
@@ -2543,7 +2636,7 @@ function checkBody(file, expectedHash, deliveryId) {
 function checkPrTarget(ledger, item) {
   const pr = ledger.pr;
   if (!pr) fail("invariant_error", "this publication needs a recorded PR");
-  if (item.target.pr_number !== pr.number || item.target.pr_url !== pr.url) fail("identity_mismatch", "the publication targets another PR", { expected: { pr_number: pr.number, pr_url: pr.url }, observed: item.target });
+  if (item.target.pr_number !== pr.number || item.target.pr_url !== pr.url) fail("identity_mismatch", "the publication targets another PR", { expected: { pr_number: pr.number, pr_url: pr.url }, observed: item.target }, "publication-target");
 }
 
 function publicationAuthority(ledger, item) {
@@ -2563,7 +2656,7 @@ function publicationAuthority(ledger, item) {
 
 function prepareChecks(ctx, ledger, item) {
   const { candidate, repo } = ledger;
-  if (candidate.state !== "frozen" || item.candidate_oid !== candidate.oid) fail("invariant_error", "publication uses the frozen candidate unchanged", { expected: candidate.oid, observed: item.candidate_oid });
+  if (candidate.state !== "frozen" || item.candidate_oid !== candidate.oid) fail("invariant_error", "publication uses the frozen candidate unchanged", { expected: candidate.oid, observed: item.candidate_oid }, "publication-frozen");
   publicationAuthority(ledger, item);
   if (item.kind === "push") requireShapeSweeps(ctx, ledger, item.candidate_oid);
   const drift = localIdentity(ctx, ledger, "frozen");
@@ -2572,7 +2665,7 @@ function prepareChecks(ctx, ledger, item) {
   const github = repo.github;
   if (item.kind === "push") {
     if (repo.remote_name === null) fail("invariant_error", "no remote is configured for this delivery");
-    if (item.target.remote_name !== repo.remote_name || item.target.remote_url !== repo.remote_url) fail("identity_mismatch", "the push targets another remote", { expected: { remote_name: repo.remote_name, remote_url: repo.remote_url }, observed: item.target });
+    if (item.target.remote_name !== repo.remote_name || item.target.remote_url !== repo.remote_url) fail("identity_mismatch", "the push targets another remote", { expected: { remote_name: repo.remote_name, remote_url: repo.remote_url }, observed: item.target }, "publication-target");
     if (item.target.host !== (github?.host ?? null) || item.target.repository !== githubRepository(github)) {
       fail("identity_mismatch", "push host/repository must be this delivery's GitHub identity, or null for a non-GitHub remote", { observed: item.target });
     }
@@ -2587,7 +2680,7 @@ function prepareChecks(ctx, ledger, item) {
   } else {
     if (!github) fail("invariant_error", "GitHub publication needs a GitHub repository identity");
     if (item.target.host !== github.host || item.target.repository !== githubRepository(github)) {
-      fail("identity_mismatch", "the publication targets another repository", { expected: { host: github.host, repository: githubRepository(github) }, observed: { host: item.target.host, repository: item.target.repository } });
+      fail("identity_mismatch", "the publication targets another repository", { expected: { host: github.host, repository: githubRepository(github) }, observed: { host: item.target.host, repository: item.target.repository } }, "publication-target");
     }
   }
   const remoteHead = expectedRemote(ledger).oid;
@@ -2598,7 +2691,7 @@ function prepareChecks(ctx, ledger, item) {
       if (!isDeepStrictEqual(item.intended.head_repository, github) || item.intended.head_branch !== candidate.branch || item.intended.base !== baseBranchName(ledger)) {
         fail("identity_mismatch", "the PR must be opened from this delivery's branch onto its verified base", { expected: { head_repository: github, head_branch: candidate.branch, base: baseBranchName(ledger) }, observed: item.intended });
       }
-      if (remoteHead !== item.candidate_oid || item.precondition.head_oid !== item.candidate_oid) fail("identity_mismatch", "push the candidate before opening its PR", { expected: item.candidate_oid, observed: remoteHead });
+      if (remoteHead !== item.candidate_oid || item.precondition.head_oid !== item.candidate_oid) fail("identity_mismatch", "push the candidate before opening its PR", { expected: item.candidate_oid, observed: remoteHead }, "push-before-pr-create");
       checkSummaryCandidate(checkBody(item.intended.body_file, item.intended.body_sha256), ledger.delivery_id, item.candidate_oid);
       break;
     }
@@ -2627,7 +2720,7 @@ function prepareChecks(ctx, ledger, item) {
   }
   for (const { operationId, first, last } of lastSteps(ledger)) {
     if (first.kind === item.kind && isDeepStrictEqual(first.target, item.target) && !TERMINAL_STEPS.has(last.step)) {
-      fail("invariant_error", "the same action has an unresolved operation; inspect remote state and finish it before starting another", { id: operationId });
+      fail("invariant_error", "the same action has an unresolved operation; inspect remote state and finish it before starting another", { id: operationId }, "unresolved-operation");
     }
   }
 }
@@ -2714,7 +2807,7 @@ function publicationChecks(ctx, ledger, item) {
     prepareChecks(ctx, ledger, item);
     return;
   }
-  if (!events) fail("invariant_error", "record a prepared step before observing an operation", { id: item.operation_id });
+  if (!events) fail("invariant_error", "record a prepared step before observing an operation", { id: item.operation_id }, "prepared-first");
   for (const field of operationFields) {
     if (!isDeepStrictEqual(item[field], events[0][field])) fail("invariant_error", `an operation keeps its ${field} across steps`, { expected: events[0][field], observed: item[field] });
   }
@@ -2765,27 +2858,296 @@ function appendChecks(ctx, ledger, field, item) {
   }
 }
 
+function checkAppendItems(field, items) {
+  const ids = new Set();
+  items.forEach((item, index) => {
+    const label = items.length === 1 ? field : `${field}/${index}`;
+    if (!isObject(item)) fail("schema_error", "append takes one JSON object or an array of objects", { path: label });
+    requireShape(item, ITEM_DEFS[field], label, "append-shape");
+    const problems = itemProblems(field, item, label);
+    if (problems.length > 0) fail("invariant_error", problems.join("; "), { id: item.id ?? null }, "append-item-problems");
+    if (ids.has(item.id)) fail("invariant_error", "an append array repeats an ID", { id: item.id });
+    ids.add(item.id);
+  });
+}
+
+// Appends items in order inside one mutation. Each new item is checked
+// against the accumulating draft, so same-call checks (one unresolved
+// operation per action, one reply per thread, role-run reservations) see the
+// earlier items. A prepared publication and a later step of the same
+// operation never share a revision: the prepared record must land before the
+// external write it guards is read back.
+function appendInto(ctx, draft, field, items) {
+  const added = [];
+  const preparedHere = new Set();
+  for (const item of items) {
+    const collection = collectionOf(draft, field);
+    const existing = collection.find((entry) => entry.id === item.id);
+    if (existing) {
+      if (isDeepStrictEqual(existing, item)) continue;
+      fail("invariant_error", "an existing ID was reused with different content; use a new ID and supersedes_id", { id: item.id });
+    }
+    if (field === "publications") {
+      if (item.step !== "prepared" && preparedHere.has(item.operation_id)) {
+        fail("invariant_error", "a prepared step and a later step of the same operation cannot share one write; record the read-back after the external write", { id: item.operation_id });
+      }
+      if (item.step === "prepared") preparedHere.add(item.operation_id);
+    }
+    appendChecks(ctx, draft, field, item);
+    collection.push(item);
+    recomputeCounters(draft);
+    enforceReviewBound(draft);
+    added.push(item.id);
+  }
+  return added;
+}
+
 function commandAppend(options, stdin) {
   const ctx = resolveContext(options, { mutation: true });
   const field = options.field;
-  const item = parseJson(stdin, "stdin");
-  if (!isObject(item)) fail("schema_error", "append takes exactly one JSON object");
-  requireShape(item, ITEM_DEFS[field], field);
-  const problems = itemProblems(field, item);
-  if (problems.length > 0) fail("invariant_error", problems.join("; "), { id: item.id ?? null });
+  const parsed = parseJson(stdin, "stdin");
+  const batch = Array.isArray(parsed);
+  const items = batch ? parsed : [parsed];
+  if (batch && items.length === 0) fail("schema_error", "an append array holds at least one item");
+  checkAppendItems(field, items);
   return mutate(ctx, options, "append", (draft, ledger) => {
     const owner = requireOwner(ledger, options);
-    const items = collectionOf(draft, field);
-    const existing = items.find((entry) => entry.id === item.id);
-    if (existing) {
-      if (isDeepStrictEqual(existing, item)) return { actor: owner, data: { id: item.id } };
-      fail("invariant_error", "an existing ID was reused with different content; use a new ID and supersedes_id", { id: item.id });
+    const added = appendInto(ctx, draft, field, items);
+    const ids = items.map((item) => item.id);
+    if (!batch) return { actor: owner, operation: `append ${field}`, data: { id: ids[0] }, detail: { collection: field, id: ids[0] } };
+    return { actor: owner, operation: `append ${field}`, data: { ids, added }, detail: { collection: field, ids: added } };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Publication payload generation (prepare / verify). The helper still never
+// writes externally; it builds the same events a caller would append.
+
+function readPublicationBatch(file, action) {
+  const items = readJsonFile(file, "--batch");
+  if (!Array.isArray(items) || items.length === 0) fail("schema_error", `a publication ${action} batch is a nonempty JSON array`, { path: file });
+  for (const item of items) if (!isObject(item)) fail("schema_error", "each batch item is a JSON object", { path: file });
+  return items;
+}
+
+function prepareParams(kind, params) {
+  const spec = PREPARE_PARAMS[kind];
+  const allowed = [...spec.required, ...spec.optional];
+  for (const key of Object.keys(params)) {
+    if (!allowed.includes(key)) fail("argument_error", `${kind} preparation does not take ${key}`, { observed: key });
+    if (typeof params[key] !== "string" || params[key].length === 0) fail("argument_error", `${key} must be a nonempty string`, { observed: params[key] });
+  }
+  for (const key of spec.required) if (!hasOwn(params, key)) fail("argument_error", `${kind} preparation needs ${key}`);
+  if (hasOwn(params, "draft") && !["true", "false"].includes(params.draft)) fail("argument_error", "draft must be true or false", { observed: params.draft });
+  if (hasOwn(params, "body_file")) requireAbsolute(params.body_file, "body_file");
+  if (hasOwn(params, "current_body_sha256") && !/^[0-9a-f]{64}$/.test(params.current_body_sha256)) fail("argument_error", "current_body_sha256 must be 64 lowercase hex characters");
+  return params;
+}
+
+function bodySha(file) {
+  try {
+    return sha256(fs.readFileSync(file));
+  } catch (error) {
+    return fail("io_error", `cannot read the body file: ${error.code}`, { path: file });
+  }
+}
+
+function threadReview(ledger, thread, batchId) {
+  if (batchId) return batchReview(ledger, batchId);
+  const reviews = currentItems(ledger.reviews).filter((review) => review.batch && review.findings.some((finding) => finding.thread_id === thread));
+  if (reviews.length === 0) fail("invariant_error", "no current review batch pairs a finding with this thread", { observed: thread });
+  const batches = [...new Set(reviews.map((review) => review.batch.id))];
+  if (batches.length > 1) fail("argument_error", "more than one current review batch pairs a finding with this thread; pass --review-batch", { observed: batches });
+  return batchReview(ledger, batches[0]);
+}
+
+function prTargetOf(ledger) {
+  const { github } = ledger.repo;
+  if (!github) fail("invariant_error", "GitHub publication needs a GitHub repository identity");
+  if (!ledger.pr) fail("invariant_error", "this publication needs a recorded PR");
+  return { host: github.host, repository: githubRepository(github), pr_number: ledger.pr.number, pr_url: ledger.pr.url };
+}
+
+function buildPrepared(ledger, kind, params, at) {
+  const { candidate, repo } = ledger;
+  if (candidate.state !== "frozen") fail("invariant_error", "publication uses the frozen candidate unchanged", { expected: "frozen", observed: candidate.state }, "publication-frozen");
+  const remoteHead = expectedRemote(ledger).oid;
+  const precondition = { head_oid: remoteHead, body_sha256: null, state: null, observed_at: at };
+  let target;
+  let intended;
+  let batchId = null;
+  switch (kind) {
+    case "push":
+      if (repo.remote_name === null) fail("invariant_error", "no remote is configured for this delivery");
+      target = { remote_name: repo.remote_name, remote_url: repo.remote_url, ref: destinationRef(ledger), host: repo.github?.host ?? null, repository: githubRepository(repo.github) };
+      intended = { oid: candidate.oid };
+      break;
+    case "pr_create":
+      if (!repo.github) fail("invariant_error", "GitHub publication needs a GitHub repository identity");
+      target = { host: repo.github.host, repository: githubRepository(repo.github), pr_number: null, pr_url: null };
+      intended = { head_repository: clone(repo.github), head_branch: candidate.branch, base: baseBranchName(ledger), draft: params.draft === "true", body_file: params.body_file, body_sha256: bodySha(params.body_file) };
+      break;
+    case "pr_body":
+      target = prTargetOf(ledger);
+      intended = { body_file: params.body_file, body_sha256: bodySha(params.body_file) };
+      Object.assign(precondition, { head_oid: remoteHead ?? ledger.pr.head, body_sha256: params.current_body_sha256, state: ledger.pr.state });
+      break;
+    case "pr_state":
+      target = prTargetOf(ledger);
+      intended = { draft: params.draft === "true" };
+      Object.assign(precondition, { head_oid: remoteHead ?? ledger.pr.head, state: ledger.pr.state });
+      break;
+    case "reply":
+    case "resolve": {
+      target = prTargetOf(ledger);
+      const review = threadReview(ledger, params.thread, params.review_batch);
+      batchId = review.batch.id;
+      const thread = readBatchSnapshot(review.batch, ledger).threads.find((entry) => entry.thread_graphql_id === params.thread);
+      if (!thread) fail("identity_mismatch", "the thread is not in the frozen batch", { observed: params.thread });
+      Object.assign(precondition, { head_oid: remoteHead ?? ledger.pr.head, state: ledger.pr.state });
+      if (kind === "reply") {
+        Object.assign(target, { root_comment_database_id: thread.root_comment_database_id, thread_graphql_id: thread.thread_graphql_id });
+        intended = { body_file: params.body_file, body_sha256: bodySha(params.body_file) };
+      } else {
+        target.thread_graphql_id = thread.thread_graphql_id;
+        let replyOperation = params.reply_operation;
+        if (!replyOperation) {
+          const replies = lastSteps(ledger).filter(({ first, last }) => first.kind === "reply" && first.batch_id === batchId && first.target.thread_graphql_id === thread.thread_graphql_id && last.step === "verified");
+          if (replies.length === 0) fail("invariant_error", "resolve only after this thread's reply is verified");
+          replyOperation = replies[replies.length - 1].operationId;
+        }
+        intended = { resolved: true, reply_operation_id: replyOperation };
+      }
+      break;
     }
-    appendChecks(ctx, ledger, field, item);
-    items.push(item);
-    recomputeCounters(draft);
-    enforceReviewBound(draft);
-    return { actor: owner, operation: `append ${field}`, data: { id: item.id }, detail: { collection: field, id: item.id } };
+    default:
+      break;
+  }
+  return { id: `pub-${randomUUID()}`, operation_id: `${kind.replace("_", "-")}-${randomUUID()}`, step: "prepared", kind, at, candidate_oid: candidate.oid, target, intended, precondition, batch_id: batchId, observed: null, error: null };
+}
+
+const OBSERVED_KEYS = ["object_id", "url", "target", "oid", "body_sha256", "draft", "resolved", "state", "observed_at"];
+
+function readObservedFile(file) {
+  const value = readJsonFile(file, "observed_file");
+  if (!isObject(value)) fail("schema_error", "an observed file holds one JSON object", { path: file });
+  for (const key of Object.keys(value)) if (!OBSERVED_KEYS.includes(key)) fail("schema_error", `unknown observed field ${key}`, { path: file });
+  if (!isObject(value.target)) fail("schema_error", "an observation names the target it read back", { path: file });
+  const observed = { object_id: null, url: null, target: value.target, oid: null, body_sha256: null, draft: null, resolved: null, state: null, observed_at: now(), ...value };
+  requireShape(observed, "Observed", "observed");
+  return observed;
+}
+
+// --from-check uses the raw GET readers. The identity comparators behind
+// `check` compare against the ledger's current expectation, which is still the
+// state before this write.
+function observeFromCheck(ctx, ledger, first) {
+  const at = now();
+  if (first.kind === "push") {
+    const url = configuredRemoteUrl(ctx.worktree, first.target.remote_name);
+    if (url === null) fail("environment_error", "the recorded remote is not configured here", { expected: first.target.remote_name });
+    const live = lsRemote(ctx.worktree, first.target.remote_name, first.target.ref);
+    if (!live.ok) fail("network_error", "the remote ref could not be read; nothing was recorded", { observed: live.error });
+    return { object_id: null, url: null, target: { ...first.target, remote_url: url }, oid: live.oid, body_sha256: null, draft: null, resolved: null, state: null, observed_at: at };
+  }
+  if (first.kind === "pr_state") {
+    if (!ledger.pr) fail("invariant_error", "this publication needs a recorded PR");
+    const live = readGitHubPr(ledger.pr);
+    if (!live.ok) fail("network_error", "the PR could not be read; nothing was recorded", { observed: live.error });
+    const pr = live.pr;
+    return { object_id: null, url: pr.url, target: { host: pr.host, repository: pr.repository, pr_number: pr.number, pr_url: pr.url }, oid: pr.head, body_sha256: null, draft: pr.draft, resolved: null, state: pr.state, observed_at: at };
+  }
+  return fail("argument_error", "--from-check verifies only push and pr-state; supply the read-back with an observed file", { observed: first.kind });
+}
+
+function verifyParams(item) {
+  const sources = ["observed_file", "from_check", "failed", "uncertain"].filter((key) => hasOwn(item, key));
+  for (const key of Object.keys(item)) if (!["id", ...sources].includes(key)) fail("argument_error", `a verify item does not take ${key}`, { observed: key });
+  if (typeof item.id !== "string" || !item.id) fail("argument_error", "a verify item names its operation id");
+  if (sources.length !== 1) fail("argument_error", "a verify item needs exactly one of observed_file, from_check, failed or uncertain", { id: item.id });
+  const source = sources[0];
+  if (source === "from_check" && item.from_check !== true) fail("argument_error", "from_check is true when present", { id: item.id });
+  if (["failed", "uncertain"].includes(source) && (typeof item[source] !== "string" || !item[source].trim())) fail("argument_error", `${source} gives its reason`, { id: item.id });
+  if (source === "observed_file") requireAbsolute(item.observed_file, "observed_file");
+  return source;
+}
+
+function operationStart(ledger, id) {
+  const events = operations(ledger).get(id);
+  if (!events) fail("invariant_error", "no prepared publication has this operation id", { id });
+  return events[0];
+}
+
+function buildObservationStep(first, observation) {
+  const { supersedes_id: _ignored, ...base } = first;
+  const event = { ...base, id: `pub-${randomUUID()}`, at: now(), observed: null, error: null };
+  if (observation.failed !== undefined) return { ...event, step: "failed", error: observation.failed };
+  if (observation.uncertain !== undefined) return { ...event, step: "uncertain", error: observation.uncertain };
+  const verified = { ...event, step: "verified", observed: observation.observed };
+  try {
+    verifiedObservationChecks(null, verified);
+  } catch (error) {
+    if (!(error instanceof LedgerError) || error.code !== "identity_mismatch") throw error;
+    return { ...event, step: "mismatch", observed: observation.observed, error: error.message };
+  }
+  return verified;
+}
+
+function commandPublication(options) {
+  const ctx = resolveContext(options, { mutation: true });
+  const action = options.action;
+  const batched = options.batch !== undefined;
+  const items = batched ? readPublicationBatch(options.batch, action) : options.items;
+  const kind = action === "prepare" ? PUBLICATION_KINDS[options.kind] : null;
+  const batchId = batched ? `publication-batch-${randomUUID()}` : null;
+  let observations = null;
+  let observedFrom = null;
+  if (action === "verify") {
+    const ids = new Set();
+    const sources = items.map((item) => {
+      const source = verifyParams(item);
+      if (ids.has(item.id)) fail("invariant_error", "a verify batch names each operation once", { id: item.id });
+      ids.add(item.id);
+      return source;
+    });
+    // Reads happen before the lock: network latency never holds the branch mutex.
+    const snapshot = readLedger(ctx);
+    observedFrom = new Map();
+    const kinds = new Set(items.map((item) => operationStart(snapshot, item.id).kind));
+    if (kinds.size > 1) fail("invariant_error", "a verify batch holds operations of one kind", { observed: [...kinds] });
+    observations = items.map((item, index) => {
+      const first = operationStart(snapshot, item.id);
+      observedFrom.set(item.id, first);
+      if (sources[index] === "observed_file") return { observed: readObservedFile(item.observed_file) };
+      if (sources[index] === "from_check") return { observed: observeFromCheck(ctx, snapshot, first) };
+      return { [sources[index]]: item[sources[index]] };
+    });
+  } else {
+    for (const item of items) prepareParams(kind, item);
+  }
+  return mutate(ctx, options, "publication", (draft, ledger) => {
+    const owner = requireOwner(ledger, options);
+    forbidDuringRecovery(ledger, "publication");
+    let events;
+    if (action === "prepare") {
+      const at = now();
+      events = items.map((item) => buildPrepared(ledger, kind, item, at));
+    } else {
+      events = items.map((item, index) => {
+        const first = operationStart(ledger, item.id);
+        if (!isDeepStrictEqual(first, observedFrom.get(item.id))) fail("stale_revision", "the operation changed while it was being read back; re-read and retry", { id: item.id }, "stale-revision");
+        return buildObservationStep(first, observations[index]);
+      });
+    }
+    checkAppendItems("publications", events);
+    const added = appendInto(ctx, draft, "publications", events);
+    const summary = events.map((event) => ({ operation_id: event.operation_id, event_id: event.id, kind: event.kind, step: event.step, error: event.error }));
+    return {
+      actor: owner,
+      operation: `publication ${action}`,
+      data: { batch_id: batchId, items: summary, events },
+      detail: { collection: "publications", ids: added, batch: batchId === null ? null : { id: batchId, action, kind: events[0].kind, size: events.length } },
+    };
   });
 }
 
@@ -2946,7 +3308,15 @@ function commandFreeze(options) {
     forbidDuringRecovery(ledger, "an ordinary freeze");
     if (ledger.phase === "watch" && ledger.authorization.monitoring !== "remediate") fail("invariant_error", "an observe-only watch never remediates");
     const transition = applyFreeze(ctx, ledger, draft, options.oid, evidence);
-    return { actor: owner, data: { oid: options.oid }, detail: transition ?? {} };
+    if (!options["review-bound"]) return { actor: owner, data: { oid: options.oid }, detail: transition ?? {} };
+    // Freeze, measure and install the bound in one revision, with the same
+    // checks the separate measure and set-review-bound commands apply.
+    const frozen = clone(draft);
+    const measurement = measureCandidate(ctx, frozen, draft);
+    const measured = clone(draft);
+    const bound = deriveReviewBound(ctx, measured, options["review-bound"]);
+    installReviewBound(ctx, measured, draft, bound);
+    return { actor: owner, data: { oid: options.oid, measurement, review_bound: draft.review_bound }, detail: { ...(transition ?? {}), measurement, review_bound: draft.review_bound } };
   });
 }
 
@@ -3126,21 +3496,30 @@ function commandSetReviewBound(options) {
   return mutate(ctx, options, "set-review-bound", (draft, ledger) => {
     const owner = requireOwner(ledger, options);
     forbidDuringRecovery(ledger, "set-review-bound");
+    installReviewBound(ctx, ledger, draft, bound);
+    return { actor: owner, data: { review_bound: draft.review_bound }, detail: { review_bound: draft.review_bound } };
+  });
+}
+
+// Shared by set-review-bound and freeze --review-bound: `ledger` is the state
+// the bound is checked against, `draft` receives it.
+function installReviewBound(ctx, ledger, draft, bound) {
+  {
     if (ledger.candidate.state !== "frozen" || bound.measured_oid !== ledger.candidate.oid) fail("identity_mismatch", "review bound must identify the frozen candidate");
     const drift = localIdentity(ctx, ledger, "frozen");
     if (drift.mismatches.length || drift.environment.length) fail("identity_mismatch", "cannot set a bound on a drifted candidate", { observed: drift });
-    if (ledger.measurements.measured_oid !== bound.measured_oid || ledger.measurements.diff_base_oid !== ledger.repo.diff_base_oid || ledger.measurements.files !== bound.basis.files) fail("invariant_error", "measure this candidate against diff_base_oid before setting its bound");
+    if (ledger.measurements.measured_oid !== bound.measured_oid || ledger.measurements.diff_base_oid !== ledger.repo.diff_base_oid || ledger.measurements.files !== bound.basis.files) fail("invariant_error", "measure this candidate against diff_base_oid before setting its bound", undefined, "bound-measure-first");
     const decisions = ledger.sources.decisions;
     if (!decisions.some((item) => item.id === bound.basis.workspace_decision)) fail("invariant_error", "workspace evidence must reference a recorded decision");
     if (bound.delegated_limit !== null && !decisions.some((item) => item.id === bound.basis.delegated_decision)) fail("invariant_error", "a delegated limit needs its recorded policy source");
     const packages = bound.basis.packages;
     if (packages !== null && (new Set(packages).size !== packages.length || packages.some((item) => item !== "." && !validManifestPath(item)))) fail("invariant_error", "packages are unique repository-relative leaf boundaries");
-    if (packages !== null && packages.some((a) => packages.some((b) => a !== b && (a === "." || b.startsWith(`${a}/`))))) fail("invariant_error", "count affected leaf packages only, not their ancestors");
+    if (packages !== null && packages.some((a) => packages.some((b) => a !== b && (a === "." || b.startsWith(`${a}/`))))) fail("invariant_error", "count affected leaf packages only, not their ancestors", undefined, "bound-ancestor-packages");
     const calculated = baseReviewClass(bound.basis.files, packages);
     const previous = ledger.review_bound;
     // Retain the larger finalized allowance across replacement candidates.
     const base = Math.max(calculated.max_rounds, previous?.max_rounds ?? 0);
-    if (bound.size !== calculated.size || bound.max_rounds !== base) fail("invariant_error", "size/base allowance differs from recorded size/workspace evidence", { expected: { size: calculated.size, max_rounds: base } });
+    if (bound.size !== calculated.size || bound.max_rounds !== base) fail("invariant_error", "size/base allowance differs from recorded size/workspace evidence", { expected: { size: calculated.size, max_rounds: base } }, "bound-size-mismatch");
     const ids = new Set();
     for (const grant of bound.overrides) {
       if (ids.has(grant.id) || !ledger.authorization.grants.some((recorded) => isDeepStrictEqual(recorded, grant))) fail("invariant_error", "overrides need unique, already recorded grants");
@@ -3159,8 +3538,51 @@ function commandSetReviewBound(options) {
     recomputeCounters(draft);
     if (bound.rounds_used !== draft.review_bound.rounds_used || bound.delegated_used !== draft.review_bound.delegated_used) fail("invariant_error", "review counters are derived from current evidence");
     enforceReviewBound(draft);
-    return { actor: owner, data: { review_bound: draft.review_bound }, detail: { review_bound: draft.review_bound } };
-  });
+  }
+}
+
+const EXTENSION_SCOPES = ["review_round", "monitor_remediate"];
+
+// Builds the complete bound from the owner-attested fields; everything the
+// helper can measure or count is derived exactly as set-review-bound checks it.
+function deriveReviewBound(ctx, ledger, spec) {
+  const prior = ledger.review_bound;
+  let attested;
+  if (spec === "reuse") {
+    if (!prior) fail("invariant_error", "--review-bound reuse needs a prior bound; supply the attested fields in a file");
+    if (prior.basis.packages === null) fail("invariant_error", "--review-bound reuse needs recorded package roots; supply the attested fields in a file");
+    const unbound = ledger.authorization.grants.filter((grant) => EXTENSION_SCOPES.includes(grant.scope) && grant.additional_cycles && !prior.overrides.some((entry) => entry.id === grant.id));
+    if (unbound.length > 0) fail("invariant_error", "an extension grant is recorded that the prior bound does not carry; supply the attested fields in a file", { observed: unbound.map((grant) => grant.id) });
+    const packages = prior.basis.packages;
+    const changed = splitNul(git(ctx.worktree, ["diff", "--name-only", "-z", "--no-renames", ledger.repo.diff_base_oid, ledger.candidate.oid, "--"], { buffer: true }).stdout).map(decodePath);
+    const outside = packages.includes(".") ? [] : changed.filter((file) => !inScope(file, packages));
+    if (outside.length > 0) fail("invariant_error", "the candidate changes paths outside the recorded package roots; supply the attested fields in a file", { observed: outside });
+    attested = { basis: { packages: clone(packages), workspace_decision: prior.basis.workspace_decision, delegated_decision: prior.basis.delegated_decision }, delegated_limit: prior.delegated_limit, overrides: clone(prior.overrides) };
+  } else {
+    attested = readJsonFile(spec, "--review-bound");
+    requireExactKeys(attested, ["basis", "delegated_limit", "overrides"], "partial review bound");
+    if (!isObject(attested.basis)) fail("schema_error", "a partial review bound nests packages, workspace_decision and delegated_decision under basis");
+    requireExactKeys(attested.basis, ["packages", "workspace_decision", "delegated_decision"], "partial review bound basis");
+    if (!Array.isArray(attested.overrides)) fail("schema_error", "overrides is an array of recorded grants");
+  }
+  const files = ledger.measurements.files;
+  const calculated = baseReviewClass(files, attested.basis.packages);
+  const counted = clone(ledger);
+  counted.review_bound = { rounds_used: 0, delegated_used: 0 };
+  recomputeCounters(counted);
+  const bound = {
+    max_rounds: Math.max(calculated.max_rounds, prior?.max_rounds ?? 0),
+    rounds_used: counted.review_bound.rounds_used,
+    size: calculated.size,
+    measured_oid: ledger.candidate.oid,
+    basis: { files, ...attested.basis },
+    delegated_limit: attested.delegated_limit,
+    delegated_used: counted.review_bound.delegated_used,
+    extension_rounds: attested.overrides.reduce((sum, grant) => sum + (Number.isSafeInteger(grant?.additional_cycles) ? grant.additional_cycles : 0), 0),
+    overrides: attested.overrides,
+  };
+  requireShape(bound, "ReviewBound", "review_bound");
+  return bound;
 }
 
 // Fixes already contained in a verified push were swept with their own batch;
@@ -3175,9 +3597,9 @@ function requireShapeSweeps(ctx, ledger, oid) {
   );
   if (fixed.length > 0 && !ledger.review_bound) fail("invariant_error", "set the review bound before pushing fixes; their shape sweeps are checked against it");
   for (const finding of fixed) {
-    if (!finding.shape?.trim()) fail("invariant_error", "fixed findings need shape labels before publication");
+    if (!finding.shape?.trim()) fail("invariant_error", "fixed findings need shape labels before publication", undefined, "review-finding-shape");
     const sweep = currentItems(ledger.defect_shapes).find((item) => item.shape === finding.shape && item.candidate_oid === oid && item.sweep === "done");
-    if (!sweep || !sweep.evidence?.trim() || !sweep.searched_scope.length) fail("invariant_error", `complete the ${finding.shape} sweep for this candidate before pushing`);
+    if (!sweep || !sweep.evidence?.trim() || !sweep.searched_scope.length) fail("invariant_error", `complete the ${finding.shape} sweep for this candidate before pushing`, undefined, "sweep-before-push");
   }
 }
 
@@ -3187,28 +3609,33 @@ function commandMeasure(options) {
     const owner = requireOwner(ledger, options);
     forbidDuringRecovery(ledger, "measure");
     if (ledger.candidate.state !== "frozen") fail("invariant_error", "measure needs a frozen candidate; leave local-only work unmeasured with an explicit limitation");
-    const out = git(ctx.worktree, ["diff", "--numstat", "-z", "--no-renames", ledger.repo.diff_base_oid, ledger.candidate.oid, "--"], { buffer: true }).stdout;
-    let files = 0;
-    let additions = 0;
-    let deletions = 0;
-    let binary = 0;
-    for (const record of splitNul(out)) {
-      const text = record.toString("utf8");
-      const first = text.indexOf("\t");
-      const second = text.indexOf("\t", first + 1);
-      if (first === -1 || second === -1) continue;
-      const added = text.slice(0, first);
-      const removed = text.slice(first + 1, second);
-      files += 1;
-      if (added === "-" || removed === "-") binary += 1;
-      else {
-        additions += Number(added);
-        deletions += Number(removed);
-      }
-    }
-    Object.assign(draft.measurements, { files, additions, deletions, binary_files: binary, measured_oid: ledger.candidate.oid, diff_base_oid: ledger.repo.diff_base_oid });
-    return { actor: owner, data: { files, additions, deletions, binary_files: binary }, detail: { measured_oid: ledger.candidate.oid, diff_base_oid: ledger.repo.diff_base_oid } };
+    const counts = measureCandidate(ctx, ledger, draft);
+    return { actor: owner, data: counts, detail: { measured_oid: ledger.candidate.oid, diff_base_oid: ledger.repo.diff_base_oid } };
   });
+}
+
+function measureCandidate(ctx, ledger, draft) {
+  const out = git(ctx.worktree, ["diff", "--numstat", "-z", "--no-renames", ledger.repo.diff_base_oid, ledger.candidate.oid, "--"], { buffer: true }).stdout;
+  let files = 0;
+  let additions = 0;
+  let deletions = 0;
+  let binary = 0;
+  for (const record of splitNul(out)) {
+    const text = record.toString("utf8");
+    const first = text.indexOf("\t");
+    const second = text.indexOf("\t", first + 1);
+    if (first === -1 || second === -1) continue;
+    const added = text.slice(0, first);
+    const removed = text.slice(first + 1, second);
+    files += 1;
+    if (added === "-" || removed === "-") binary += 1;
+    else {
+      additions += Number(added);
+      deletions += Number(removed);
+    }
+  }
+  Object.assign(draft.measurements, { files, additions, deletions, binary_files: binary, measured_oid: ledger.candidate.oid, diff_base_oid: ledger.repo.diff_base_oid });
+  return { files, additions, deletions, binary_files: binary };
 }
 
 function invalidatedRefs(ledger) {
@@ -3293,12 +3720,16 @@ function reviewApplies(ctx, ledger, review, completion) {
   return null;
 }
 
+function appendedIn(event, operation, id) {
+  return event.operation === operation && (event.detail.id === id || event.detail.ids?.includes(id) === true);
+}
+
 function batchRecordedInReviewRound(ledger, batchId) {
   // A handoff, blocked resume or takeover changes the owner, not the round.
   // The claim that left done is the boundary for the newly authorized batch.
   const start = [...ledger.history].reverse().find((event) => event.operation === "claim" && event.phase === "review_round" && event.detail.from_phase === "done");
   const firstReview = ledger.reviews.find((review) => review.batch?.id === batchId);
-  const recorded = ledger.history.find((event) => event.operation === "append reviews" && event.detail.id === firstReview?.id);
+  const recorded = ledger.history.find((event) => appendedIn(event, "append reviews", firstReview?.id));
   return Boolean(start && recorded && recorded.revision > start.revision);
 }
 
@@ -3310,7 +3741,7 @@ function observationRecordedInWatch(ledger, evidence) {
   return Boolean(start && evidence.some(({ collection, item }) => {
     if (collection !== "sessions" || item.phase !== "watch") return false;
     const root = chainRoot(ledger.sessions, item);
-    return ledger.history.some((event) => event.operation === "append sessions" && event.detail.id === root.id
+    return ledger.history.some((event) => appendedIn(event, "append sessions", root.id)
       && event.revision > start.revision && event.phase === "watch" && event.session === root.label && event.runtime === root.runtime);
   }));
 }
@@ -3575,6 +4006,114 @@ function commandSummaryBody(options) {
   return envelope("summary-body", false, ledger.revision, { action: result.action, body: result.body, body_sha256: sha256(Buffer.from(result.body, "utf8")), current_body_sha256: currentSha });
 }
 
+// ---------------------------------------------------------------------------
+// Templates: a skeleton for each record or input file, plus the cross-field
+// rules the schema cannot express. Placeholders in angle brackets must be
+// replaced; nullable fields start as null.
+
+const SUCCESSOR_RULE = "A successor sets supersedes_id to an earlier item of the same collection and keeps its subject (candidate, batch, run, session or operation); each item has at most one successor.";
+const TEMPLATES = {
+  validation: { def: "Validation", rules: [
+    "A completed command execution (result pass or fail, no reused_from) needs content_manifest and input_fingerprint: generate both with content-manifest --output-file, and use its input_fingerprint.",
+    "A completed command execution has exactly one of oid (the frozen candidate, from a clean checkout) or content_id (sha256:<input_fingerprint>, for working or local-only content).",
+    "pass and fail need the actual exit_code and log; skipped and unavailable need a reason.",
+    "A reuse record sets reused_from and reuse together, keeps the original command, cwd, scope, log and exit_code, and has input_fingerprint null.",
+    SUCCESSOR_RULE,
+  ] },
+  audits: { def: "Audit", rules: ["Exactly one of oid or content_id; content_id needs content_manifest.", "role_run_id names a recorded role run, or is null for a direct audit.", "A FAIL audit is never superseded by a better verdict; a recheck is a new audit.", SUCCESSOR_RULE] },
+  reviews: { def: "Review", item: { findings: "finding" }, rules: [
+    "An implementation review has exactly one of candidate_oid or content_id; content_id needs content_manifest.",
+    "verdict fits mode: accept, revise, split or rewrite only for spec; pass, pass-with-fixes or fail otherwise.",
+    "cycle_id and cycle_kind are both null or both set. Once a review bound is installed, every finding needs a shape label.",
+    "A fixed finding needs fix_oid or fix_content_id; rejected, deferred and duplicate need a reason.",
+    "A successor keeps mode, candidate, source, round, cycle, batch and every finding's source_id, severity, location and thread_id.",
+  ] },
+  defect_shapes: { def: "DefectShape", rules: ["A done sweep names its searched_scope and states its result in evidence, even when no sibling was found.", SUCCESSOR_RULE] },
+  publications: { def: "PublicationEvent", rules: [
+    "Prefer publication prepare and publication verify, which build these events from the ledger.",
+    "prepared has observed null; verified needs an observed read-back; failed, mismatch and uncertain need error.",
+    "batch_id is the frozen review batch, set only for reply and resolve.",
+    "Every step of one operation keeps candidate_oid, kind, target, intended, precondition and batch_id; a prepared step and a later step of the same operation never share one append.",
+  ] },
+  role_runs: { def: "RoleRun", rules: [
+    "runtime_version is a nonempty string (the client's version), never null.",
+    "execution inline needs fallback_reason; status blocked needs block_reason.",
+    "At most one of candidate_oid or content_id; content_id needs content_manifest.",
+    "A delegated implementation reviewer dispatch needs the frozen candidate with its bound installed and a free cycle.",
+    "A successor keeps role, mode, phase, candidate, execution, runtime, session_label and fallback_reason.",
+  ] },
+  sessions: { def: "Session", rules: ["A successor keeps label, runtime and phase; a known native_session_id cannot change."] },
+  limitations: { def: "Limitation", rules: [SUCCESSOR_RULE] },
+  decisions: { def: "Decision", rules: ["IDs are unique; a review bound's workspace_decision and delegated_decision name recorded decisions."] },
+  finding: { def: "Finding", rules: ["Give every finding a shape label once a review bound is installed, including a proposed new label when none fits."] },
+  grant: { def: "Grant", rules: ["wording quotes the user's words. endpoint is set only for scope endpoint. additional_cycles is a positive count only for a review_round or monitor_remediate extension, otherwise null."] },
+  authorization: { def: "AuthorizationObject", rules: ["endpoint must equal init --endpoint; carry forward authority the user already gave as grants."] },
+  bootstrap: { def: "BootstrapInput", rules: ["Prefer prepare-init, which generates this file. A dirty checkout needs a dirty_scope decision naming every changed path."] },
+  "commit-evidence": { def: "CommitEvidence", rules: ["prior_head is the recorded working head. intended_paths and excluded_paths are literal relative Git paths."] },
+  release: { def: "ReleaseInput", rules: ["complete needs completion and no blocker; handoff needs next for the same phase and checkpoint; blocked needs blocker and a next at its resume_checkpoint."] },
+  reconcile: { def: "ReconcileEvidence", rules: ["expected equals the ledger's current candidate_oid and working_head_oid; observed depends on case."] },
+  "review-bound": { def: "ReviewBound", rules: ["Prefer freeze --review-bound with the partial file, which derives every measured and counted field."] },
+  "review-bound-partial": { def: null, rules: [
+    "packages lists affected leaf workspace package or app roots once, never their ancestors; use [\".\"] for a root-only repository and null when boundaries cannot be established.",
+    "workspace_decision names a recorded decision; delegated_decision names one whenever delegated_limit is not null.",
+    "overrides are exact copies of recorded extension grants and keep every grant the prior bound carried.",
+  ] },
+  observed: { def: "Observed", rules: ["For publication verify --observed-file, nullable fields may be omitted (null) and observed_at defaults to now; target is the object actually read back."] },
+};
+
+const PLACEHOLDERS = {
+  Timestamp: "<ISO-8601 UTC timestamp>",
+  OID: "<full commit OID>",
+  SHA256: "<64-hex SHA-256>",
+  AbsolutePath: "<absolute path>",
+  Id: "<unique id>",
+  NonEmptyText: "<text>",
+  ContentId: "<sha256:digest>",
+  Uuid: "<uuid>",
+  Runtime: "<one of: claude | codex | gemini>",
+};
+
+function skeletonOf(node, refName = null, depth = 0) {
+  const defs = loadSchema().$defs;
+  if (depth > 12) return null;
+  if (node.$ref) {
+    const name = node.$ref.split("/").pop();
+    return skeletonOf(defs[name], name, depth + 1);
+  }
+  if (node.anyOf) {
+    if (node.anyOf.some((option) => option.type === "null")) return null;
+    return skeletonOf(node.anyOf[0], refName, depth + 1);
+  }
+  if (node.allOf && !node.properties) return Object.assign({}, ...node.allOf.map((part) => skeletonOf(part, refName, depth + 1)).filter(isObject));
+  if (hasOwn(node, "const")) return node.const;
+  if (node.enum) return node.enum.includes(null) ? null : `<one of: ${node.enum.join(" | ")}>`;
+  const types = Array.isArray(node.type) ? node.type : [node.type];
+  if (types.includes("null")) return null;
+  if (types.includes("object") || node.properties) {
+    const result = {};
+    for (const key of node.required ?? []) result[key] = node.properties?.[key] ? skeletonOf(node.properties[key], null, depth + 1) : null;
+    return result;
+  }
+  if (types.includes("array")) return [];
+  if (types.includes("boolean")) return false;
+  if (types.includes("integer") || types.includes("number")) return 0;
+  if (types.includes("string")) return PLACEHOLDERS[refName] ?? (node.minLength ? "<text>" : "");
+  return null;
+}
+
+function commandTemplate(options) {
+  const template = TEMPLATES[options.name];
+  const defs = loadSchema().$defs;
+  let skeleton;
+  if (options.name === "review-bound-partial") {
+    skeleton = { basis: { packages: ["<leaf package root>"], workspace_decision: PLACEHOLDERS.Id, delegated_decision: null }, delegated_limit: null, overrides: [] };
+  } else {
+    skeleton = skeletonOf(defs[template.def], template.def);
+  }
+  const items = Object.fromEntries(Object.entries(template.item ?? {}).map(([field, name]) => [field, skeletonOf(defs[TEMPLATES[name].def], TEMPLATES[name].def)]));
+  return envelope("template", false, null, { name: options.name, schema_def: template.def, skeleton, items, rules: template.rules });
+}
+
 const HANDLERS = {
   path: commandPath,
   "prepare-init": commandPrepareInit,
@@ -3597,6 +4136,8 @@ const HANDLERS = {
   "recover-lock": commandRecoverLock,
   "set-review-bound": commandSetReviewBound,
   "summary-body": commandSummaryBody,
+  publication: commandPublication,
+  template: commandTemplate,
 };
 
 export async function run(argv) {
@@ -3623,6 +4164,7 @@ export async function main(argv = process.argv.slice(2)) {
       id: known ? error.id : null,
       expected: known ? error.expected : null,
       observed: known ? error.observed : null,
+      hint: known && error.site !== null ? HINTS[error.site] : null,
     };
     exitCode = known ? EXIT_BY_CODE[error.code] : 1;
     if (!known) process.stderr.write(`${String(error?.stack ?? error).replace(/(gh[opsu]_|github_pat_)\w+/g, "$1[redacted]")}\n`);
