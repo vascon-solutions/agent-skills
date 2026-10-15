@@ -1,9 +1,10 @@
-// agent-scripts v1 sha256:a04083efff05b49bf209b674561a45d20f8989bcb96f97eeff9a0487459fb944
+// agent-scripts v1 sha256:a0a3da0ea3927e7145af9329c448b15b3987be31938163a90c3e5b020165591f
 // Canonical copy: vascon-solutions/agent-skills templates/agent-scripts/agent-scripts.mjs.
 // Vendor this file unmodified; see the README next to the canonical copy.
 import { spawn, spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import fs from "node:fs";
+import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
@@ -146,7 +147,7 @@ function checkEnv(value, where) {
 
 function checkRelative(value, where) {
   if (value === undefined) return;
-  if (typeof value !== "string" || path.isAbsolute(value) || value.split(/[\\/]/).includes("..")) fail(`${where} must be a relative path inside the repository`);
+  if (typeof value !== "string" || path.isAbsolute(value) || value.split(/[\\/]/).includes("..")) fail(`${where} must be a relative path with no ".." segment`);
 }
 
 function validateConfig(config) {
@@ -581,6 +582,21 @@ function listenerPids(port) {
   return [...new Set([...lsof.stdout.matchAll(/^p(\d+)$/gm)].map((match) => Number(match[1])))];
 }
 
+// Catches listeners whose owner the probes cannot see, such as another user's process or a root-owned docker-proxy.
+async function acceptsConnections(port) {
+  const attempt = (host) => new Promise((resolve) => {
+    const socket = net.connect({ port, host });
+    const settle = (value) => {
+      socket.destroy();
+      resolve(value);
+    };
+    socket.setTimeout(1000, () => settle(false));
+    socket.once("connect", () => settle(true));
+    socket.once("error", () => settle(false));
+  });
+  return (await Promise.all(["127.0.0.1", "::1"].map(attempt))).some(Boolean);
+}
+
 function describeProcess(pid) {
   return `pid ${pid} (${commandLine(pid) || "unknown command"}, started ${startTime(pid) ?? "unknown"})`;
 }
@@ -745,6 +761,7 @@ async function serveStart(root, options, config) {
         for (const [name, port] of Object.entries(command.ports)) {
           const holders = listenerPids(port);
           if (holders.length > 0) fail(`port ${name}=${port} already has a listener: ${holders.map(describeProcess).join("; ")}`);
+          if (await acceptsConnections(port)) fail(`port ${name}=${port} already accepts connections from a process this user cannot identify`);
         }
       }
       writeState(paths.state, state);
@@ -912,6 +929,10 @@ async function stopRecordedServers(root, config, { quiet, state }) {
           foreign += 1;
           log(`port ${name}=${port} still has a listener this run does not own: ${describeProcess(pid)}; decide whether to stop it`);
         }
+      }
+      if (listenerPids(port).length === 0 && (await acceptsConnections(port))) {
+        foreign += 1;
+        log(`port ${name}=${port} still accepts connections from a process this user cannot identify; decide whether to stop it`);
       }
     }
   }
