@@ -1,4 +1,4 @@
-// agent-scripts v1 sha256:bdb42f44758873d3444d08567b1cd8a27ba7e5c0c2ab004c59a5a780bd070413
+// agent-scripts v1 sha256:86e2b550dfbb50b53cd3482b7c9e6f9b39661a2ebc561b16afda3b9e25eb7f26
 // Canonical copy: vascon-solutions/agent-skills templates/agent-scripts/agent-scripts.mjs.
 // Vendor this file unmodified; see the README next to the canonical copy.
 import { spawn, spawnSync } from "node:child_process";
@@ -313,6 +313,7 @@ function changedPaths(root, options, config) {
   const raw = options["paths-from"] !== undefined ? readPathsFrom(options["paths-from"]) : discoverPaths(root, options, config);
   const excluded = new Set(options.exclude.map(normalizeRelative));
   const ignore = (config.ignore ?? []).map(globToRegExp);
+  const realRoot = fs.realpathSync(root);
   const result = new Set();
   for (const entry of raw) {
     const file = normalizeRelative(entry);
@@ -323,7 +324,11 @@ function changedPaths(root, options, config) {
     } catch {
       continue;
     }
-    if (stat.isFile() || stat.isSymbolicLink()) result.add(file);
+    if (!stat.isFile()) continue;
+    const resolved = fs.realpathSync(path.join(root, file));
+    const relative = path.relative(realRoot, resolved);
+    if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) fail(`path ${JSON.stringify(file)} resolves outside the repository`);
+    result.add(file);
   }
   return [...result].sort();
 }

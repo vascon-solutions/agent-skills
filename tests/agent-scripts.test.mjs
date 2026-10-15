@@ -294,6 +294,35 @@ test("fix formats only delivery-owned paths: unchanged files and excluded unrela
   }
 });
 
+test("fix and lint exclude symlinks and reject paths through directories linked outside the repository", () => {
+  const dir = makeRepo({ schema: 1, extensions: [".ts"], fix: [{ command: ["node", tool("upper.mjs")] }], lint: [{ command: ["node", tool("upper.mjs")] }] });
+  const external = fs.mkdtempSync(path.join(os.tmpdir(), "agent-scripts-external-"));
+  const target = path.join(external, "outside.ts");
+  const list = path.join(dir, ".git", "delivery-paths");
+  try {
+    fs.writeFileSync(target, "external\n");
+    fs.symlinkSync(target, path.join(dir, "link.ts"));
+    fs.symlinkSync(external, path.join(dir, "linked"));
+    for (const kind of ["fix", "lint"]) {
+      for (const source of [["--base", "main"], ["--paths-from", list]]) {
+        fs.writeFileSync(list, "link.ts\n");
+        const result = cli(dir, [kind, ...source]);
+        assert.equal(result.status, 0, result.stderr);
+        assert.equal(fs.readFileSync(target, "utf8"), "external\n", `${kind} must not follow an executable symlink`);
+        assert.match(result.stderr, /no changed files/);
+      }
+      fs.writeFileSync(list, "linked/outside.ts\n");
+      const nested = cli(dir, [kind, "--paths-from", list]);
+      assert.equal(nested.status, 2, nested.stderr);
+      assert.match(nested.stderr, /resolves outside the repository/);
+      assert.equal(fs.readFileSync(target, "utf8"), "external\n");
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(external, { recursive: true, force: true });
+  }
+});
+
 test("no changed files exits 0 without running a step, and gate stops at the first failure with its status", () => {
   const dir = makeRepo({
     schema: 1,

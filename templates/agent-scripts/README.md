@@ -68,7 +68,7 @@ Configuration lives under `agentScripts` in the repository root's `package.json`
 
 **Changed paths.** The base is `--base REF`, then `agentScripts.base`, then `defaultBase` in `.agent/delivery-policy.json`. An unresolvable or missing base is an error unless `--working-tree-only` is given, which compares with `HEAD` instead.
 
-Default discovery is everything that differs from the merge base of the base and `HEAD`: committed, staged and unstaged changes, plus untracked files that Git does not ignore (`.gitignore`, `.git/info/exclude` and the global excludes file all apply). Deleted paths are dropped; a rename counts as its new path. All Git output is read NUL-delimited, so names with spaces or newlines are safe.
+Default discovery includes committed, staged and unstaged changes since the merge base of the base and `HEAD`. It also includes untracked files Git does not ignore (`.gitignore`, `.git/info/exclude` and the global excludes file all apply). Deleted paths and symlinks are dropped; a rename counts as its new path. Supplied paths through linked directories are rejected when the resolved file is outside the repository. All Git output is read NUL-delimited, so names with spaces or newlines are safe.
 
 Discovery can include working-tree edits the delivery does not own. When the tree holds unrelated changes, pass the delivery's own list instead:
 

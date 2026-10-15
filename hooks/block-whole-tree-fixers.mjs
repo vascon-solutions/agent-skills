@@ -22,7 +22,7 @@ const VALUE_OPTIONS = {
 
 class Unparseable extends Error {}
 
-// Splits a command into segments of words on && || ; | & and newlines. Anything needing real shell
+// Keeps each segment's words and following operator (&& || ; | & or newline). Anything needing real shell
 // evaluation (substitution, subshells, groups, here-documents) throws Unparseable.
 export function segments(command) {
   const result = [];
@@ -38,10 +38,10 @@ export function segments(command) {
     word = "";
     inWord = false;
   };
-  const endSegment = () => {
+  const endSegment = (operator = null) => {
     endWord();
     if (redirectionTarget) throw new Unparseable("redirection without target");
-    if (words.length > 0) result.push(words);
+    if (words.length > 0) result.push({ words, operator });
     words = [];
   };
   for (let index = 0; index < command.length; index += 1) {
@@ -89,8 +89,8 @@ export function segments(command) {
       if (newline === -1) break;
       index = newline - 1;
     } else if (char === "&" || char === "|" || char === ";" || char === "\n") {
-      if ((char === "&" || char === "|") && next === char) index += 1;
-      endSegment();
+      const operator = (char === "&" || char === "|") && next === char ? char + command[++index] : char;
+      endSegment(operator);
     } else if (char === " " || char === "\t") {
       endWord();
     } else if (char === ">" || char === "<") {
@@ -214,10 +214,10 @@ function analyseWords(words, dir, depth) {
   if (rest.length === 0) return { blocked: null, dir };
   const [head, ...args] = rest;
   if (head === "cd") {
-    const target = args.find((arg) => !arg.startsWith("-"));
-    if (target === undefined) return { blocked: null, dir: os.homedir() };
+    const target = args.find((arg) => !["-L", "-P", "--"].includes(arg));
     if (target === "-" || dir === null) return { blocked: null, dir: null };
-    return { blocked: null, dir: path.resolve(dir, target.replace(/^~(?=$|\/)/, os.homedir())) };
+    const destination = target === undefined ? os.homedir() : path.resolve(dir, target.replace(/^~(?=$|\/)/, os.homedir()));
+    return { blocked: null, dir: destination };
   }
   if (["bash", "sh", "zsh", "eval", "xargs", "sudo"].includes(head)) return { blocked: null, dir };
   if (head === "npx") {
@@ -267,11 +267,27 @@ function analyseCommand(command, cwd, depth = 0) {
     if (error instanceof Unparseable) return null;
     throw error;
   }
-  let dir = cwd;
-  for (const words of parsed) {
-    const result = analyseWords(words, dir, depth);
-    if (result.blocked) return { blocked: result.blocked, at: result.at };
-    dir = result.dir;
+  let states = [{ dir: cwd, status: null }];
+  let listStart = states;
+  let previous = null;
+  for (const { words, operator } of parsed) {
+    const nextStates = [];
+    for (const state of states) {
+      if ((previous === "&&" && state.status === false) || (previous === "||" && state.status === true)) {
+        nextStates.push(state);
+        continue;
+      }
+      const result = analyseWords(words, state.dir, depth);
+      if (result.blocked) return { blocked: result.blocked, at: result.at };
+      // Earlier commands can change the filesystem, so every command may succeed or fail.
+      // Pipeline commands run in subshells; their cd never changes the parent directory.
+      nextStates.push({ dir: previous === "|" || operator === "|" ? state.dir : result.dir, status: true });
+      nextStates.push({ dir: state.dir, status: false });
+    }
+    states = [...new Map(nextStates.map((state) => [JSON.stringify(state), state])).values()];
+    if (operator === "&") states = listStart;
+    if ([";", "\n", "&"].includes(operator)) listStart = states;
+    previous = operator;
   }
   return null;
 }

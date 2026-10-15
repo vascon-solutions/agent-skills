@@ -4,7 +4,7 @@
 
 `block-whole-tree-fixers.mjs` is a Claude Code `PreToolUse` hook for the `Bash` tool. It refuses formatter and linter fix runs that would rewrite the whole tree. Such a run can change files a task does not own.
 
-It splits the command on `&&`, `||`, `;`, `|`, `&` and newlines. It strips environment assignments and `env`, `exec`, `nohup`, `time` and `command` prefixes, and unwraps the runners `pnpm exec`, `pnpm dlx`, `pnpm run`, `pnpm <script>` and `npx`. It follows `cd <dir>` and `pnpm -C <dir>` against the hook input's `cwd`.
+It splits the command on `&&`, `||`, `;`, `|`, `&` and newlines, retaining the operators. It strips environment assignments and `env`, `exec`, `nohup`, `time` and `command` prefixes, and unwraps the runners `pnpm exec`, `pnpm dlx`, `pnpm run`, `pnpm <script>` and `npx`. It follows `cd <dir>` and `pnpm -C <dir>` against the hook input's `cwd`. Conditional commands are checked in each possible directory after earlier commands succeed, fail or are skipped. Pipeline and background directory changes stay within their subshells.
 
 **Denied:**
 
