@@ -7,7 +7,14 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-const RUNNER_FLAGS_WITH_VALUE = new Set(["-C", "--dir", "--filter", "-F", "--workspace-root", "--reporter", "--loglevel"]);
+const RUNNER_FLAGS_WITH_VALUE = new Set(["-C", "--dir", "--filter", "-F", "--reporter", "--loglevel", "--workspace-concurrency", "--resume-from"]);
+const WRAPPER_FLAGS_WITH_VALUE = {
+  env: new Set(["-u", "--unset", "-C", "--chdir", "-a", "--argv0", "-P", "--env0-from", "--quoting-style", "-S", "--split-string"]),
+  exec: new Set(["-a"]),
+  time: new Set(["-f", "--format", "-o", "--output"]),
+  nohup: new Set(),
+  command: new Set(),
+};
 const PNPM_BUILTINS = new Set([
   "add", "audit", "bin", "config", "create", "dedupe", "deploy", "env", "fetch", "i", "import", "init", "install", "install-test", "it",
   "licenses", "link", "list", "ln", "ls", "outdated", "pack", "patch", "patch-commit", "prune", "publish", "rb", "rebuild", "remove", "rm",
@@ -201,14 +208,68 @@ function quote(arg) {
   return /^[A-Za-z0-9_./:=@%+-]+$/.test(arg) ? arg : `'${arg.replaceAll("'", "'\\''")}'`;
 }
 
+function readOption(args, index, valued, shortClusters = false) {
+  const arg = args[index];
+  const equal = arg.indexOf("=");
+  if (equal !== -1) return { flags: [arg.slice(0, equal)], value: arg.slice(equal + 1), next: index + 1 };
+  if (shortClusters && !arg.startsWith("--")) {
+    const flags = [];
+    for (let offset = 1; offset < arg.length; offset += 1) {
+      const flag = `-${arg[offset]}`;
+      flags.push(flag);
+      if (valued.has(flag)) {
+        const attached = arg.slice(offset + 1);
+        return { flags, value: attached || args[index + 1], next: index + (attached ? 1 : 2) };
+      }
+    }
+    return { flags, next: index + 1 };
+  }
+  return { flags: [arg], value: valued.has(arg) ? args[index + 1] : undefined, next: index + (valued.has(arg) ? 2 : 1) };
+}
+
+function workspaceDirectory(dir) {
+  if (dir === null) return null;
+  let current = path.resolve(dir);
+  while (!fs.existsSync(path.join(current, "pnpm-workspace.yaml"))) {
+    const parent = path.dirname(current);
+    if (parent === current) return dir;
+    current = parent;
+  }
+  return current;
+}
+
 // Analyses one segment's words; returns {blocked, dir, at}: dir is the effective directory afterwards,
 // at is the directory a blocked command runs in.
 function analyseWords(words, dir, depth) {
   let index = 0;
   while (index < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[index])) index += 1;
-  while (["env", "exec", "nohup", "time", "command"].includes(words[index])) {
+  const wrapper = words[index] ? toolName(words[index]) : null;
+  if (Object.hasOwn(WRAPPER_FLAGS_WITH_VALUE, wrapper)) {
     index += 1;
-    while (index < words.length && (/^[A-Za-z_][A-Za-z0-9_]*=/.test(words[index]) || words[index].startsWith("-"))) index += 1;
+    let runDir = dir;
+    let directoryValue;
+    let optionsEnded = false;
+    while (index < words.length) {
+      if (wrapper === "env" && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[index])) {
+        index += 1;
+      } else if (!optionsEnded && words[index] === "--") {
+        optionsEnded = true;
+        index += 1;
+      } else if (!optionsEnded && words[index].startsWith("-")) {
+        const option = readOption(words, index, WRAPPER_FLAGS_WITH_VALUE[wrapper], true);
+        if (wrapper === "env" && option.flags.some((flag) => ["-S", "--split-string"].includes(flag))) return { blocked: null, dir };
+        if (wrapper === "env" && option.flags.some((flag) => ["-C", "--chdir"].includes(flag))) {
+          if (option.value === undefined) return { blocked: null, dir };
+          directoryValue = option.value;
+        }
+        index = option.next;
+      } else {
+        break;
+      }
+    }
+    if (directoryValue !== undefined) runDir = dir === null ? null : path.resolve(dir, directoryValue);
+    const inner = analyseWords(words.slice(index), runDir, depth);
+    return { blocked: inner.blocked, dir, at: inner.at };
   }
   const rest = words.slice(index);
   if (rest.length === 0) return { blocked: null, dir };
@@ -228,16 +289,29 @@ function analyseWords(words, dir, depth) {
   }
   if (head === "pnpm") {
     let runDir = dir;
+    let directoryValue;
+    let workspaceRoot = false;
     let filtered = false;
     let position = 0;
-    while (position < args.length && args[position].startsWith("-")) {
-      const flag = args[position];
-      if (flag === "-C" || flag === "--dir") runDir = runDir === null ? null : path.resolve(runDir, args[position + 1] ?? ".");
-      if (flag === "--filter" || flag === "-F" || flag === "-r" || flag === "--recursive") filtered = true;
-      position += RUNNER_FLAGS_WITH_VALUE.has(flag) ? 2 : 1;
-    }
-    const sub = args[position];
-    let tail = args.slice(position + 1);
+    const skipOptions = () => {
+      while (position < args.length && args[position].startsWith("-")) {
+        if (args[position] === "--") {
+          position += 1;
+          break;
+        }
+        const option = readOption(args, position, RUNNER_FLAGS_WITH_VALUE);
+        if (option.flags.some((flag) => ["-C", "--dir"].includes(flag))) directoryValue = option.value ?? ".";
+        if (option.flags.some((flag) => ["-w", "--workspace-root"].includes(flag))) workspaceRoot = true;
+        if (option.flags.some((flag) => ["--filter", "-F", "-r", "--recursive"].includes(flag))) filtered = true;
+        position = option.next;
+      }
+    };
+    skipOptions();
+    const sub = args[position++];
+    if (sub === "run" || sub === "run-script") skipOptions();
+    if (directoryValue !== undefined) runDir = dir === null ? null : path.resolve(dir, directoryValue);
+    if (workspaceRoot) runDir = workspaceDirectory(runDir);
+    let tail = args.slice(position);
     if (sub === undefined) return { blocked: null, dir };
     if (["exec", "run", "run-script"].includes(sub) && tail[0] === "--") tail = tail.slice(1);
     if (sub === "exec" || sub === "dlx") {

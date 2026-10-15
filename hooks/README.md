@@ -8,6 +8,8 @@ It splits the command on `&&`, `||`, `;`, `|`, `&` and newlines, retaining the o
 
 The optional `--` separator is accepted before an `exec` executable or a `run` script name. Lifecycle shortcuts `pnpm test` (including `t` and `tst`) and `pnpm start` resolve their package scripts too.
 
+Wrapper options consume their own values, including `env -u NAME`, `exec -a NAME`, and `time -o FILE`. Directory options such as `env -C DIR` and `pnpm --dir=DIR` set the wrapped command's directory. Pnpm accepts separated and equals-form option values before the command or a `run` script name.
+
 **Denied:**
 
 - `ultracite fix` with no path arguments, `.`, or only directories;
@@ -16,7 +18,7 @@ The optional `--` separator is accepted before an `exec` executable or a `run` s
 - `prettier --write` (`-w`) with no paths, or only directories or globs;
 - a `pnpm` script, resolved from the nearest `package.json` above the effective directory, whose body is one of the above after appending the forwarded arguments (followed through up to three nested `pnpm` scripts).
 
-**Allowed:** path-scoped invocations, and anything the hook cannot read. Commands needing shell evaluation (`bash -c`, `sh -c`, `eval`, `$(…)`, backticks, subshells, groups, here-documents), `pnpm --filter`/`-r` script runs, unreadable input, and other tools all pass through. These are stated limits, not guarantees: the hook catches the common mistake, not a determined bypass.
+**Allowed:** path-scoped invocations, and anything the hook cannot read. Commands needing evaluation (`bash -c`, `sh -c`, `env -S`, `eval`, `$(…)`, backticks, subshells, groups, here-documents), `pnpm --filter`/`-r` script runs, unreadable input, and other tools all pass through. These are stated limits, not guarantees: the hook catches the common mistake, not a determined bypass.
 
 **Reason.** When the nearest `package.json` defines `agent:fix`, the deny reason says to use `pnpm agent:fix` (see [agent-scripts](../templates/agent-scripts/README.md)). Otherwise it says to pass the explicit changed paths.
 

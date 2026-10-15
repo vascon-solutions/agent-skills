@@ -16,9 +16,11 @@ function fixture() {
     fs.mkdirSync(path.dirname(path.join(dir, relative)), { recursive: true });
     fs.writeFileSync(path.join(dir, relative), text);
   };
-  write("with-agent/package.json", JSON.stringify({ scripts: { "agent:fix": "node tools/agent-scripts.mjs fix", fix: "ultracite fix", format: "biome format --write .", "lint:fix": "eslint --fix src", "fix:file": "ultracite fix src/a.ts", chain: "pnpm fix", check: "biome check .", test: "eslint --fix", start: "prettier --write", t: "biome check .", tst: "biome check ." } }));
+  write("with-agent/package.json", JSON.stringify({ scripts: { "agent:fix": "node tools/agent-scripts.mjs fix", fix: "ultracite fix", format: "biome format --write .", "lint:fix": "eslint --fix src", "fix:file": "ultracite fix src/a.ts", chain: "pnpm fix", check: "biome check .", test: "eslint --fix", start: "prettier --write", t: "biome check .", tst: "biome check .", "workspace:fix": "eslint --fix ." } }));
+  write("with-agent/pnpm-workspace.yaml", "packages:\n  - apps/*\n");
   write("with-agent/src/a.ts", "export const a = 1;\n");
   write("with-agent/apps/web/src/b.ts", "export const b = 1;\n");
+  write("with-agent/apps/web/package.json", JSON.stringify({ scripts: { "agent:fix": "node tools/agent-scripts.mjs fix", fix: "ultracite fix", "nested:fix": "eslint --fix .", "workspace:fix": "eslint src" } }));
   write("plain/package.json", JSON.stringify({ scripts: { fix: "ultracite fix", "lint:fix": "eslint \"{src,apps}/**/*.ts\" --fix", test: "eslint src", start: "prettier --check ." } }));
   write("plain/src/a.ts", "export const a = 1;\n");
   return dir;
@@ -41,6 +43,20 @@ test("the hook denies whole-tree fixer invocations and allows path-scoped or unp
       ["npx -y ultracite@latest fix --unsafe", agent],
       ["FOO=1 BAR=2 pnpm exec ultracite fix", agent],
       ["env CI=1 ultracite fix", agent],
+      ["env -u FOO eslint --fix .", agent],
+      ["env --unset FOO eslint --fix .", agent],
+      ["env --unset=FOO eslint --fix .", agent],
+      ["env -iu FOO eslint --fix .", agent],
+      ["env -uFOO eslint --fix .", agent],
+      ["/usr/bin/env -u FOO eslint --fix .", agent],
+      ["env -C with-agent eslint --fix src", dir],
+      ["env --chdir=with-agent eslint --fix src", dir],
+      ["env -C with-agent --chdir with-agent eslint --fix src", dir],
+      ["exec -a worker eslint --fix .", agent],
+      ["exec -ca worker eslint --fix .", agent],
+      ["time -o lint.log eslint --fix .", agent],
+      ["time --format '%E' eslint --fix .", agent],
+      ["env -u FOO exec -a worker eslint --fix .", agent],
       ["ultracite fix .", agent],
       ['ultracite fix > "lint log"', agent],
       ["ultracite fix 2>> 'lint log'", agent],
@@ -83,6 +99,17 @@ test("the hook denies whole-tree fixer invocations and allows path-scoped or unp
       ["git status && pnpm exec ultracite fix 2>&1 | tail -20", agent],
       ["echo start; biome check --write .", agent],
       ["pnpm -C with-agent fix", dir],
+      ["pnpm --dir=apps/web nested:fix", agent],
+      ["pnpm run --dir=apps/web nested:fix", agent],
+      ["pnpm run -C apps/web nested:fix", agent],
+      ["pnpm --dir=apps run --dir=apps/web nested:fix", agent],
+      ["pnpm -C=apps/web nested:fix", agent],
+      ["pnpm --reporter=silent --dir=apps/web nested:fix", agent],
+      ["pnpm --workspace-root exec eslint --fix .", agent],
+      ["pnpm --workspace-root workspace:fix", path.join(agent, "apps/web")],
+      ["pnpm -w workspace:fix", path.join(agent, "apps/web")],
+      ["pnpm --workspace-root --dir=apps/web workspace:fix", agent],
+      ["pnpm --dir=apps/web --workspace-root workspace:fix", agent],
       ["pnpm fix", plain],
       ["pnpm lint:fix", plain],
     ];
@@ -105,6 +132,17 @@ test("the hook denies whole-tree fixer invocations and allows path-scoped or unp
       ["biome check .", agent],
       ["pnpm check", agent],
       ["eslint --fix src/a.ts", agent],
+      ["env -u FOO eslint --fix src/a.ts", agent],
+      ["env --unset=FOO eslint --fix src/a.ts", agent],
+      ["env -u eslint node --fix .", agent],
+      ["exec -a eslint node --fix .", agent],
+      ["time -o eslint node --fix .", agent],
+      ["env -C with-agent echo done; eslint --fix src", dir],
+      ["env -S 'eslint --fix .'", agent],
+      ["pnpm --dir=apps/web fix src/b.ts", agent],
+      ["pnpm -C=apps/web fix src/b.ts", agent],
+      ["pnpm --filter=web fix", agent],
+      ["pnpm workspace:fix", path.join(agent, "apps/web")],
       ["cd missing || eslint --fix src/a.ts", agent],
       ["cd missing && eslint --fix src", agent],
       ["cd apps/web && eslint --fix src/b.ts", agent],
