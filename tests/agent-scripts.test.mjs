@@ -167,20 +167,24 @@ test("changed-path discovery covers committed, staged, unstaged, untracked and o
 });
 
 test("each step gets only its own extensions and cwd, appendPaths false runs once, and chunks finish before the next step", () => {
+  const webStep = recordStep("web", { extensions: [".ts"], cwd: "apps/web" });
+  const webPaths = Array.from({ length: 6 }, (_, index) => `file-${index}-${"x".repeat(20)}.ts`);
+  const commandBytes = webStep.command.reduce((total, arg) => total + Buffer.byteLength(arg) + 1, 0);
+  const maxArgBytes = commandBytes + 2 * (Buffer.byteLength(webPaths[0]) + 1);
   const dir = makeRepo({
     schema: 1,
     lint: [
-      recordStep("web", { extensions: [".ts"], cwd: "apps/web" }),
+      webStep,
       recordStep("docs", { extensions: [".md"] }),
       recordStep("affected", { appendPaths: false }),
     ],
   }, { "apps/web/keep.ts": "a\n" });
   const record = withRecord(dir);
   try {
-    for (let index = 0; index < 6; index += 1) write(dir, `apps/web/file-${index}-${"x".repeat(20)}.ts`, "a\n");
+    for (const file of webPaths) write(dir, `apps/web/${file}`, "a\n");
     write(dir, "lib/outside.ts", "a\n");
     write(dir, "README.md", "a\n");
-    const result = cli(dir, ["lint", "--base", "main"], { RECORD_FILE: record, AGENT_SCRIPTS_MAX_ARG_BYTES: "250" });
+    const result = cli(dir, ["lint", "--base", "main"], { RECORD_FILE: record, AGENT_SCRIPTS_MAX_ARG_BYTES: String(maxArgBytes) });
     assert.equal(result.status, 0, result.stderr);
     const entries = recorded(record);
     const tags = entries.map((entry) => entry.tag);
@@ -188,7 +192,7 @@ test("each step gets only its own extensions and cwd, appendPaths false runs onc
     assert.ok(webChunks.length > 1, "the small argument limit should split the web step");
     assert.deepEqual(tags, [...webChunks.map(() => "web"), "docs", "affected"]);
     for (const entry of webChunks) assert.equal(fs.realpathSync(entry.cwd), fs.realpathSync(path.join(dir, "apps", "web")));
-    assert.deepEqual(webChunks.flatMap((entry) => entry.args).sort(), Array.from({ length: 6 }, (_, index) => `file-${index}-${"x".repeat(20)}.ts`));
+    assert.deepEqual(webChunks.flatMap((entry) => entry.args).sort(), webPaths);
     assert.deepEqual(entries.find((entry) => entry.tag === "docs").args, ["README.md"]);
     assert.deepEqual(entries.find((entry) => entry.tag === "affected").args, []);
   } finally {
@@ -226,6 +230,35 @@ test("lint runs every step and keeps the first failure, fix stops at the first f
     assert.match(result.stderr, /lint steps must not modify files; changed: a\.ts/);
   } finally {
     fs.rmSync(mutating, { recursive: true, force: true });
+  }
+
+  const outside = makeRepo({ schema: 1, extensions: [".ts"], lint: [{
+    command: ["node", "-e", `
+      const fs = require("node:fs");
+      fs.writeFileSync("unchanged.txt", "rewritten\\n");
+      fs.writeFileSync("unrelated.txt", "rewritten\\n");
+      fs.writeFileSync("existing.txt", "rewritten\\n");
+      fs.writeFileSync("new\\nfile.txt", "created\\n");
+      fs.unlinkSync("deleted.txt");
+      fs.unlinkSync("link.txt");
+      fs.symlinkSync("other.txt", "link.txt");
+    `],
+    appendPaths: false,
+  }] }, { "unchanged.txt": "original\n", "unrelated.txt": "original\n", "deleted.txt": "original\n", "other.txt": "original\n" });
+  try {
+    write(outside, "a.ts", "a\n");
+    write(outside, "unrelated.txt", "unrelated edit\n");
+    write(outside, "existing.txt", "untracked\n");
+    fs.symlinkSync("unchanged.txt", path.join(outside, "link.txt"));
+    const paths = path.join(outside, ".git", "delivery-paths");
+    fs.writeFileSync(paths, "a.ts\n");
+    const result = cli(outside, ["lint", "--paths-from", paths, "--exclude", "unrelated.txt"]);
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stderr, /lint steps must not modify files; changed:/);
+    for (const file of ["unchanged.txt", "unrelated.txt", "existing.txt", "deleted.txt", "link.txt"]) assert.ok(result.stderr.includes(file), file);
+    assert.ok(result.stderr.includes('"new\\nfile.txt"'), "new paths are reported with escaped newlines");
+  } finally {
+    fs.rmSync(outside, { recursive: true, force: true });
   }
 });
 

@@ -80,7 +80,7 @@ Before any step runs, the final path list is printed to stderr.
 **Steps.** Each step receives the changed paths matching its extensions. A step with `cwd` runs in that directory and receives only the matching paths under it, relative to it. Paths that start with `-` are passed as `./-name` so a tool cannot read them as options. Long lists are split into chunks under the argument limit, and a step finishes all its chunks before the next step starts. `appendPaths: false` runs the step once with no paths, for affected-project runners; it still runs only when some changed path matches its filter.
 
 - `fix` stops at the first failing step and returns its exit status.
-- `lint` runs every step and returns the first failure's status. Lint steps must not change files: the script hashes the changed paths before and after and fails if any changed.
+- `lint` runs every step and returns the first failure's status. Lint steps must not change files. Before and after linting, the script snapshots every tracked file and non-ignored untracked file, including paths excluded from the delivery inputs. It fails on additions, deletions, content or permission changes, and symlink target changes. Ignored untracked caches and build outputs are outside this check.
 - With no matching paths at all it prints `agent-scripts: no changed files` and exits 0.
 
 ## gate

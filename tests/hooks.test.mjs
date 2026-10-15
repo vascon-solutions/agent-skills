@@ -40,6 +40,11 @@ test("the hook denies whole-tree fixer invocations and allows path-scoped or unp
       ["FOO=1 BAR=2 pnpm exec ultracite fix", agent],
       ["env CI=1 ultracite fix", agent],
       ["ultracite fix .", agent],
+      ['ultracite fix > "lint log"', agent],
+      ["ultracite fix 2>> 'lint log'", agent],
+      ['ultracite fix > lint\\ log', agent],
+      ['ultracite fix > "lint"\\ log 2>&1', agent],
+      ['echo start > "start log"; ultracite fix', agent],
       ["biome check --write", agent],
       ["biome format --write .", agent],
       ["biome lint --fix src apps", agent],
@@ -72,6 +77,10 @@ test("the hook denies whole-tree fixer invocations and allows path-scoped or unp
     }
     const allowed = [
       ["ultracite fix src/a.ts", agent],
+      ['ultracite fix > "lint log" src/a.ts', agent],
+      ["ultracite fix src/a.ts 2>> 'lint log'", agent],
+      ['echo start > "start log"; ultracite fix src/a.ts', agent],
+      ['ultracite fix > "unterminated', agent],
       ["pnpm exec ultracite fix src/a.ts apps/web/src/b.ts", agent],
       ["biome check --write src/a.ts", agent],
       ["biome check --write --changed", agent],

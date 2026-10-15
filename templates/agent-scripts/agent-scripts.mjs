@@ -1,4 +1,4 @@
-// agent-scripts v1 sha256:2d288ed0df4923dd2dc2a913d8fa6632b0a9b7e9cde0dc2053cbe41e39d9ffbb
+// agent-scripts v1 sha256:bdb42f44758873d3444d08567b1cd8a27ba7e5c0c2ab004c59a5a780bd070413
 // Canonical copy: vascon-solutions/agent-skills templates/agent-scripts/agent-scripts.mjs.
 // Vendor this file unmodified; see the README next to the canonical copy.
 import { spawn, spawnSync } from "node:child_process";
@@ -390,13 +390,19 @@ function stepPaths(step, files, defaults) {
   return selected;
 }
 
-function fileDigests(root, files) {
+function repositoryDigests(root) {
+  const listed = git(root, ["ls-files", "-z", "--cached", "--others", "--exclude-standard"]);
+  if (listed === null) fail("cannot list files for the lint read-only check");
   const digests = new Map();
-  for (const file of files) {
+  for (const file of new Set(splitNul(listed))) {
+    const absolute = path.join(root, file);
     try {
-      digests.set(file, digest(fs.readFileSync(path.join(root, file))));
-    } catch {
-      digests.set(file, null);
+      const stat = fs.lstatSync(absolute);
+      if (stat.isSymbolicLink()) digests.set(file, `link:${fs.readlinkSync(absolute)}`);
+      else if (stat.isFile()) digests.set(file, `${stat.mode}:${digest(fs.readFileSync(absolute))}`);
+    } catch (error) {
+      if (error.code === "ENOENT") digests.set(file, null);
+      else fail(`cannot snapshot ${displayPath(file)} for the lint read-only check: ${error.message}`);
     }
   }
   return digests;
@@ -413,7 +419,7 @@ function runSteps(kind, root, options, config) {
   log(`${files.length} changed path${files.length === 1 ? "" : "s"}:`);
   for (const file of files) process.stderr.write(`  ${displayPath(file)}\n`);
   const limit = Number(process.env.AGENT_SCRIPTS_MAX_ARG_BYTES) || DEFAULT_MAX_ARG_BYTES;
-  const before = kind === "lint" ? fileDigests(root, files) : null;
+  const before = kind === "lint" ? repositoryDigests(root) : null;
   let failure = 0;
   for (const [index, step] of steps.entries()) {
     const cwd = step.cwd ? path.join(root, step.cwd) : root;
@@ -435,8 +441,9 @@ function runSteps(kind, root, options, config) {
     }
   }
   if (before) {
-    const after = fileDigests(root, files);
-    const mutated = files.filter((file) => before.get(file) !== after.get(file));
+    const after = repositoryDigests(root);
+    const mutated = [...new Set([...before.keys(), ...after.keys()])]
+      .filter((file) => before.get(file) !== after.get(file)).sort();
     if (mutated.length > 0) {
       log(`lint steps must not modify files; changed: ${mutated.map(displayPath).join(", ")}`);
       failure ||= 1;

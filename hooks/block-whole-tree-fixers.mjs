@@ -29,13 +29,18 @@ export function segments(command) {
   let words = [];
   let word = "";
   let inWord = false;
+  let redirectionTarget = false;
   const endWord = () => {
-    if (inWord) words.push(word);
+    if (inWord) {
+      if (redirectionTarget) redirectionTarget = false;
+      else words.push(word);
+    }
     word = "";
     inWord = false;
   };
   const endSegment = () => {
     endWord();
+    if (redirectionTarget) throw new Unparseable("redirection without target");
     if (words.length > 0) result.push(words);
     words = [];
   };
@@ -89,16 +94,15 @@ export function segments(command) {
     } else if (char === " " || char === "\t") {
       endWord();
     } else if (char === ">" || char === "<") {
-      if (inWord && /^\d+$/.test(word)) {
+      if (!redirectionTarget && inWord && /^\d+$/.test(word)) {
         word = "";
         inWord = false;
       }
       endWord();
+      if (redirectionTarget) throw new Unparseable("redirection without target");
       if (next === ">" || next === "&") index += 1;
-      while (command[index + 1] === " ") index += 1;
-      let target = "";
-      while (index + 1 < command.length && !/[\s;&|]/.test(command[index + 1])) target += command[++index];
-      if (!target) throw new Unparseable("redirection without target");
+      // Consume the target through the same quote and escape handling as other words.
+      redirectionTarget = true;
     } else {
       word += char;
       inWord = true;
