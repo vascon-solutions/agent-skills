@@ -16,10 +16,10 @@ function fixture() {
     fs.mkdirSync(path.dirname(path.join(dir, relative)), { recursive: true });
     fs.writeFileSync(path.join(dir, relative), text);
   };
-  write("with-agent/package.json", JSON.stringify({ scripts: { "agent:fix": "node tools/agent-scripts.mjs fix", fix: "ultracite fix", format: "biome format --write .", "lint:fix": "eslint --fix src", "fix:file": "ultracite fix src/a.ts", chain: "pnpm fix", check: "biome check ." } }));
+  write("with-agent/package.json", JSON.stringify({ scripts: { "agent:fix": "node tools/agent-scripts.mjs fix", fix: "ultracite fix", format: "biome format --write .", "lint:fix": "eslint --fix src", "fix:file": "ultracite fix src/a.ts", chain: "pnpm fix", check: "biome check .", test: "eslint --fix", start: "prettier --write", t: "biome check .", tst: "biome check ." } }));
   write("with-agent/src/a.ts", "export const a = 1;\n");
   write("with-agent/apps/web/src/b.ts", "export const b = 1;\n");
-  write("plain/package.json", JSON.stringify({ scripts: { fix: "ultracite fix", "lint:fix": "eslint \"{src,apps}/**/*.ts\" --fix" } }));
+  write("plain/package.json", JSON.stringify({ scripts: { fix: "ultracite fix", "lint:fix": "eslint \"{src,apps}/**/*.ts\" --fix", test: "eslint src", start: "prettier --check ." } }));
   write("plain/src/a.ts", "export const a = 1;\n");
   return dir;
 }
@@ -34,6 +34,8 @@ test("the hook denies whole-tree fixer invocations and allows path-scoped or unp
     const denied = [
       ["ultracite fix", agent],
       ["pnpm exec ultracite fix", agent],
+      ["pnpm exec -- eslint --fix .", agent],
+      ["pnpm exec -- prettier --write .", agent],
       ["pnpm dlx ultracite fix", agent],
       ["npx ultracite fix", agent],
       ["npx -y ultracite@latest fix --unsafe", agent],
@@ -62,6 +64,12 @@ test("the hook denies whole-tree fixer invocations and allows path-scoped or unp
       ["pnpm format", agent],
       ["pnpm lint:fix", agent],
       ["pnpm chain", agent],
+      ["pnpm test", agent],
+      ["pnpm run -- test", agent],
+      ["pnpm run-script -- start", agent],
+      ["pnpm t", agent],
+      ["pnpm tst", agent],
+      ["pnpm start", agent],
       ["cd with-agent && pnpm fix", dir],
       ["cd with-agent; ultracite fix src", dir],
       ["cd missing || eslint --fix src", agent],
@@ -90,6 +98,7 @@ test("the hook denies whole-tree fixer invocations and allows path-scoped or unp
       ['echo start > "start log"; ultracite fix src/a.ts', agent],
       ['ultracite fix > "unterminated', agent],
       ["pnpm exec ultracite fix src/a.ts apps/web/src/b.ts", agent],
+      ["pnpm exec -- eslint --fix src/a.ts", agent],
       ["biome check --write src/a.ts", agent],
       ["biome check --write --changed", agent],
       ["biome check --write --staged", agent],
@@ -108,6 +117,16 @@ test("the hook denies whole-tree fixer invocations and allows path-scoped or unp
       ["pnpm fix -- src/a.ts", agent],
       ["pnpm agent:fix", agent],
       ["pnpm install", agent],
+      ["pnpm test src/a.ts", agent],
+      ["pnpm t -- src/a.ts", agent],
+      ["pnpm tst src/a.ts", agent],
+      ["pnpm start src/a.ts", agent],
+      ["pnpm run t", agent],
+      ["pnpm run -- t", agent],
+      ["pnpm run tst", agent],
+      ["pnpm test", plain],
+      ["pnpm t", plain],
+      ["pnpm start", plain],
       ["pnpm --filter web fix", agent],
       ["bash -c 'ultracite fix'", agent],
       ["sh -c \"pnpm fix\"", agent],

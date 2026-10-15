@@ -11,7 +11,7 @@ const RUNNER_FLAGS_WITH_VALUE = new Set(["-C", "--dir", "--filter", "-F", "--wor
 const PNPM_BUILTINS = new Set([
   "add", "audit", "bin", "config", "create", "dedupe", "deploy", "env", "fetch", "i", "import", "init", "install", "install-test", "it",
   "licenses", "link", "list", "ln", "ls", "outdated", "pack", "patch", "patch-commit", "prune", "publish", "rb", "rebuild", "remove", "rm",
-  "root", "server", "setup", "store", "un", "uninstall", "unlink", "up", "update", "upgrade", "why", "help", "start", "test", "t",
+  "root", "server", "setup", "store", "un", "uninstall", "unlink", "up", "update", "upgrade", "why", "help",
 ]);
 const VALUE_OPTIONS = {
   biome: new Set(["--config-path", "--max-diagnostics", "--reporter", "--log-level", "--log-kind", "--diagnostic-level", "--colors", "--stdin-file-path", "--vcs-root", "--vcs-client-kind", "--files-max-size", "--since", "--only", "--skip", "--indent-style", "--indent-width", "--line-width", "--line-ending"]),
@@ -237,13 +237,14 @@ function analyseWords(words, dir, depth) {
       position += RUNNER_FLAGS_WITH_VALUE.has(flag) ? 2 : 1;
     }
     const sub = args[position];
-    const tail = args.slice(position + 1);
+    let tail = args.slice(position + 1);
     if (sub === undefined) return { blocked: null, dir };
+    if (["exec", "run", "run-script"].includes(sub) && tail[0] === "--") tail = tail.slice(1);
     if (sub === "exec" || sub === "dlx") {
       if (tail.length === 0) return { blocked: null, dir };
       return { blocked: wholeTree(toolName(tail[0]), tail.slice(1), runDir), dir, at: runDir };
     }
-    const script = sub === "run" || sub === "run-script" ? tail[0] : sub;
+    const script = sub === "run" || sub === "run-script" ? tail[0] : ["t", "tst"].includes(sub) ? "test" : sub;
     const scriptArgs = sub === "run" || sub === "run-script" ? tail.slice(1) : tail;
     if (script === undefined || (sub !== "run" && sub !== "run-script" && PNPM_BUILTINS.has(sub))) return { blocked: null, dir };
     if (filtered || depth >= 3) return { blocked: null, dir };

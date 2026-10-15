@@ -1,4 +1,4 @@
-// agent-scripts v1 sha256:86e2b550dfbb50b53cd3482b7c9e6f9b39661a2ebc561b16afda3b9e25eb7f26
+// agent-scripts v1 sha256:884b7c30602eecbe57d56359d978acf1f19acd35cdebbd05c8b0e4e69682db29
 // Canonical copy: vascon-solutions/agent-skills templates/agent-scripts/agent-scripts.mjs.
 // Vendor this file unmodified; see the README next to the canonical copy.
 import { spawn, spawnSync } from "node:child_process";
@@ -233,7 +233,7 @@ function splitNul(text) {
 }
 
 function normalizeRelative(file) {
-  const normalized = path.posix.normalize(file.replaceAll("\\", "/")).replace(/^\.\//, "");
+  const normalized = path.posix.normalize(file.split(path.sep).join("/")).replace(/^\.\//, "");
   if (normalized === "." || normalized.startsWith("../") || path.posix.isAbsolute(normalized)) fail(`path ${JSON.stringify(file)} is outside the repository`);
   return normalized;
 }
@@ -285,6 +285,8 @@ function readPathsFrom(file) {
 }
 
 function globToRegExp(glob) {
+  const directoryOnly = glob.endsWith("/");
+  glob = glob.replace(/\/+$/, "");
   let source = "";
   for (let index = 0; index < glob.length; index += 1) {
     const char = glob[index];
@@ -306,7 +308,7 @@ function globToRegExp(glob) {
       source += char.replace(/[.+^${}()|[\]\\]/g, "\\$&");
     }
   }
-  return new RegExp(`^${source}(?:/.*)?$`);
+  return new RegExp(`^${source}${directoryOnly ? "/.*" : "(?:/.*)?"}$`);
 }
 
 function changedPaths(root, options, config) {
@@ -384,7 +386,8 @@ function chunk(argv, files, limit) {
 
 function stepPaths(step, files, defaults) {
   const extensions = step.extensions ?? defaults ?? null;
-  const prefix = step.cwd ? `${normalizeRelative(step.cwd)}/` : "";
+  const directory = path.normalize(step.cwd ?? ".");
+  const prefix = directory === "." || directory === `.${path.sep}` ? "" : `${normalizeRelative(directory).replace(/\/+$/, "")}/`;
   const selected = [];
   for (const file of files) {
     if (extensions && !extensions.some((extension) => file.endsWith(extension))) continue;

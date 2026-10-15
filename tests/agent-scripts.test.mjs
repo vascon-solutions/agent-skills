@@ -167,7 +167,7 @@ test("changed-path discovery covers committed, staged, unstaged, untracked and o
 });
 
 test("each step gets only its own extensions and cwd, appendPaths false runs once, and chunks finish before the next step", () => {
-  const webStep = recordStep("web", { extensions: [".ts"], cwd: "apps/web" });
+  const webStep = recordStep("web", { extensions: [".ts"], cwd: "apps/web/" });
   const webPaths = Array.from({ length: 6 }, (_, index) => `file-${index}-${"x".repeat(20)}.ts`);
   const commandBytes = webStep.command.reduce((total, arg) => total + Buffer.byteLength(arg) + 1, 0);
   const maxArgBytes = commandBytes + 2 * (Buffer.byteLength(webPaths[0]) + 1);
@@ -175,8 +175,8 @@ test("each step gets only its own extensions and cwd, appendPaths false runs onc
     schema: 1,
     lint: [
       webStep,
-      recordStep("docs", { extensions: [".md"] }),
-      recordStep("affected", { appendPaths: false }),
+      recordStep("docs", { extensions: [".md"], cwd: "." }),
+      recordStep("affected", { appendPaths: false, cwd: "./" }),
     ],
   }, { "apps/web/keep.ts": "a\n" });
   const record = withRecord(dir);
@@ -195,6 +195,26 @@ test("each step gets only its own extensions and cwd, appendPaths false runs onc
     assert.deepEqual(webChunks.flatMap((entry) => entry.args).sort(), webPaths);
     assert.deepEqual(entries.find((entry) => entry.tag === "docs").args, ["README.md"]);
     assert.deepEqual(entries.find((entry) => entry.tag === "affected").args, []);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(record, { force: true });
+  }
+});
+
+test("directory ignore globs exclude generated descendants without excluding similarly named files", () => {
+  const dir = makeRepo({ schema: 1, ignore: ["dist/", "**/generated/", "**/cache/"], fix: [{ command: ["node", tool("upper.mjs")] }], lint: [recordStep("kept")] });
+  const record = withRecord(dir);
+  const ignored = ["dist/out.js", "dist/deep/out.js", "generated/a.ts", "apps/web/generated/a.ts", "apps/web/cache/out.js"];
+  const kept = ["src/a.ts", "dist-file.js", "apps/web/generated-file.ts", "cache"];
+  try {
+    for (const file of [...ignored, ...kept]) write(dir, file, "original\n");
+    const fixed = cli(dir, ["fix", "--base", "main"]);
+    assert.equal(fixed.status, 0, fixed.stderr);
+    for (const file of ignored) assert.equal(fs.readFileSync(path.join(dir, file), "utf8"), "original\n", file);
+    for (const file of kept) assert.equal(fs.readFileSync(path.join(dir, file), "utf8"), "ORIGINAL\n", file);
+    const linted = cli(dir, ["lint", "--base", "main"], { RECORD_FILE: record });
+    assert.equal(linted.status, 0, linted.stderr);
+    assert.deepEqual(recorded(record).flatMap(entry => entry.args).sort(), kept.sort());
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
     fs.rmSync(record, { force: true });
@@ -351,6 +371,7 @@ test("hostile file names and config values reach tools as literal argv elements"
   const record = withRecord(dir);
   try {
     const names = ["$(touch pwned-name).ts", "; touch pwned-two;.ts", "`touch pwned-three`.ts", "-rf.ts", "a'b\"c.ts"];
+    if (path.sep === "/") names.push("back\\slash.ts", "back/slash.ts");
     for (const name of names) write(dir, name, "x\n");
     const result = cli(dir, ["lint", "--base", "main"], { RECORD_FILE: record });
     assert.equal(result.status, 0, result.stderr);

@@ -6,6 +6,8 @@
 
 It splits the command on `&&`, `||`, `;`, `|`, `&` and newlines, retaining the operators. It strips environment assignments and `env`, `exec`, `nohup`, `time` and `command` prefixes, and unwraps the runners `pnpm exec`, `pnpm dlx`, `pnpm run`, `pnpm <script>` and `npx`. It follows `cd <dir>` and `pnpm -C <dir>` against the hook input's `cwd`. Conditional commands are checked in each possible directory after earlier commands succeed, fail or are skipped. Pipeline and background directory changes stay within their subshells.
 
+The optional `--` separator is accepted before an `exec` executable or a `run` script name. Lifecycle shortcuts `pnpm test` (including `t` and `tst`) and `pnpm start` resolve their package scripts too.
+
 **Denied:**
 
 - `ultracite fix` with no path arguments, `.`, or only directories;
