@@ -31,6 +31,6 @@ Use one external evidence directory for the brief, reports, source/image receipt
 
 Auditors close their own task sessions or exact audit leases. The lifecycle owner stops only environments it created, including queued or failed starts, and verifies completion through the installed runner's status and cleanup receipts. Borrowed persistent services remain running. Perform cleanup even after audit failure or interruption; report residue separately from behavioral results.
 
-Follow the runner's account exclusivity and documented logout evidence. Uncertain authentication cleanup stays quarantined where the runner requires it. Do not reset sessions, change account aliases, lower resource guards or remove registry records to proceed. Recovery requires a verifiably dead exact owner.
+Follow the runner's account exclusivity and documented logout evidence. Uncertain authentication cleanup stays quarantined where the runner requires it. Do not reset sessions unless the runner's generated brief grants a scoped visible-UI session clear; then follow its revalidation steps exactly. Do not change account aliases, lower resource guards or remove registry records to proceed. Recovery requires a verifiably dead exact owner.
 
 Choosing a documented managed environment can include its authorized data initialization and teardown. It does not authorize resetting shared data, rebuilding fixtures, changing persistent base services, remote installation, source transfer or public exposure. Unsupported needs remain explicit gaps.

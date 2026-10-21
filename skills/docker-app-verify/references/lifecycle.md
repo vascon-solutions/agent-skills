@@ -51,8 +51,8 @@ Keep separate `ui-report.md` and `api-report.md` when both run. The combined `re
 
 ## Close exact owned resources
 
-1. Preserve reports, receipts and compact sanitized observations, including failed or blocked runs. Record the source actually tested and any unsupported checks.
-2. Follow the adapter's normal logout and evidence contract for authenticated sessions. End the exact lease with `audit-end --id <environment> --audit <token>` and any documented cleanup receipt. A closed browser alone does not prove backend logout.
+1. Preserve reports, receipts and compact sanitized observations, including failed or blocked runs. Record the source actually tested and any unsupported checks. When a delegated auditor cannot write files and returns the full report in its result, the lifecycle owner saves it at the brief's report path. Evidence saved under the runner's `workspace/` is deleted on stop; keep it in `audit-*/` or another named subdirectory.
+2. Follow the adapter's normal logout and evidence contract for authenticated sessions. End the exact lease with `audit-end --id <environment> --audit <token>` and any documented cleanup receipt. A closed browser alone does not prove backend logout. Clear an account's sessions only where the runner's generated brief grants it, through the application's visible control inside an exclusive revalidation lease; only the logout receipt then releases the account.
 3. The lifecycle owner calls `stop --id <environment>` only for environments created for this run. An audit-end failure does not skip owned environment cleanup. Borrowed persistent services remain running; an owned temporary view or lease may still need closing.
 4. Wait for completed shutdown and inspect documented status, resource/data cleanup receipts and residue. A stop request alone is insufficient. Remove ephemeral credentials; preserve sanitized evidence.
 5. If transport is lost, inspect ownership/status before using documented recovery. Recover only an exact verifiably dead owner. Preserve quarantine and admission limits; never manually free accounts, registry rows or data slots.
