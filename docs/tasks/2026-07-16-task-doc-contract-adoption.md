@@ -13,23 +13,24 @@ Source mode: PRD.
 
 Generation style: synthesized from the approved source spec, current
 `agent-skills` behavior, the two follow-up comments on PR #5, and the merged
-consuming-repository hook baseline in `floatstar/ncdmb-procurement-ui#139`.
+consuming-repository hook baseline in a client repository (pull request 139).
 
-This is the `agent-skills` repository workstream from the NCDMB fast task
+This is the `agent-skills` repository workstream from a client fast-task
 delivery system design. It must be implemented and published from this
 repository as a separate goal/PR from the UI repository support.
 
 ## Design Reference
 
-- Source Spec:
-  `https://github.com/floatstar/ncdmb-procurement-ui/blob/673991101acd16f3b8ef8dbd546f6f2bb3bea4ef/docs/superpowers/specs/2026-07-16-fast-task-delivery-system-design.md`
+- Source Spec: an earlier fast-task design in a client repository
+  (`docs/superpowers/specs/2026-07-16-fast-task-delivery-system-design.md`
+  at commit `673991101acd16f3b8ef8dbd546f6f2bb3bea4ef`)
 - Current skills: `skills/task-doc/SKILL.md` and
   `skills/task-doc-delivery-loop/SKILL.md`
 - Existing task convention: `docs/tasks/`
 - Source amendments:
   - `https://github.com/vascon-solutions/agent-skills/pull/5#issuecomment-4996230279`
   - `https://github.com/vascon-solutions/agent-skills/pull/5#issuecomment-4996264020`
-  - `https://github.com/floatstar/ncdmb-procurement-ui/pull/139`
+  - Pull request 139 in the client repository
 
 Before this task becomes approved, verify that the immutable Source Spec
 permalink resolves from GitHub. This is a prerequisite, not hidden chat context.
@@ -55,7 +56,7 @@ delegates feedback to repository automation when installed.
 | Ordered implementation currently allows a commit or ledger checkpoint after every task. | `skills/task-doc-delivery-loop/SKILL.md#Ordered-Implementation` |
 | The delivery loop currently defaults to a draft PR and requires explicit user wording before ready-for-review. | `skills/task-doc-delivery-loop/SKILL.md#Purpose`; `skills/task-doc-delivery-loop/SKILL.md#Delivery-Calibration`; `skills/task-doc-delivery-loop/SKILL.md#Publish` |
 | PR review/remediation currently uses active-session inspection and waiting. | `skills/task-doc-delivery-loop/SKILL.md#PR-Review`; `skills/task-doc-delivery-loop/SKILL.md#PR-Remediation` |
-| The consuming repository's pre-push hook runs affected type-check only; it does not run task-contract validation or the delivery planner. | `https://github.com/floatstar/ncdmb-procurement-ui/pull/139`; `.husky/pre-push` on `develop` |
+| The consuming repository's pre-push hook runs affected type-check only; it does not run task-contract validation or the delivery planner. | Pull request 139 in the client repository; `.husky/pre-push` on `develop` |
 | The repo already stores task artifacts under `docs/tasks/` and uses Node test files under `tests/`. | `docs/tasks/2026-07-01-task-doc-delivery-loop-calibration.md`; `tests/*.test.mjs` |
 
 ## Current Behavior To Preserve
@@ -144,7 +145,7 @@ delegates feedback to repository automation when installed.
   hooks, CI, test audit, or GitHub workflows.
 - Editing `publish-branch`, `address-review-findings`, or unrelated skills
   without a separate verified compatibility task.
-- Hardcoding NCDMB project names, bot login, commands, branches, or PR history.
+- Hardcoding client project names, bot login, commands, branches, or PR history.
 - Allowing one goal to implement multiple primary repositories.
 - Requiring event remediation in repositories that do not advertise it.
 - Weakening publish safety or the never-merge rule.
@@ -228,7 +229,7 @@ available. Those are explicit prerequisites; implementation must not guess them.
   discovery order, shared-default use, durable-risk test selection,
   presentation acceptance, and critical/bug-fix test-first behavior.
 - Existing `node --test tests/*.test.mjs` passes.
-- No NCDMB-specific implementation details appear in reusable skill prose.
+- No client-specific implementation details appear in reusable skill prose.
 
 ## Approval Gates
 
