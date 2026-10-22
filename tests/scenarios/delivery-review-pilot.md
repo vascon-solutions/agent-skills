@@ -2,6 +2,8 @@
 
 Use this protocol to compare two frozen implementation-review versions on six portable candidates. These are reviewer experiments, separate from product regression tests and the shipping candidate's independent review.
 
+The corrected bundle and role-contract requirements below apply to future comparisons. The historical pilot used frozen bundles without the canonical role template; its results and that limitation remain documented in the [comparison report](../../artifacts/delivery-review-pilot-results.md). The focused follow-up checks exercise the corrected contract separately and do not replace the historical paired assessments.
+
 ## Freeze the evidence and isolate each assessment
 
 Read the [pilot task](../../docs/tasks/2026-10-18-delivery-review-pilot.md) and the evaluator-only [manifest](../fixtures/review-pilot/manifest.json). The manifest owns provenance, candidate and requirement hashes, expected mechanisms, pair membership, and corrected defenses. Keep it with the evaluator.
