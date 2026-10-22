@@ -46,13 +46,13 @@ status must be complete, blocked, partial, or error. Stop after this
 assessment, within the recorded task-bound timeout.
 ```
 
-Run at most two assessments concurrently. Record requested and runtime-observed model and effort separately, full input hashes, the exact brief and output, elapsed time, and unavailable cost data. Keep fixture bytes stable while reviewers run.
+Run at most two assessments concurrently. Before dispatch, save the exact plaintext task payload and its hash in the run index. Child user-context logs may contain only ambient instructions; they are not the dispatched brief. Record requested and runtime-observed model and effort separately, full input hashes, output, elapsed time, and unavailable cost data. Keep fixture bytes stable while reviewers run.
 
 Allow one replacement per infrastructure failure, malformed result, or contaminated context. Retain the failed attempt and reason. Never rerun a valid result for a better score. After a material correction, repeat only affected pairs for both variants once; retain the initial findings and identify the final comparison cohort.
 
 ## Validate the envelope before accepting evidence
 
-Validate the entire result against the canonical reviewer envelope before scoring it. Require a string `verdict_or_answer`, lowercase `critical`, `important`, or `minor` finding severities, the existing status and blocker enums, arrays for findings and evidence collections, and the cleanup object with state and detail. A valid top-level status alone is insufficient. Preserve malformed raw outputs as errors and accept no findings or scores from them. Do not silently normalize an invalid enum or verdict type into valid evidence.
+Validate the entire result against the canonical reviewer envelope before scoring it. Require a string `verdict_or_answer`, lowercase `critical`, `important`, or `minor` finding severities, the existing status and blocker enums, arrays for findings and evidence collections, and the cleanup object with state and detail. Require a null blocker for a complete result and a permitted non-null blocker otherwise. Check string entries in `unverified`, artifact references, and the experiment's prohibition on heavy commands. A valid top-level status alone is insufficient. Preserve malformed raw outputs as errors and accept no findings or scores from them. Do not silently normalize an invalid enum or verdict type into valid evidence.
 
 A replacement may restate the existing serialization constraints explicitly without revealing findings or changing candidate, guidance, model, effort, or tools. Record that brief clarification and keep the original failure. A replacement that also fails cannot start another retry without explicit authorization.
 
