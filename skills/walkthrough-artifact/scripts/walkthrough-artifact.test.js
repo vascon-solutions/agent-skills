@@ -68,7 +68,10 @@ test('manifest drift is reported in both directions, every failure at once', (t)
 
   const css = workspace(t);
   css.edit(css.page, '<div class="bar"></div>', '<div class="bar" style="background:url(../audit-run/screenshots/1-x-unused-attempt.png)"></div>');
-  assertReported(failuresOf(css), [/1-x-unused-attempt\.png: reference is not under img\//]);
+  css.edit(css.page, '/* /walkthrough:tokens */', '/* /walkthrough:tokens */\n/* .old { background: url(../old/hero.png) } */');
+  const cssFailures = failuresOf(css);
+  assertReported(cssFailures, [/1-x-unused-attempt\.png: reference is not under img\//]);
+  assert.ok(!cssFailures.some((f) => /hero\.png/.test(f)), cssFailures.join('\n'));
 
   const missing = workspace(t);
   fs.rmSync(missing.manifest);
@@ -128,8 +131,13 @@ test('tokens, unlisted origins and remote loads are refused', (t) => {
   published.edit(published.page, '<div class="bar"></div>', '<div class="bar"><svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"></svg></div>');
   published.edit(published.page, 'src="img/1-01-job-list.png"', 'src="./img/1-01-job-list.png"');
   assert.deepEqual(failuresOf(published), []);
-  published.edit(published.manifest, 'Published: https://claude.ai/public/artifacts/abc123.', 'Published: https://claude.ai/x?token=abc.');
-  assertReported(failuresOf(published), [/manifest contains token=/]);
+  published.edit(published.manifest, 'Published: https://claude.ai/public/artifacts/abc123.', 'Published: https://claude.ai/x?token=abc. Fixed per https://tracker.example.com/X-1.');
+  published.edit(published.page, '</body>', '<!-- staging admin: https://admin.example.com/jobs -->\n</body>');
+  assertReported(failuresOf(published), [
+    /manifest contains token=/,
+    /manifest names https:\/\/tracker\.example\.com\/X-1, whose origin is not in Allowed origins/,
+    /page names https:\/\/admin\.example\.com\/jobs, whose origin is not in Allowed origins/,
+  ]);
 });
 
 test('the page status table must match the manifest Status rows', (t) => {

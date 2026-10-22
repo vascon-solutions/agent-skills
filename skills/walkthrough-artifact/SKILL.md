@@ -93,7 +93,7 @@ Fix every scanner hit, then run `check`. It reads the page without its HTML comm
 - a local reference (`src`, `srcset`, `poster` or CSS `url()`) points outside `img/` or its file is missing, an `img/` file is unused, or an image has no manifest line
 - a manifest image line names an unused or missing file, has no `from:`, or names a raw capture missing from a present audit run
 - alt text is empty, or a figure has no caption
-- the page loads anything remote, or the page or manifest names a URL whose origin is not under `Allowed origins`; the published URL under `## Revisions` is exempt
+- the page loads anything remote, or the page or manifest names a URL whose origin is not under `Allowed origins`; only the URL right after `Published:` is exempt
 - the page or manifest contains a JWT, `token=`, `access_token` or a `Bearer` token
 - the page status table and the manifest `## Status` rows differ in items, tones, labels or order
 

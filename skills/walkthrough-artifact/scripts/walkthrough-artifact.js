@@ -76,7 +76,9 @@ function attr(tag, name) {
 /* ---------- page ---------- */
 
 function stripComments(html) {
-  return html.replace(/<!--[\s\S]*?-->/g, '');
+  return html
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/(<style\b[^>]*>)([\s\S]*?)(<\/style>)/gi, (m, open, css, close) => open + css.replace(/\/\*[\s\S]*?\*\//g, '') + close);
 }
 
 function isRemote(value) {
@@ -217,8 +219,8 @@ function readManifest(text, manifestDir) {
       .map((cells) => ({ item: cells[item] || '', tone: (cells[tone] || '').toLowerCase(), label: cells[label] || '' }));
     if (item < 0 || tone < 0 || label < 0) status = { malformed: true };
   }
-  const withoutRevisions = text.replace(/^##\s+Revisions\s*$[\s\S]*?(?=^##\s|(?![\s\S]))/m, '');
-  return { origins, runs, imageLines, status, withoutRevisions };
+  const withoutPublished = text.replace(/\bPublished:\s*https?:\/\/[^\s`<>)\]]+/gi, 'Published:');
+  return { origins, runs, imageLines, status, withoutPublished };
 }
 
 /* ---------- check ---------- */
@@ -313,8 +315,8 @@ function check(pagePath, manifestPath) {
     failures.push('manifest has no "- Allowed origins:" line');
   } else {
     const allowed = new Set(manifest.origins);
-    const pageText = rendered.replace(/\sxmlns(?::[\w-]+)?\s*=\s*(?:"[^"]*"|'[^']*')/gi, '');
-    for (const [label, text] of [['page', pageText], ['manifest', manifest.withoutRevisions]]) {
+    const pageText = html.replace(/\sxmlns(?::[\w-]+)?\s*=\s*(?:"[^"]*"|'[^']*')/gi, '');
+    for (const [label, text] of [['page', pageText], ['manifest', manifest.withoutPublished]]) {
       for (const url of new Set(urlsIn(text))) {
         if (!allowed.has(originOf(url))) failures.push(`${label} names ${url}, whose origin is not in Allowed origins`);
       }
