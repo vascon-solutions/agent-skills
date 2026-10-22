@@ -19,10 +19,10 @@ The current skill pack has strong task discovery and delivery workflows:
 
 The missing workflow is issue-first intake. A user may notice a bug or improvement, want the repository inspected thoroughly, and then create a GitHub issue for another teammate without creating implementation artifacts. They may also want to deliberate on unresolved scope before issue creation or optionally create a task doc after the issue exists.
 
-Two issues from `floatstar/ncdmb-procurement-ui` illustrate the intended quality bar:
+Two issues from a client procurement UI repository illustrate the intended quality bar:
 
-- [#178 — Align vendor signup password fields with reset-password components](https://github.com/floatstar/ncdmb-procurement-ui/issues/178)
-- [#181 — Add browser-history support for DataTable pagination](https://github.com/floatstar/ncdmb-procurement-ui/issues/181)
+- Align vendor signup password fields with reset-password components
+- Add browser-history support for DataTable pagination
 
 Both record the problem, code evidence, requested outcome, acceptance criteria, exclusions, and handoff context. The new skill should make that outcome repeatable without creating phantom task-doc or PR references.
 
@@ -342,6 +342,6 @@ No visual companion is required. This is a linear operational workflow whose exa
 - Suggest only existing metadata and require explicit approval before applying it.
 - Treat the GitHub issue as the primary artifact and offer task-doc creation only after the issue exists.
 - Never reference task docs, branches, or PRs that do not yet exist.
-- Store the skill in the shared `/Users/dee/agent-skills` repository.
+- Store the skill in the shared `~/agent-skills` repository.
 
 No product or architecture decisions remain unresolved for implementation planning.

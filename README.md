@@ -284,7 +284,7 @@ Documentation audits and reviews report findings without editing. Existing clean
 ### Applying stack standards
 
 1. Use the relevant standard skill while creating or reviewing stack-specific work: `tanstack-fe-standard`, `tanstack-start-standard`, `nestjs-api-standard`, `nx-monorepo-standard`, `forms-rhf-zod-standard`, `migration-discipline`, `audit-logging-standard`, or `ultracite-standard`
-2. Pair standards with `review-implementation` or `alphadigital-platform-review` when the work needs an explicit review verdict
+2. Pair standards with `review-implementation` when the work needs an explicit review verdict
 
 ### Publishing code safely
 

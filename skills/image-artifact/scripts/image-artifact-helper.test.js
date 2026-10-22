@@ -61,13 +61,13 @@ test('prompt-plan can suggest svg output for exact-text static image work', () =
 
 test('prompt-plan defaults repo sources to repo-aware agent-artifacts workspace', () => {
   const root = tempDir();
-  const repo = path.join(root, 'ncdmb-procurement-ui');
+  const repo = path.join(root, 'example-ui');
   write(path.join(repo, '.git', 'HEAD'), 'ref: refs/heads/main\n');
   const sourcePath = path.join(repo, 'docs', 'architecture.md');
   write(sourcePath, '# Architecture\n\n- Frontend talks to API routes\n');
 
   const output = run(['prompt-plan', sourcePath, '--kind', 'architecture-diagram'], { env: { HOME: root } });
-  const expectedPath = path.join(root, 'agent-artifacts', 'ncdmb-procurement-ui-architecture', 'images', 'architecture-prompt-plan.md');
+  const expectedPath = path.join(root, 'agent-artifacts', 'example-ui-architecture', 'images', 'architecture-prompt-plan.md');
 
   assert.match(output, new RegExp(`Written: ${expectedPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
   assert.equal(fs.existsSync(expectedPath), true);
@@ -75,7 +75,7 @@ test('prompt-plan defaults repo sources to repo-aware agent-artifacts workspace'
 
 test('prompt-plan honors explicit repo-local workspace path', () => {
   const root = tempDir();
-  const repo = path.join(root, 'ncdmb-procurement-ui');
+  const repo = path.join(root, 'example-ui');
   write(path.join(repo, '.git', 'HEAD'), 'ref: refs/heads/main\n');
   const sourcePath = path.join(repo, 'docs', 'architecture.md');
   const workspacePath = path.join(repo, 'artifacts', 'architecture');
@@ -90,7 +90,7 @@ test('prompt-plan honors explicit repo-local workspace path', () => {
 
 test('prompt-plan honors explicit out path inside repo', () => {
   const root = tempDir();
-  const repo = path.join(root, 'ncdmb-procurement-ui');
+  const repo = path.join(root, 'example-ui');
   write(path.join(repo, '.git', 'HEAD'), 'ref: refs/heads/main\n');
   const sourcePath = path.join(repo, 'docs', 'architecture.md');
   const outPath = path.join(repo, 'artifacts', 'architecture', 'images', 'custom-plan.md');

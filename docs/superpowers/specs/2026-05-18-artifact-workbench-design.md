@@ -176,7 +176,7 @@ Startup report:
 
 ```text
 Artifact workbench
-Workspace: /Users/dee/agent-artifacts/<slug>
+Workspace: ~/agent-artifacts/<slug>
 URL: http://127.0.0.1:<port>/
 HTML: 3
 Markdown: 1

@@ -22,8 +22,8 @@
 Run:
 
 ```bash
-python3 /Users/dee/.codex/skills/.system/skill-creator/scripts/init_skill.py audit-ui \
-  --path /Users/dee/agent-skills/skills \
+python3 ~/.codex/skills/.system/skill-creator/scripts/init_skill.py audit-ui \
+  --path ~/agent-skills/skills \
   --resources scripts,references,assets \
   --interface 'display_name=Audit UI' \
   --interface 'short_description=Audit running UI journeys with evidence' \
@@ -124,7 +124,7 @@ The brief template must capture scope, mode, environment, services, actors, scen
 - [ ] **Step 4: Regenerate optional UI metadata**
 
 ```bash
-python3 /Users/dee/.codex/skills/.system/skill-creator/scripts/generate_openai_yaml.py \
+python3 ~/.codex/skills/.system/skill-creator/scripts/generate_openai_yaml.py \
   skills/audit-ui \
   --interface 'display_name=Audit UI' \
   --interface 'short_description=Audit running UI journeys with evidence' \
@@ -149,7 +149,7 @@ Add `audit-ui` to `SKILL_NAMES`, the README tree, the Skills table, and a concis
 sh -n bin/link-skills.sh
 python3 -m venv /tmp/agent-skills-validator
 /tmp/agent-skills-validator/bin/pip install PyYAML
-/tmp/agent-skills-validator/bin/python /Users/dee/.codex/skills/.system/skill-creator/scripts/quick_validate.py skills/audit-ui
+/tmp/agent-skills-validator/bin/python ~/.codex/skills/.system/skill-creator/scripts/quick_validate.py skills/audit-ui
 node --test skills/audit-ui/scripts/*.test.mjs
 ```
 

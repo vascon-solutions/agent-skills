@@ -2461,7 +2461,7 @@ function readReceipt(receipt) {
   return { ok: true, receipt: parsed };
 }
 
-// The ncdmb UI receipt adapter, unchanged: it attests candidate, lane,
+// The UI receipt adapter, unchanged: it attests candidate, lane,
 // lockfile, policy and base, and cannot attest a non-null dependency.
 function receiptAccepts(ctx, ledger, validation, candidateOid) {
   if (validation.receipt.adapter !== RECEIPT_ADAPTER) return { ok: false, reason: `unsupported receipt adapter ${validation.receipt.adapter}` };

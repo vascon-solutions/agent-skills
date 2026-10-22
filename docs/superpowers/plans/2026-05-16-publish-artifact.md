@@ -20,14 +20,14 @@
 - [ ] **Step 1: Create the skill directory**
 
 ```bash
-mkdir -p /Users/dee/agent-skills/skills/publish-artifact
+mkdir -p ~/agent-skills/skills/publish-artifact
 ```
 
 Expected: no output, directory exists.
 
 - [ ] **Step 2: Write `SKILL.md` with full content**
 
-Write the file at `/Users/dee/agent-skills/skills/publish-artifact/SKILL.md` with this exact content:
+Write the file at `~/agent-skills/skills/publish-artifact/SKILL.md` with this exact content:
 
 ````markdown
 ---
@@ -279,8 +279,8 @@ On a dry run, prefix every line with `[dry-run]`.
 - [ ] **Step 3: Verify the file exists and has expected sections**
 
 ```bash
-ls -la /Users/dee/agent-skills/skills/publish-artifact/SKILL.md
-grep -c "^## " /Users/dee/agent-skills/skills/publish-artifact/SKILL.md
+ls -la ~/agent-skills/skills/publish-artifact/SKILL.md
+grep -c "^## " ~/agent-skills/skills/publish-artifact/SKILL.md
 ```
 
 Expected: file exists; section count is 13 or more (Purpose, When To Use, When Not To Use, Inputs, Configuration, Workspace Resolution, Pre-Publish Secret Scan, S3 Upload, Presigned URLs, Gist Publishing, State Tracking, Workflow, Validation, Output, Cautions).
@@ -288,8 +288,8 @@ Expected: file exists; section count is 13 or more (Purpose, When To Use, When N
 - [ ] **Step 4: Commit**
 
 ```bash
-git -C /Users/dee/agent-skills add skills/publish-artifact/SKILL.md
-git -C /Users/dee/agent-skills commit -m "feat: add publish-artifact skill"
+git -C ~/agent-skills add skills/publish-artifact/SKILL.md
+git -C ~/agent-skills commit -m "feat: add publish-artifact skill"
 ```
 
 ---
@@ -301,7 +301,7 @@ git -C /Users/dee/agent-skills commit -m "feat: add publish-artifact skill"
 
 - [ ] **Step 1: Add `publish-artifact` to `SKILL_NAMES`**
 
-In `/Users/dee/agent-skills/bin/link-skills.sh`, find the `SKILL_NAMES` variable. Add `publish-artifact` as a new line after `repo-design-context`:
+In `~/agent-skills/bin/link-skills.sh`, find the `SKILL_NAMES` variable. Add `publish-artifact` as a new line after `repo-design-context`:
 
 ```
 repo-design-context
@@ -336,7 +336,7 @@ publish-artifact
 - [ ] **Step 2: Verify the entry is present**
 
 ```bash
-grep "^publish-artifact$" /Users/dee/agent-skills/bin/link-skills.sh
+grep "^publish-artifact$" ~/agent-skills/bin/link-skills.sh
 ```
 
 Expected: `publish-artifact`
@@ -344,8 +344,8 @@ Expected: `publish-artifact`
 - [ ] **Step 3: Commit**
 
 ```bash
-git -C /Users/dee/agent-skills add bin/link-skills.sh
-git -C /Users/dee/agent-skills commit -m "feat: register publish-artifact in link-skills.sh"
+git -C ~/agent-skills add bin/link-skills.sh
+git -C ~/agent-skills commit -m "feat: register publish-artifact in link-skills.sh"
 ```
 
 ---
@@ -357,7 +357,7 @@ git -C /Users/dee/agent-skills commit -m "feat: register publish-artifact in lin
 
 - [ ] **Step 1: Add `publish-artifact/` to the directory tree**
 
-In `/Users/dee/agent-skills/README.md`, find the directory tree block. Add `├── publish-artifact/` after `├── repo-design-context/`:
+In `~/agent-skills/README.md`, find the directory tree block. Add `├── publish-artifact/` after `├── repo-design-context/`:
 
 ```
     ├── repo-design-context/
@@ -386,7 +386,7 @@ Add this new section in the usage section of the README. Place it after the `###
 - [ ] **Step 4: Verify the README mentions publish-artifact in all three places**
 
 ```bash
-grep -c "publish-artifact" /Users/dee/agent-skills/README.md
+grep -c "publish-artifact" ~/agent-skills/README.md
 ```
 
 Expected: 3 or more.
@@ -394,8 +394,8 @@ Expected: 3 or more.
 - [ ] **Step 5: Commit**
 
 ```bash
-git -C /Users/dee/agent-skills add README.md
-git -C /Users/dee/agent-skills commit -m "docs: add publish-artifact to README"
+git -C ~/agent-skills add README.md
+git -C ~/agent-skills commit -m "docs: add publish-artifact to README"
 ```
 
 ---
@@ -408,7 +408,7 @@ git -C /Users/dee/agent-skills commit -m "docs: add publish-artifact to README"
 - [ ] **Step 1: Run the link script**
 
 ```bash
-/Users/dee/agent-skills/bin/link-skills.sh
+~/agent-skills/bin/link-skills.sh
 ```
 
 Expected output mentions `publish-artifact` being linked into each target directory. No errors.
@@ -429,7 +429,7 @@ for dir in \
 done
 ```
 
-Expected: every line begins with `OK:` and the symlink targets `/Users/dee/agent-skills/skills/publish-artifact`. `MISSING:` lines are acceptable only for target tools the user has not installed (e.g., Cursor).
+Expected: every line begins with `OK:` and the symlink targets `~/agent-skills/skills/publish-artifact`. `MISSING:` lines are acceptable only for target tools the user has not installed (e.g., Cursor).
 
 - [ ] **Step 3: Verify the SKILL.md is readable through the symlink**
 
@@ -453,7 +453,7 @@ Expected: first five lines of the new SKILL.md, including the `name: publish-art
 Run each grep and confirm a match exists:
 
 ```bash
-SKILL=/Users/dee/agent-skills/skills/publish-artifact/SKILL.md
+SKILL=~/agent-skills/skills/publish-artifact/SKILL.md
 
 grep -q "ARTIFACTS_S3_BUCKET"        "$SKILL" && echo "OK: bucket env"        || echo "MISSING: bucket env"
 grep -q "ARTIFACTS_S3_REGION"        "$SKILL" && echo "OK: region env"        || echo "MISSING: region env"
@@ -477,7 +477,7 @@ Expected: every line starts with `OK:`. Any `MISSING:` line means re-open Task 1
 - [ ] **Step 2: Verify there are no placeholder strings**
 
 ```bash
-grep -nE "TBD|TODO|FIXME|\\?\\?" /Users/dee/agent-skills/skills/publish-artifact/SKILL.md || echo "OK: no placeholders"
+grep -nE "TBD|TODO|FIXME|\\?\\?" ~/agent-skills/skills/publish-artifact/SKILL.md || echo "OK: no placeholders"
 ```
 
 Expected: `OK: no placeholders`.

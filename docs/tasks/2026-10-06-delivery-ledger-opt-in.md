@@ -19,7 +19,7 @@ An independent assessment of the trigger, the dependent skills, the lost guarant
 
 An independent spec review then split the original combined task. Helper ergonomics moved to `docs/tasks/2026-10-06-delivery-ledger-ergonomics.md`, which depends on this task.
 
-The measured cost behind the request: BE-01-01-q2 spent about 520s of critical-path time (about 17% of agent working time, about 20% of output tokens) on ledger bookkeeping. Measurement artefacts are in `/Users/dee/agent-artifacts/delivery-ledger-cost-2026-10-06/`.
+The measured cost behind the request: BE-01-01-q2 spent about 520s of critical-path time (about 17% of agent working time, about 20% of output tokens) on ledger bookkeeping. Measurement artefacts are in `~/agent-artifacts/delivery-ledger-cost-2026-10-06/`.
 
 ## Design Reference
 
@@ -57,7 +57,7 @@ Evidence from `main` at `7c09101`.
 | Unconditional ledger wording outside the loop | `address-review-findings/SKILL.md:39`; `references/orchestration.md:35`, `:75-82`; `monitor-pr-review/SKILL.md:16`, `:50`; `review-implementation/references/risk-classes.md:18-20`; `review-policy.md:80`; `README.md:112`; `audit-ui/SKILL.md:32`; `audit-api/SKILL.md:32-33` |
 | What a repository may override; the list has no ledger requirement | `references/authorization.md:25` |
 | Repository overrides read `AGENTS.md`, then `.agent/delivery-policy.json`; `AGENTS.md` wins | `orchestration.md:44` |
-| Editing `ncdmb-procurement-ui/.agent/delivery-policy.json` invalidates existing validation receipts once | `ncdmb-procurement-ui/scripts/run-affected-validation.mjs:182-186`; `delivery-ledger.mjs:2385` |
+| Editing `<ui-checkout>/.agent/delivery-policy.json` invalidates existing validation receipts once | `<ui-checkout>/scripts/run-affected-validation.mjs:182-186`; `delivery-ledger.mjs:2385` |
 | Guarantees the helper enforces only in ledger mode: lock and claim (`:77-82`); prepared-event idempotency (`:150-151`); review invalidation when a source changes (`:136`); evidence bound to the final candidate, with pending findings and FAIL audits blocking (`:104-110`); required audits that cannot be waived (`:108`); shape-sweep refusal before a push (`review-policy.md:70-79`); fresh-session resume (`:14`) | `references/delivery-ledger.md` |
 | A ledger left behind cannot resume after another session pushes: moved ref → mismatch (`:118`); `remote_adoption` never replaces a baseline (`:128`); drift refuses claim (`:92`). Takeover needs the user's word (`:82`). The ledger is per-worktree and uncommitted (`:11`, `:14`). | `references/delivery-ledger.md` |
 | A PR body carrying another delivery's `agent-delivery-summary` marker makes `summary-body` refuse | `delivery-ledger.mjs:1488-1492` |

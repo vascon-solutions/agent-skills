@@ -8,13 +8,13 @@ This is one improvement-grade delivery in `vascon-solutions/agent-skills`, targe
 
 ## Source Context
 
-Codebase findings from the `SH-01-01-q1` delivery in `bolamark-erp` (2026-10-06), reviewed with Dee in this session:
+Codebase findings from the `SH-01-01-q1` delivery in an ERP project (2026-10-06), reviewed with Dee in this session:
 
 - The task doc required a "Rendered check" (create, edit and legacy Customer in the running app). The owner drove the browser itself, and the ledger recorded `audit_policy: {state: not_requested, reason: "no live audit requested"}`. No `audits` record exists. The only trace is limitation `runtime-native-path`.
-- The owner set `delegated_limit: 1`, citing `bolamark-erp/AGENTS.md:30` ("Request independent review…"), which names no number. The size rule gave 3 cycles. After the single review returned 5 findings, the fixes were verified only locally.
-- At the time, agent-devbox's Bolamark adapter supported only a persistent base pinned to one ref, so it could not serve the candidate. The owner fell back to the native stack, which was correct. But `docker-app-verify` only describes that fallback for an absent runner or an unsupported project.
+- The owner set `delegated_limit: 1`, citing the ERP project's `AGENTS.md:30` ("Request independent review…"), which names no number. The size rule gave 3 cycles. After the single review returned 5 findings, the fixes were verified only locally.
+- At the time, agent-devbox's ERP adapter supported only a persistent base pinned to one ref, so it could not serve the candidate. The owner fell back to the native stack, which was correct. But `docker-app-verify` only describes that fallback for an absent runner or an unsupported project.
 
-Dee approved creating this task doc. Since then agent-devbox has shipped a disposable Bolamark candidate component (DEVENV-16, `039b464`; `up --ui WORKTREE --component candidate`, `docs/bolamark-candidate.md`) and a TAF Marketplace candidate (DEVENV-17, `42cee81`, `docs/taf-marketplace-candidate.md`), so a Bolamark branch can now be served on devbox. The 2026-10-06 finding stands as the historical trigger; the fallback rule below still covers other persistent-only or unconfigured cases.
+Dee approved creating this task doc. Since then agent-devbox has shipped a disposable ERP candidate component (DEVENV-16, `039b464`; `up --ui WORKTREE --component candidate`) and a marketplace candidate (DEVENV-17, `42cee81`), so an ERP branch can now be served on devbox. The 2026-10-06 finding stands as the historical trigger; the fallback rule below still covers other persistent-only or unconfigured cases.
 
 ## Design Reference
 
@@ -52,7 +52,7 @@ Evidence from `main` at `7c09101`.
 | `docker-app-verify` fallback covers only "runner is absent or the project is unsupported" | `skills/docker-app-verify/SKILL.md:16`; `references/lifecycle.md:12` |
 | Uncommitted working-tree edits (reviewed 2026-10-14) add a "Before starting" checklist to the lifecycle guide and point `SKILL.md:18` at it. Checklist item 1 already says a borrowed base behind a required ref cannot serve the task and that an isolated component must be chosen and the reason recorded. No other task owns these edits. | `git diff -- skills/docker-app-verify` on the working tree |
 | Reuse requires source, ownership and capabilities to match | `skills/docker-app-verify/SKILL.md:18` |
-| The Bolamark adapter keeps its persistent base (`persistentOnly: true`, built from `base.ref`, reuse keeps that revision, refresh/reset rejected, `base-verify` makes no product write) and, since DEVENV-16 (`039b464`), also a disposable `candidate` component: `adapterFor` merges `bolamarkCandidate` when `component === 'candidate'`, and `capabilities` reports `databaseProvisioning: 'disposable'`, `uiAudit: 'disposable-business-writes'` with no reuse | `/Users/dee/Code/agent-devbox/src/adapters.mjs` (`bolamark-erp`, `bolamarkCandidate`, `adapterFor`, `capabilities`); `/Users/dee/Code/agent-devbox/docs/bolamark-base.md`; `/Users/dee/Code/agent-devbox/docs/bolamark-candidate.md` |
+| The ERP adapter keeps its persistent base (`persistentOnly: true`, built from `base.ref`, reuse keeps that revision, refresh/reset rejected, `base-verify` makes no product write) and, since DEVENV-16 (`039b464`), also a disposable `candidate` component: `adapterFor` merges the candidate adapter when `component === 'candidate'`, and `capabilities` reports `databaseProvisioning: 'disposable'`, `uiAudit: 'disposable-business-writes'` with no reuse | `agent-devbox/src/adapters.mjs` (the ERP adapter, its candidate adapter, `adapterFor`, `capabilities`); the ERP base and candidate docs under `agent-devbox/docs/` |
 | Existing test that pins a delegated limit of 1 | `tests/delivery-ledger.test.mjs:4061` |
 
 ## Current Behavior To Preserve
@@ -67,7 +67,7 @@ Evidence from `main` at `7c09101`.
 
 ## Prerequisites
 
-Current `main`, including R2 (PR #20) and `docker-app-verify` (PR #19), plus the uncommitted `docker-app-verify` working-tree edits listed in the evidence table. This task owns and lands those edits; do not commit them separately or discard them. No sibling repository dependency. The agent-devbox Bolamark candidate component (DEVENV-16) is not a prerequisite: the rules here must still hold for adapters or components that cannot serve a candidate.
+Current `main`, including R2 (PR #20) and `docker-app-verify` (PR #19), plus the uncommitted `docker-app-verify` working-tree edits listed in the evidence table. This task owns and lands those edits; do not commit them separately or discard them. No sibling repository dependency. The agent-devbox ERP candidate component (DEVENV-16) is not a prerequisite: the rules here must still hold for adapters or components that cannot serve a candidate.
 
 **Landing order for the four 2026-10-06 tasks:** this task first, then delivery-ledger-opt-in, then agent-script-contract-and-delivery-hygiene, then delivery-ledger-ergonomics. The opt-in task adds the lightweight (no-ledger) equivalent of the required-audit rule on top of this task's wording; this task writes the rule for ledger mode only.
 
@@ -85,8 +85,8 @@ Current `main`, including R2 (PR #20) and `docker-app-verify` (PR #19), plus the
 
 - In `docker-app-verify` (SKILL and lifecycle) and `SKILL.md:40`, add the case where the runner is present and the project is configured, but no supported component can serve the candidate source. Treat it as unsupported *for this candidate*: record a limitation naming the reason and the adapter evidence, then use the established execution path, unless Docker verification was explicitly required.
 - **Home of the rule.** In the lifecycle guide, the rule extends item 1 of the uncommitted "Before starting" checklist (it already covers a borrowed base behind a required ref): when no supported component can serve the candidate at all, that item resolves to the recorded limitation and the established path. The fallback sentence at `lifecycle.md:12` and `SKILL.md:16` gains the same case in one clause. State the rule once; the checklist item and the fallback sentence link rather than repeat.
-- **Fix the inherited checklist item 1.** As written it prescribes `route --ui <candidate-worktree>` for every agent-devbox adapter, but the disposable candidate components refuse `route` (`/Users/dee/Code/agent-devbox/docs/taf-marketplace-candidate.md:34` lists it among the refused commands; the Bolamark candidate is the same shape). The persistent Bolamark base refuses it too: the CLI allows only `base-up/down/status/verify` for a `persistentOnly` adapter (`/Users/dee/Code/agent-devbox/src/cli.mjs:58-59`). `route` exists only for managed-stack bases (`agent-devbox/README.md:176`). Reword item 1 to name no command: compare the task's required inputs with what the selected environment runs through that adapter's documented source-comparison mechanism, which is `route` for a managed-stack base, the `base-verify` source receipt for the persistent Bolamark base, and the served source digest the candidate components emit at `up`. Where the mechanism only reports after start, the pre-start check is limited to confirming from the adapter docs that the component builds from the candidate worktree, and the comparison runs immediately after readiness, before any audit handoff. A mismatch after start stays a blocker, as the existing lifecycle step 3 says.
-- **Decide before starting.** The condition is established from discovery output and the selected adapter's documentation before any start. Examples: an adapter whose only component is a persistent base pinned to another ref, or a project configuration with no candidate build input. The Bolamark adapter is no longer such a case; its `candidate` component serves a feature worktree. If an environment that was expected to serve the candidate starts and its source receipts do not match, that stays a reported blocker. It is not this fallback.
+- **Fix the inherited checklist item 1.** As written it prescribes `route --ui <candidate-worktree>` for every agent-devbox adapter, but the disposable candidate components refuse `route` (the agent-devbox marketplace candidate doc lists it among the refused commands; the ERP candidate is the same shape). The persistent ERP base refuses it too: the CLI allows only `base-up/down/status/verify` for a `persistentOnly` adapter (`agent-devbox/src/cli.mjs:58-59`). `route` exists only for managed-stack bases (`agent-devbox/README.md:176`). Reword item 1 to name no command: compare the task's required inputs with what the selected environment runs through that adapter's documented source-comparison mechanism, which is `route` for a managed-stack base, the `base-verify` source receipt for the persistent ERP base, and the served source digest the candidate components emit at `up`. Where the mechanism only reports after start, the pre-start check is limited to confirming from the adapter docs that the component builds from the candidate worktree, and the comparison runs immediately after readiness, before any audit handoff. A mismatch after start stays a blocker, as the existing lifecycle step 3 says.
+- **Decide before starting.** The condition is established from discovery output and the selected adapter's documentation before any start. Examples: an adapter whose only component is a persistent base pinned to another ref, or a project configuration with no candidate build input. The ERP adapter is no longer such a case; its `candidate` component serves a feature worktree. If an environment that was expected to serve the candidate starts and its source receipts do not match, that stays a reported blocker. It is not this fallback.
 - Apply the same environment-selection sentence to `skills/audit-ui/SKILL.md:59` and `skills/audit-api/SKILL.md:62`, so standalone audits get the same rule. This is a wording change to environment selection only; their method and verdict rules stay excluded.
 - State that the auditor does not depend on devbox: the owner may serve the candidate on the established path and give the `auditor` that proven URL.
 - Keep the existing distinction: a candidate-serving environment with a limited executor leaves checks unverified, and does not trigger a fallback.
@@ -99,8 +99,8 @@ Current `main`, including R2 (PR #20) and `docker-app-verify` (PR #19), plus the
 
 ## Excluded
 
-- agent-devbox changes. The Bolamark candidate component already exists there (DEVENV-16) and needs nothing from this task.
-- `bolamark-erp` instruction or policy edits.
+- agent-devbox changes. The ERP candidate component already exists there (DEVENV-16) and needs nothing from this task.
+- ERP project instruction or policy edits.
 - Ledger schema, helper command or role-definition changes. If pre-implementation verification shows the helper cannot express the new defaults, stop and report rather than widening scope.
 - Mandatory auditor dispatch. The owner's discretion stays.
 - Changes to `audit-ui`/`audit-api` method or verdict rules, or to reviewer behavior. The single environment-selection sentence in each audit skill is in scope.
@@ -137,7 +137,7 @@ Recorded consequence, raised by the spec review: a required task-doc audit that 
 ## Execution Rules
 
 - Wording changes follow the repository's existing prose style and `unslop`. Don't duplicate rules across files: the delivery-loop SKILL states each rule once and links to the reference that owns its detail.
-- Keep `docker-app-verify` generic: name the condition ("no supported component serves the candidate source"), not Bolamark specifically.
+- Keep `docker-app-verify` generic: name the condition ("no supported component serves the candidate source"), not one project specifically.
 - Run `node --test tests/*.test.mjs` before completion.
 
 ## Deliverables
@@ -175,4 +175,4 @@ None beyond the delivery endpoint the user chooses.
 ## Follow-ups
 
 - Optionally teach `task-doc` and `review-task-docs` to mark runtime acceptance rows explicitly, so the trigger becomes mechanical rather than interpreted.
-- Acceptance step, runnable once this task lands: one delivery of a Bolamark task with a rendered check on the devbox `candidate` component (`up --ui WORKTREE --component candidate`), confirming the dispatch and devbox path end to end. The agent-devbox side shipped in DEVENV-16.
+- Acceptance step, runnable once this task lands: one delivery of an ERP project task with a rendered check on the devbox `candidate` component (`up --ui WORKTREE --component candidate`), confirming the dispatch and devbox path end to end. The agent-devbox side shipped in DEVENV-16.

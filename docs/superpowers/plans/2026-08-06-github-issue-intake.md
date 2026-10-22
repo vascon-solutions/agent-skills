@@ -88,7 +88,7 @@ git commit -m "test(skills): define github issue intake contracts"
 Run:
 
 ```bash
-python3 /Users/dee/.codex/skills/.system/skill-creator/scripts/init_skill.py github-issue-intake \
+python3 ~/.codex/skills/.system/skill-creator/scripts/init_skill.py github-issue-intake \
   --path skills \
   --resources references \
   --interface 'display_name=GitHub Issue Intake' \
@@ -179,7 +179,7 @@ Link only artifacts that exist. For teammate handoff without a task doc, write: 
 Run:
 
 ```bash
-rg -n 'TBD|TODO|floatstar|ncdmb|\.agent/tasks/' skills/github-issue-intake/references/issue-template.md
+rg -n 'TBD|TODO|<client-name>|\.agent/tasks/' skills/github-issue-intake/references/issue-template.md
 ```
 
 Expected: no matches.
@@ -353,7 +353,7 @@ Run:
 ```bash
 validation_deps_dir=$(mktemp -d)
 python3 -m pip install --quiet --target "$validation_deps_dir" PyYAML
-PYTHONPATH="$validation_deps_dir" python3 /Users/dee/.codex/skills/.system/skill-creator/scripts/quick_validate.py skills/github-issue-intake
+PYTHONPATH="$validation_deps_dir" python3 ~/.codex/skills/.system/skill-creator/scripts/quick_validate.py skills/github-issue-intake
 ```
 
 Expected: `Skill is valid!`
@@ -385,7 +385,7 @@ Expected: the linker exits zero and all five symlinks exist.
 
 - [ ] **Step 4: Run GREEN forward tests with fresh read-only subagents**
 
-Repeat the three RED prompts with `Use $github-issue-intake at /Users/dee/agent-skills/.worktrees/codex/github-issue-intake-design/skills/github-issue-intake/SKILL.md` and no permission for GitHub or filesystem writes. Confirm that agents:
+Repeat the three RED prompts with `Use $github-issue-intake at ~/agent-skills/.worktrees/codex/github-issue-intake-design/skills/github-issue-intake/SKILL.md` and no permission for GitHub or filesystem writes. Confirm that agents:
 
 - avoid phantom task-doc paths;
 - split independent outcomes despite bundling pressure;
@@ -450,7 +450,7 @@ git commit -m "fix(skills): address github issue intake review"
 
 - [ ] **Step 5: Merge locally into `main`**
 
-Verify the parent `main` checkout has no conflicting tracked changes. From `/Users/dee/agent-skills`, merge the reviewed branch without force, reset, or checkout-based file replacement:
+Verify the parent `main` checkout has no conflicting tracked changes. From `~/agent-skills`, merge the reviewed branch without force, reset, or checkout-based file replacement:
 
 ```bash
 git merge --no-ff codex/github-issue-intake-design

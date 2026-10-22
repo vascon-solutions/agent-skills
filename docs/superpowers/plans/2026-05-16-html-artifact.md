@@ -20,7 +20,7 @@
 - [ ] **Step 1: Create the skill directory**
 
 ```bash
-mkdir -p /Users/dee/agent-skills/skills/html-artifact
+mkdir -p ~/agent-skills/skills/html-artifact
 ```
 
 Expected: no output, directory exists.
@@ -142,8 +142,8 @@ Written: ~/agent-artifacts/agent-skills/task-docs/my-task.html (task-doc → jum
 - [ ] **Step 3: Verify frontmatter and line count**
 
 ```bash
-head -5 /Users/dee/agent-skills/skills/html-artifact/SKILL.md
-wc -l /Users/dee/agent-skills/skills/html-artifact/SKILL.md
+head -5 ~/agent-skills/skills/html-artifact/SKILL.md
+wc -l ~/agent-skills/skills/html-artifact/SKILL.md
 ```
 
 Expected: first line is `---`, `name: html-artifact` present, line count between 80 and 130.
@@ -151,8 +151,8 @@ Expected: first line is `---`, `name: html-artifact` present, line count between
 - [ ] **Step 4: Commit**
 
 ```bash
-git -C /Users/dee/agent-skills add skills/html-artifact/SKILL.md
-git -C /Users/dee/agent-skills commit -m "feat: add html-artifact SKILL.md"
+git -C ~/agent-skills add skills/html-artifact/SKILL.md
+git -C ~/agent-skills commit -m "feat: add html-artifact SKILL.md"
 ```
 
 ---
@@ -165,7 +165,7 @@ git -C /Users/dee/agent-skills commit -m "feat: add html-artifact SKILL.md"
 - [ ] **Step 1: Create references directory**
 
 ```bash
-mkdir -p /Users/dee/agent-skills/skills/html-artifact/references
+mkdir -p ~/agent-skills/skills/html-artifact/references
 ```
 
 - [ ] **Step 2: Write `html-layouts.md` with full content**
@@ -508,13 +508,13 @@ Markdown rendering rules:
 - [ ] **Step 3: Verify the file references all 6 doc types**
 
 ```bash
-grep -c "^## Layout:" /Users/dee/agent-skills/skills/html-artifact/references/html-layouts.md
+grep -c "^## Layout:" ~/agent-skills/skills/html-artifact/references/html-layouts.md
 ```
 
 Expected: `5` (task-doc, roadmap, qa-handoff, frontend-handoff, repo-doc; generic uses a different heading).
 
 ```bash
-grep "generic\|task-doc\|roadmap\|qa-handoff\|frontend-handoff\|repo-doc" /Users/dee/agent-skills/skills/html-artifact/references/html-layouts.md | wc -l
+grep "generic\|task-doc\|roadmap\|qa-handoff\|frontend-handoff\|repo-doc" ~/agent-skills/skills/html-artifact/references/html-layouts.md | wc -l
 ```
 
 Expected: 6 or more matches.
@@ -522,8 +522,8 @@ Expected: 6 or more matches.
 - [ ] **Step 4: Commit**
 
 ```bash
-git -C /Users/dee/agent-skills add skills/html-artifact/references/html-layouts.md
-git -C /Users/dee/agent-skills commit -m "feat: add html-artifact layout specifications"
+git -C ~/agent-skills add skills/html-artifact/references/html-layouts.md
+git -C ~/agent-skills commit -m "feat: add html-artifact layout specifications"
 ```
 
 ---
@@ -566,7 +566,7 @@ html-artifact
 - [ ] **Step 2: Verify the entry is present**
 
 ```bash
-grep "html-artifact" /Users/dee/agent-skills/bin/link-skills.sh
+grep "html-artifact" ~/agent-skills/bin/link-skills.sh
 ```
 
 Expected: `html-artifact`
@@ -574,8 +574,8 @@ Expected: `html-artifact`
 - [ ] **Step 3: Commit**
 
 ```bash
-git -C /Users/dee/agent-skills add bin/link-skills.sh
-git -C /Users/dee/agent-skills commit -m "feat: register html-artifact in link-skills.sh"
+git -C ~/agent-skills add bin/link-skills.sh
+git -C ~/agent-skills commit -m "feat: register html-artifact in link-skills.sh"
 ```
 
 ---
@@ -616,7 +616,7 @@ Add this new section under `### Reviewing and tracking feature work`:
 - [ ] **Step 4: Verify the README mentions html-artifact in all three places**
 
 ```bash
-grep -c "html-artifact" /Users/dee/agent-skills/README.md
+grep -c "html-artifact" ~/agent-skills/README.md
 ```
 
 Expected: 3 or more.
@@ -624,8 +624,8 @@ Expected: 3 or more.
 - [ ] **Step 5: Commit**
 
 ```bash
-git -C /Users/dee/agent-skills add README.md
-git -C /Users/dee/agent-skills commit -m "docs: add html-artifact to README"
+git -C ~/agent-skills add README.md
+git -C ~/agent-skills commit -m "docs: add html-artifact to README"
 ```
 
 ---
@@ -659,7 +659,7 @@ If the user says yes, invoke `html-artifact` on the output path. This is a post-
 - [ ] **Step 2: Verify the original output contract is intact**
 
 ```bash
-grep "Produce exactly one of" /Users/dee/agent-skills/skills/task-doc/SKILL.md
+grep "Produce exactly one of" ~/agent-skills/skills/task-doc/SKILL.md
 ```
 
 Expected: one match — the original constraint line is still present.
@@ -667,7 +667,7 @@ Expected: one match — the original constraint line is still present.
 - [ ] **Step 3: Verify the new section is present**
 
 ```bash
-grep "HTML Companion" /Users/dee/agent-skills/skills/task-doc/SKILL.md
+grep "HTML Companion" ~/agent-skills/skills/task-doc/SKILL.md
 ```
 
 Expected: one match.
@@ -675,8 +675,8 @@ Expected: one match.
 - [ ] **Step 4: Commit**
 
 ```bash
-git -C /Users/dee/agent-skills add skills/task-doc/SKILL.md
-git -C /Users/dee/agent-skills commit -m "feat: add html-artifact opt-in to task-doc"
+git -C ~/agent-skills add skills/task-doc/SKILL.md
+git -C ~/agent-skills commit -m "feat: add html-artifact opt-in to task-doc"
 ```
 
 ---
@@ -710,7 +710,7 @@ If the user says yes, invoke `html-artifact` on the output path.
 - [ ] **Step 2: Verify**
 
 ```bash
-grep "HTML Companion" /Users/dee/agent-skills/skills/roadmap-todo/SKILL.md
+grep "HTML Companion" ~/agent-skills/skills/roadmap-todo/SKILL.md
 ```
 
 Expected: one match.
@@ -718,8 +718,8 @@ Expected: one match.
 - [ ] **Step 3: Commit**
 
 ```bash
-git -C /Users/dee/agent-skills add skills/roadmap-todo/SKILL.md
-git -C /Users/dee/agent-skills commit -m "feat: add html-artifact opt-in to roadmap-todo"
+git -C ~/agent-skills add skills/roadmap-todo/SKILL.md
+git -C ~/agent-skills commit -m "feat: add html-artifact opt-in to roadmap-todo"
 ```
 
 ---
@@ -751,7 +751,7 @@ Add a fifth bullet:
 - [ ] **Step 2: Verify all five report fields are present**
 
 ```bash
-grep -A 10 "When done, report" /Users/dee/agent-skills/skills/prepare-qa-handoff/SKILL.md
+grep -A 10 "When done, report" ~/agent-skills/skills/prepare-qa-handoff/SKILL.md
 ```
 
 Expected: 5 bullet points, last one mentioning `html-artifact`.
@@ -759,8 +759,8 @@ Expected: 5 bullet points, last one mentioning `html-artifact`.
 - [ ] **Step 3: Commit**
 
 ```bash
-git -C /Users/dee/agent-skills add skills/prepare-qa-handoff/SKILL.md
-git -C /Users/dee/agent-skills commit -m "feat: add html-artifact opt-in to prepare-qa-handoff"
+git -C ~/agent-skills add skills/prepare-qa-handoff/SKILL.md
+git -C ~/agent-skills commit -m "feat: add html-artifact opt-in to prepare-qa-handoff"
 ```
 
 ---
@@ -793,7 +793,7 @@ Add a sixth bullet:
 - [ ] **Step 2: Verify**
 
 ```bash
-grep -A 12 "When done, report" /Users/dee/agent-skills/skills/prepare-frontend-handoff/SKILL.md
+grep -A 12 "When done, report" ~/agent-skills/skills/prepare-frontend-handoff/SKILL.md
 ```
 
 Expected: 6 bullet points, last one mentioning `html-artifact`.
@@ -801,8 +801,8 @@ Expected: 6 bullet points, last one mentioning `html-artifact`.
 - [ ] **Step 3: Commit**
 
 ```bash
-git -C /Users/dee/agent-skills add skills/prepare-frontend-handoff/SKILL.md
-git -C /Users/dee/agent-skills commit -m "feat: add html-artifact opt-in to prepare-frontend-handoff"
+git -C ~/agent-skills add skills/prepare-frontend-handoff/SKILL.md
+git -C ~/agent-skills commit -m "feat: add html-artifact opt-in to prepare-frontend-handoff"
 ```
 
 ---
@@ -815,7 +815,7 @@ git -C /Users/dee/agent-skills commit -m "feat: add html-artifact opt-in to prep
 - [ ] **Step 1: Run the link script**
 
 ```bash
-/Users/dee/agent-skills/bin/link-skills.sh
+~/agent-skills/bin/link-skills.sh
 ```
 
 Expected output includes:
@@ -833,7 +833,7 @@ or
 ls -la ~/.claude/skills/html-artifact
 ```
 
-Expected: a symlink pointing to `/Users/dee/agent-skills/skills/html-artifact`.
+Expected: a symlink pointing to `~/agent-skills/skills/html-artifact`.
 
 - [ ] **Step 3: Verify SKILL.md is accessible through the symlink**
 
@@ -859,6 +859,6 @@ Expected: each path exists (symlink or directory). Any "No such file or director
 - [ ] **Step 5: Final commit for the plan file itself**
 
 ```bash
-git -C /Users/dee/agent-skills add docs/superpowers/plans/2026-05-16-html-artifact.md
-git -C /Users/dee/agent-skills commit -m "docs: add html-artifact implementation plan"
+git -C ~/agent-skills add docs/superpowers/plans/2026-05-16-html-artifact.md
+git -C ~/agent-skills commit -m "docs: add html-artifact implementation plan"
 ```

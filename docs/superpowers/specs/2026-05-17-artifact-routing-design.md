@@ -176,7 +176,7 @@ After implementation, validate by reviewing the changed skill text against these
 - A text-heavy Markdown source should route to HTML unless the user clearly wants a low-text visual.
 - An "image artifact for this spec/doc/source" request should create or recommend a low-text concept visual, not a dense rendered text card.
 - A request for exact routes or commands should not rely on generative image text.
-- A repo source such as `ncdmb-procurement-ui/docs/architecture.md` should default to `~/agent-artifacts/ncdmb-procurement-ui-architecture/images/`, not `~/agent-artifacts/architecture/images/` and not repo-local `./artifacts/architecture/images/`.
+- A repo source such as `example-ui/docs/architecture.md` should default to `~/agent-artifacts/example-ui-architecture/images/`, not `~/agent-artifacts/architecture/images/` and not repo-local `./artifacts/architecture/images/`.
 - Simple image generation should not create prompt-plan sidecars by default.
 - Simple explicit repo-local image generation should not create metadata sidecars by default.
 - In Codex, a low-text architecture infographic should prefer the `imagegen` skill / built-in image generation path over hand-written SVG.

@@ -1,6 +1,6 @@
 # Portable Variant Board Workflow
 
-- Status: Implemented 2026-09-24 on `feat/variant-board-workflow`. Automated checks, browser checks, and the NCDMB pilot (Claude direct path) are recorded in `skills/variant-board/references/hosts.md`; the Codex pilot was attempted and blocked by the local CLI version, and the ChatGPT bundle pilot has not run, so three-host portability acceptance remains incomplete.
+- Status: Implemented 2026-09-24 on `feat/variant-board-workflow`. Automated checks, browser checks, and the client pilot (Claude direct path) are recorded in `skills/variant-board/references/hosts.md`; the Codex pilot was attempted and blocked by the local CLI version, and the ChatGPT bundle pilot has not run, so three-host portability acceptance remains incomplete.
 - Prepared: 2026-09-24.
 - Classification: Feature-grade; one coherent delivery covering the new board contract and the existing routes that must hand off to it.
 - Repository baseline: `fac71e45bbe0e120762ca8d3c0feefe0d60df16c`. Recheck at execution time.
@@ -17,10 +17,10 @@ The final review of revision 3 found five contract gaps: changed-byte issuance, 
 
 ## Design Reference
 
-- Source Spec: `/Users/dee/agent-artifacts/variant-board-workflow/markdown/spec.md`, revision 4, especially §§5.1–5.9 and §9.
-- Intent: `/Users/dee/agent-artifacts/variant-board-workflow/markdown/handoff.md`.
-- Read-only examples: `/Users/dee/agent-artifacts/memo-delivery-ux/html/variants.html`, `/Users/dee/agent-artifacts/tender-workspace-ux/html/variants.html`, `/Users/dee/agent-artifacts/tender-workspace-ux/html/commercial.html`, and `/Users/dee/agent-artifacts/tender-workspace-ux/html/authority.html`.
-- Read-only pilot theme: `/Users/dee/Code/FLOATSTAR/ncdmb-procurement-ui/packages/ui/src/styles.css`; determine the source revision and relevant app overrides at pilot time.
+- Source Spec: `~/agent-artifacts/variant-board-workflow/markdown/spec.md`, revision 4, especially §§5.1–5.9 and §9.
+- Intent: `~/agent-artifacts/variant-board-workflow/markdown/handoff.md`.
+- Read-only examples: `~/agent-artifacts/memo-delivery-ux/html/variants.html`, `~/agent-artifacts/tender-workspace-ux/html/variants.html`, `~/agent-artifacts/tender-workspace-ux/html/commercial.html`, and `~/agent-artifacts/tender-workspace-ux/html/authority.html`.
+- Read-only pilot theme: `<ui-checkout>/packages/ui/src/styles.css`; determine the source revision and relevant app overrides at pilot time.
 
 D1–D3 remain settled: a separate host-neutral `variant-board` skill; app-styled mocks with fixed editorial chrome; Before panes reconstructed from a named source revision, with app screenshots optional. Revision 4 is the delivery basis. Do not reopen those decisions or restart discovery.
 
@@ -49,7 +49,7 @@ The prior browser review confirmed that the memo board has independent per-secti
 ## Current Behaviour To Preserve
 
 - Boards remain discussion aids. Repo specs/task docs remain authoritative; a board or browser choice does not authorise production implementation.
-- Preserve `/Users/dee/agent-artifacts/<topic>/{html,markdown,images}/` placement and the familiar `Companion: path (vN) — section` citation text.
+- Preserve `~/agent-artifacts/<topic>/{html,markdown,images}/` placement and the familiar `Companion: path (vN) — section` citation text.
 - Preserve non-board HTML kinds, including clickable flows and approach comparisons, and non-board image generation.
 - Preserve neutral/opt-in repo design for consumers other than the explicit `board-mock` request. A theme path alone does not override ambiguity or confidence checks.
 - Keep board HTML self-contained, with inline CSS/JavaScript and embedded assets; preview must not conceal missing dependencies. Navigation links to sources and frozen versions are not external asset loads.
@@ -60,7 +60,7 @@ The prior browser review confirmed that the memo board has independent per-secti
 
 - At execution time, verify repository instructions, checkout identity, relevant skill bodies and the source spec's revision. At preparation, the main checkout was on `codex/clarify-ci-monitoring-authorization` with unrelated edits to `skills/review-implementation/SKILL.md` and `skills/task-doc-delivery-loop/SKILL.md`.
 - Use the maintained `skill-creator` workflow when implementing the skill. Select a safe implementation checkout through the existing delivery workflow; this document does not select a branch, worktree or PR target.
-- Node and a supported browser are needed for the helper/runtime checks. Read access to a product repo is needed for the NCDMB pilot.
+- Node and a supported browser are needed for the helper/runtime checks. Read access to a product repo is needed for the client pilot.
 - Actual Claude, Codex and ChatGPT sessions are needed to prove their respective host paths. Missing host access does not block independent implementation, but unrun host pilots remain explicit incomplete acceptance evidence.
 
 ## Scope
@@ -129,7 +129,7 @@ Recheck the code-evidence entry points, helper call sites/tests and installer al
 - `skills/html-artifact/SKILL.md`, `skills/repo-design-context/SKILL.md`, `skills/brainstorm/SKILL.md`.
 - `bin/link-skills.sh`, `README.md`.
 
-Inspect the workbench and existing verifiers for compatibility; they are not automatic write targets. Repository fixtures must use synthetic content rather than copying private NCDMB board/source material into this reusable skill pack.
+Inspect the workbench and existing verifiers for compatibility; they are not automatic write targets. Repository fixtures must use synthetic content rather than copying private client board/source material into this reusable skill pack.
 
 ## Decisions Required Before Implementation
 
@@ -160,7 +160,7 @@ Use Node's existing test convention. Run the new focused board tests and `node -
 
 In a browser, verify a multi-section memo-style board and a controlling-route/dependent-state board, including exact and invalid hashes, expected visible results, Before labels, light chrome and wrapper layout at 390 px and 1280 px. Verify frozen-version navigation through the unchanged workbench. These are prototype checks, not a production app audit.
 
-Build the NCDMB pilot from read-only source evidence in a separate artifact workspace, issue v1 and v2, and verify a task-shaped citation fixture using the product's citation convention. Do not alter existing product task docs merely to demonstrate citation parsing. Use synthetic copied fixtures for migration tests.
+Build the client pilot from read-only source evidence in a separate artifact workspace, issue v1 and v2, and verify a task-shaped citation fixture using the product's citation convention. Do not alter existing product task docs merely to demonstrate citation parsing. Use synthetic copied fixtures for migration tests.
 
 Run the applicable checks on an actual Claude direct-path board, a Codex direct-path board and a ChatGPT bundle candidate. Include a revision-bundle import case. Record host wrapper limits separately from canonical-file results. Host sessions not actually exercised remain unverified; they must not be reported as supported or as completed acceptance.
 

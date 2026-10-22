@@ -27,8 +27,8 @@ Expected: installed Hurl version is at least 6.1.
 - [ ] **Step 2: Initialize the generated skill skeleton**
 
 ```bash
-python3 /Users/dee/.codex/skills/.system/skill-creator/scripts/init_skill.py audit-api \
-  --path /Users/dee/agent-skills/skills \
+python3 ~/.codex/skills/.system/skill-creator/scripts/init_skill.py audit-api \
+  --path ~/agent-skills/skills \
   --resources scripts,references,assets \
   --interface 'display_name=Audit API' \
   --interface 'short_description=Audit running APIs with direct evidence' \
@@ -151,7 +151,7 @@ Capture contract source/hash/version, selected operations, environment, services
 - [ ] **Step 4: Regenerate optional UI metadata**
 
 ```bash
-python3 /Users/dee/.codex/skills/.system/skill-creator/scripts/generate_openai_yaml.py \
+python3 ~/.codex/skills/.system/skill-creator/scripts/generate_openai_yaml.py \
   skills/audit-api \
   --interface 'display_name=Audit API' \
   --interface 'short_description=Audit running APIs with direct evidence' \
@@ -172,8 +172,8 @@ Add `audit-api` to the link list, README tree/table, and a usage example that di
 
 ```bash
 sh -n bin/link-skills.sh
-/tmp/agent-skills-validator/bin/python /Users/dee/.codex/skills/.system/skill-creator/scripts/quick_validate.py skills/audit-ui
-/tmp/agent-skills-validator/bin/python /Users/dee/.codex/skills/.system/skill-creator/scripts/quick_validate.py skills/audit-api
+/tmp/agent-skills-validator/bin/python ~/.codex/skills/.system/skill-creator/scripts/quick_validate.py skills/audit-ui
+/tmp/agent-skills-validator/bin/python ~/.codex/skills/.system/skill-creator/scripts/quick_validate.py skills/audit-api
 node --test skills/audit-ui/scripts/*.test.mjs
 node --test skills/audit-api/scripts/*.test.mjs
 node --test tests/audit-helper-conformance.test.mjs tests/audit-executors.test.mjs

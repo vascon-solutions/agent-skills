@@ -25,7 +25,7 @@ The standard is firm, practical, and non-punitive.
 - Human approval remains the decision gate.
 - The Vascon public skill pack is the authoritative scope.
 - Third-party skills are mentioned only when a workflow truly depends on them.
-- Private AlphaDigital and personal workflows are excluded.
+- Private company and personal workflows are excluded.
 
 ## 3. Information Architecture
 
@@ -420,7 +420,7 @@ The site succeeds when a Vascon developer can:
 - OpenAI API usage;
 - conversation or prompt history;
 - user accounts or team analytics;
-- private AlphaDigital skills;
+- private company skills;
 - a third-party skill installation catalog;
 - the old ten-stage lifecycle;
 - a Friday workshop or training-course section;

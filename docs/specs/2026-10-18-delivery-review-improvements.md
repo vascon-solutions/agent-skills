@@ -44,7 +44,7 @@ The bundled security prompt also needs adaptation. It uses `origin/HEAD...` for 
 
 The security prompt's assertion that Rust cannot contain memory-safety defects is too broad because unsafe code and foreign interfaces exist. Its blanket treatment of prompt content also cannot substitute for tracing an agent's privileges and tool access. These are reasons to adopt its evidence method while defining a repository-specific threat model.
 
-Local binary evidence comes from `/Users/dee/.local/share/claude/versions/2.1.302`, SHA-256 `5262ce9de86243fed0d21edc39b271555d56780d0112e2b194439fe1c6662d37`. The security prompt begins at byte 100883751; bundled review source strings occur around bytes 230639000 to 230670000. This was static inspection, not an executed review or a claim about every feature-flag path.
+Local binary evidence comes from `~/.local/share/claude/versions/2.1.302`, SHA-256 `5262ce9de86243fed0d21edc39b271555d56780d0112e2b194439fe1c6662d37`. The security prompt begins at byte 100883751; bundled review source strings occur around bytes 230639000 to 230670000. This was static inspection, not an executed review or a claim about every feature-flag path.
 
 ## What recent sessions suggest
 
@@ -52,10 +52,10 @@ These are sampled session records, not a measurement of overall delivery quality
 
 | Session evidence | Consequence for the proposal |
 | --- | --- |
-| Contract-search delivery reported synchronized Shared dependencies, 23 focused e2e tests, and a clean independent review for [API PR 330](https://github.com/floatstar/ncdmb-procurement-api/pull/330). | Preserve focused verification and dependency identity. More mandatory agents are not justified by this example. |
-| The tender-milestone session reported that API implementation exposed missing duplicate-ID validation and remainder-allocation support in merged Shared work, addressed by [Shared PR 131](https://github.com/floatstar/ncdmb-procurement-shared/pull/131). | Give cross-repository changes an explicit consumer scenario before declaring the provider contract sufficient. Reconstruct timing before classifying this as a reviewer miss. |
-| "Review PR 443 implementation" reproduced confirmation state carrying across orders and stale approved actions after cancellation. Its remediation report still identified real-API acceptance as unverified. [PR 443](https://github.com/floatstar/ncdmb-procurement-ui/pull/443) | These are strong evaluation candidates. Also check that runtime gaps survive handoff and remain completion blockers when required. A completed findings batch is not full delivery completion. |
-| "Address PR 438 review findings" corrected local-only design references and required role-gate coverage in the task plan. [PR 438](https://github.com/floatstar/ncdmb-procurement-ui/pull/438) | Documentation can control security-relevant behavior. Do not exclude it categorically; route it to the existing documentation or spec reviewer. |
+| Contract-search delivery reported synchronized Shared dependencies, 23 focused e2e tests, and a clean independent review for an API PR. | Preserve focused verification and dependency identity. More mandatory agents are not justified by this example. |
+| The tender-milestone session reported that API implementation exposed missing duplicate-ID validation and remainder-allocation support in merged Shared work, addressed by a follow-up Shared PR. | Give cross-repository changes an explicit consumer scenario before declaring the provider contract sufficient. Reconstruct timing before classifying this as a reviewer miss. |
+| "Review PR 443 implementation" reproduced confirmation state carrying across orders and stale approved actions after cancellation. Its remediation report still identified real-API acceptance as unverified. | These are strong evaluation candidates. Also check that runtime gaps survive handoff and remain completion blockers when required. A completed findings batch is not full delivery completion. |
+| "Address PR 438 review findings" corrected local-only design references and required role-gate coverage in the task plan. | Documentation can control security-relevant behavior. Do not exclude it categorically; route it to the existing documentation or spec reviewer. |
 
 ## Proposed changes in priority order
 
