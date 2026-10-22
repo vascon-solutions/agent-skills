@@ -122,6 +122,16 @@ test('tokens, unlisted origins and remote loads are refused', (t) => {
     /manifest contains access_token/,
   ]);
 
+  const variants = workspace(t);
+  variants.edit(variants.page, '<div class="bar"></div>', '<div class="bar"><img src="img/1-01-job-list.png" srcset="img/1-01-job-list.png 1x, https://fieldops.example.test/hero@2x.png 2x" alt="Jobs"><video poster="https://fieldops.example.test/poster.png"></video><svg><image href="https://fieldops.example.test/map.png"/></svg></div>');
+  variants.edit(variants.manifest, '- None.', '- The support copy pasted authorization: bearer abcdefghijklmnop into the job note.');
+  assertReported(failuresOf(variants), [
+    /page loads a remote resource: https:\/\/fieldops\.example\.test\/hero@2x\.png/,
+    /page loads a remote resource: https:\/\/fieldops\.example\.test\/poster\.png/,
+    /page loads a remote resource: https:\/\/fieldops\.example\.test\/map\.png/,
+    /manifest contains a Bearer token/,
+  ]);
+
   const missing = workspace(t);
   missing.edit(missing.manifest, '- Allowed origins: https://fieldops.example.test, https://mail.example.test\n', '');
   assertReported(failuresOf(missing), [/no "- Allowed origins:" line/]);

@@ -15,7 +15,7 @@ const SECRET_PATTERNS = [
   { name: 'a JWT', re: /eyJ[\w-]{6,}\.eyJ[\w-]{6,}\.[\w-]+/ },
   { name: 'token=', re: /token=/i },
   { name: 'access_token', re: /access_token/i },
-  { name: 'a Bearer token', re: /Bearer\s+[\w.~+/-]{8,}/ },
+  { name: 'a Bearer token', re: /\bBearer\s+[\w.~+/-]{8,}/i },
 ];
 
 function usage(exitCode = 0) {
@@ -143,10 +143,14 @@ function localRefs(html) {
 
 function remoteLoads(html) {
   const found = [];
-  for (const m of html.matchAll(/<(?:img|script|iframe|source|video|audio|embed|object|link)\b[^>]*>/gi)) {
-    for (const name of ['src', 'href', 'data', 'srcset']) {
+  for (const m of html.matchAll(/<(?:img|image|script|iframe|source|video|audio|track|embed|object|link|input)\b[^>]*>/gi)) {
+    for (const name of ['src', 'href', 'xlink:href', 'data', 'poster']) {
       const value = attr(m[0], name);
       if (value && isRemote(value.trim())) found.push(value.trim());
+    }
+    const srcset = attr(m[0], 'srcset');
+    for (const candidate of srcset ? srcset.split(',').map((c) => c.trim().split(/\s+/)[0]).filter(Boolean) : []) {
+      if (isRemote(candidate)) found.push(candidate);
     }
   }
   for (const m of html.matchAll(/url\(\s*["']?([^"')]+)/gi)) {
