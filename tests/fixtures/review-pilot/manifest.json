@@ -2,44 +2,9 @@
   "version": 1,
   "delivery_base": "1223722f46475f6a79611c826a49f2db6ef270e1",
   "historical_sources": {
-    "repository": "floatstar/ncdmb-procurement-ui",
-    "pr": 443,
-    "candidate": "8f290a2bca56e6311c2868128e21978839045a08",
-    "fix": "d7981e74cb626cfab99ffdffba7881d7e9f65c50",
-    "retrieved_at": "2026-10-22",
-    "evidence_directory": "/Users/dee/agent-artifacts/delivery-review-pilot-2026-10-22/private-source",
-    "source_files": [
-      {
-        "path": "apps/procurement-ui/src/routes/_authenticated/direct-order.$id.tsx",
-        "revision": "8f290a2bca56e6311c2868128e21978839045a08",
-        "sha256": "b1c095a18883e6833522ca064036be931f551e34b60cb522f00b4fe4bccde843"
-      },
-      {
-        "path": "apps/procurement-ui/src/features/service-requests/components/direct-orders/direct-order-detail-workspace.tsx",
-        "revision": "8f290a2bca56e6311c2868128e21978839045a08",
-        "sha256": "6006525e73a036b4059c49b32742261e0de38e6cc58cd1da4b654af240652682"
-      },
-      {
-        "path": ".agent/tasks/qa-direct-order-cancel-and-reissue.md",
-        "revision": "8f290a2bca56e6311c2868128e21978839045a08",
-        "sha256": "eea28da77b9491fdd4f7ef2bafedb2f695e5da60797911c3b0f839ad872a998b"
-      },
-      {
-        "path": "apps/procurement-ui/src/routes/_authenticated/direct-order.$id.tsx",
-        "revision": "d7981e74cb626cfab99ffdffba7881d7e9f65c50",
-        "sha256": "332c8a4dc70642b6e40415c06ee474dfec85a7a68373a66a82ecd8f2f1a22726"
-      },
-      {
-        "path": "apps/procurement-ui/src/features/service-requests/components/direct-orders/direct-order-detail-workspace.tsx",
-        "revision": "d7981e74cb626cfab99ffdffba7881d7e9f65c50",
-        "sha256": "7cfd96bb746e1b44fefd46763320011b6da9335736bc2d22643088cef9b2490f"
-      },
-      {
-        "path": ".agent/tasks/qa-direct-order-cancel-and-reissue.md",
-        "revision": "d7981e74cb626cfab99ffdffba7881d7e9f65c50",
-        "sha256": "eea28da77b9491fdd4f7ef2bafedb2f695e5da60797911c3b0f839ad872a998b"
-      }
-    ]
+    "description": "Private client UI repository, withheld.",
+    "retention": "Retained outside the repository.",
+    "private_file_sha256": "bc3b297e45ec222a6b88f8098ef3490bee5907f6766d436b70b371dbcc9e0a57"
   },
   "cases": [
     {
@@ -53,8 +18,8 @@
       "defense": "new view on identity change; old async closure remains bound to prior view",
       "provenance": "sanitized independent reproduction of verified historical mechanism",
       "source_evidence": {
-        "candidate_symbol": "DirectOrderDetailPage / DirectOrderDetailWorkspace",
-        "fix_symbol": "key={id}",
+        "candidate_symbol": "record detail route / record detail workspace",
+        "fix_symbol": "record identity boundary",
         "requirement": "confirmation and reason are record-bound",
         "original_candidate_runtime": "not executed; candidate and fix inspected; portable mechanism probed separately"
       }
@@ -70,11 +35,14 @@
       "defense": "store authoritative cancellation response before attempting refresh",
       "provenance": "sanitized independent reproduction of verified historical mechanism",
       "source_evidence": {
-        "candidate_symbol": "DirectOrderDetailPage / DirectOrderDetailWorkspace",
-        "fix_symbol": "cancelMutation.onSuccess / queryClient.setQueryData",
-        "requirement": "cancelled orders have no mutation or PDF actions",
+        "candidate_symbol": "record detail route / record detail workspace",
+        "fix_symbol": "confirmed mutation response cached before refresh",
+        "requirement": "cancelled records have no mutation or download actions",
         "original_candidate_runtime": "not executed; candidate and fix inspected; portable mechanism probed separately"
-      }
+      },
+      "known_limitations": [
+        "The frozen requirements use reject for both duplicate refusal and Promise rejection. Promise-return semantics remain unspecified; clarify them in the next fixture revision."
+      ]
     },
     {
       "id": "c03",
@@ -99,8 +67,8 @@
       "defense": "record-keyed workspaces retain pending and failed state without sharing state between IDs",
       "provenance": "sanitized independent reproduction of verified historical mechanism",
       "source_evidence": {
-        "candidate_symbol": "DirectOrderDetailPage / DirectOrderDetailWorkspace",
-        "fix_symbol": "key={id}",
+        "candidate_symbol": "record detail route / record detail workspace",
+        "fix_symbol": "record identity boundary",
         "requirement": "confirmation and reason are record-bound",
         "original_candidate_runtime": "not executed; candidate and fix inspected; portable mechanism probed separately"
       }
@@ -116,11 +84,14 @@
       "defense": "store authoritative cancellation response before attempting refresh",
       "provenance": "sanitized independent reproduction of verified historical mechanism",
       "source_evidence": {
-        "candidate_symbol": "DirectOrderDetailPage / DirectOrderDetailWorkspace",
-        "fix_symbol": "cancelMutation.onSuccess / queryClient.setQueryData",
-        "requirement": "cancelled orders have no mutation or PDF actions",
+        "candidate_symbol": "record detail route / record detail workspace",
+        "fix_symbol": "confirmed mutation response cached before refresh",
+        "requirement": "cancelled records have no mutation or download actions",
         "original_candidate_runtime": "not executed; candidate and fix inspected; portable mechanism probed separately"
-      }
+      },
+      "known_limitations": [
+        "The frozen requirements use reject for both duplicate refusal and Promise rejection. Promise-return semantics remain unspecified; clarify them in the next fixture revision."
+      ]
     },
     {
       "id": "c06",

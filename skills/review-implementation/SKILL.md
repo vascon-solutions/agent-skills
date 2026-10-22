@@ -33,7 +33,7 @@ Distinguish newly introduced defects, existing defects newly exposed by this cha
 For each actionable finding include file:line or symbol, the failure scenario, violated requirement or concrete risk, impact, supporting evidence, and the smallest credible fix. Start its existing textual `evidence` field with a verification state:
 
 - `confirmed`: source evidence proves a reachable trigger and incorrect result, or an attributed reproduction demonstrates them.
-- `plausible`: a credible mechanism depends on a named runtime, dependency, or configuration fact that remains unverified. Put the smallest check that would settle it in `unverified`.
+- `plausible`: a credible mechanism depends on a named runtime, dependency, configuration, or authoritative requirement fact that remains unverified. Put the smallest check or requirement clarification that would settle it in `unverified`.
 - `refuted`: evidence disproves a claim or an applicable defense handles it. Use this state when recording rejected external findings, with the defense cited. Discard internal refuted hypotheses instead of reporting them as new actionable findings.
 
 Verification state describes evidence; severity describes impact. Preserve plausible consequential risks without numerical confidence cutoffs or presenting them as confirmed. During owner triage, plausible findings begin as `unclear`; confirmed findings still need scope and disposition evaluation. Refuted external findings follow the existing invalid/rejected path.
@@ -58,7 +58,7 @@ Report `pass`, `pass-with-fixes`, or `fail`, findings ordered by severity, and m
 - `pass-with-fixes` identifies actionable corrections; it does not mean remediation is complete.
 - `fail` identifies blocking defects or required evidence gaps. Critical defects block; explain why any other finding blocks the task's required outcome. Minor advisory cleanup alone does not fail a review.
 
-Pending-finding gates remain binding for every verdict. Put missing required acceptance in `unverified`; a reviewer verdict cannot waive it. Record inspected security boundaries and limitations in the existing summary and evidence fields.
+Pending-finding gates remain binding for every verdict. Put missing required acceptance in `unverified`; a reviewer verdict cannot waive it. Record inspected security boundaries and limitations in the compact summary inside the `verdict_or_answer` string and existing evidence fields.
 
 Distinguish inspected evidence from checks you ran and note whether review was local or independent. A pass applies to the stated scope and evidence, not to unverified runtime behavior.
 

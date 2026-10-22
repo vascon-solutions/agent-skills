@@ -6,7 +6,7 @@ Use this protocol to compare two frozen implementation-review versions on six po
 
 Read the [pilot task](../../docs/tasks/2026-10-18-delivery-review-pilot.md) and the evaluator-only [manifest](../fixtures/review-pilot/manifest.json). The manifest owns provenance, candidate and requirement hashes, expected mechanisms, pair membership, and corrected defenses. Keep it with the evaluator.
 
-Verify historical admission against the original candidate, accepted fix, and requirements. The first two pairs independently model mechanisms verified from procurement UI PR 443. The authorization pair is synthetic. Private source stays outside this repository; portable probes demonstrate the sanitized mechanisms, not execution of the original application.
+Verify historical admission against the original candidate, accepted fix, and requirements. The first two pairs independently model mechanisms verified from a private client UI change. The authorization pair is synthetic. Private source stays outside this repository; portable probes demonstrate the sanitized mechanisms, not execution of the original application.
 
 Freeze baseline skill sources from the verified delivery base before editing, then freeze revised sources before evaluating. Copy each version's linked references so relative links load that version. Do not invoke an installed skill by name or load one version's references from the other checkout.
 

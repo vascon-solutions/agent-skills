@@ -25,9 +25,9 @@ Independent shipping review caught incomplete envelope validation. The initial r
 
 The corrected validator checks the canonical key set, string verdict, lowercase severities, finding fields, cleanup, and status/blocker rules in both directions. It checks uncertainty strings, artifact references, and the read-only experiment boundary. Thirteen focused positive/negative controls pass; reassessing all outputs still gives twelve accepted and thirteen rejected. It never normalizes malformed evidence into a pass. Replacement briefs reformatted the instructions and made existing serialization constraints explicit, without findings or answer hints. Candidate, requirements, guidance, model, effort, tools, and review method stayed fixed. Two valid earlier assessments were retained; ten final assessments came from replacement contexts. This brief difference limits comparison.
 
-The revised authorization assessment's first replacement, run-15, also failed the severity contract. Dee authorized one further assessment with "Allow one additional assessment". Run-25 used that single exception. No further allowance was inferred.
+The revised authorization assessment's first replacement, run-15, also failed the severity contract. The owner authorized one further assessment with "Allow one additional assessment". Run-25 used that single exception. No further allowance was inferred.
 
-There were 25 attempts in total: twelve accepted final assessments and thirteen malformed outputs. This includes two initial identity-fixture attempts, one affected-pair correction, and eleven output-format replacement attempts. All raw failures, input bytes, recovered task payloads, hashes, and receipts remain retained. The earlier report remains in commit `53ad42b`; the earlier incorrect audit records remain as `*.initial.json` beside the corrected records.
+There were 25 attempts in total: twelve accepted final assessments and thirteen malformed outputs. This includes two initial identity-fixture attempts, one affected-pair correction, and eleven output-format replacement attempts. All raw failures, input bytes, recovered task payloads, hashes, and receipts remain retained. The earlier report and incorrect audit records remain retained outside the repository beside the corrected records.
 
 A second independent review found that the saved `brief.json` files contained ambient child context rather than dispatched tasks. The owner recovered all 25 exact plaintext task payloads from the visible dispatch calls in the active conversation. Each is retained as `dispatched-task.txt` and `dispatch-payload.json`, with hashes and original dispatch IDs in the index. Persisted parent task text is encrypted, so recovery provenance is explicit in `dispatch-provenance.json`. Replacement diffs are retained; the old ambient logs remain separate.
 
@@ -37,24 +37,28 @@ That review also found missing validator cases for non-complete results with nul
 
 The initial corrected identity fixture lost its pending guard and failed reason when revisiting a record. An owner-run negative-control probe independently reproduced both failures from its retained bytes. The correction stores separate state by record ID and clarifies first selection versus return. Final probes confirm duplicate prevention on revisit, retained failed input, and independent current-record confirmation. Both variants of the affected pair used the final fixture and requirements.
 
-The historical mechanisms were verified against procurement UI PR 443 candidate `8f290a2bca56e6311c2868128e21978839045a08`, fix `d7981e74cb626cfab99ffdffba7881d7e9f65c50`, original route/workspace, requirements, and added integration assertions. Fixtures are independently written portable reproductions; the original React application was not executed. The server authorization pair is explicitly synthetic.
+The historical mechanisms were verified against a private client UI candidate, its accepted fix, requirements, and integration assertions. Source identities and paths are retained outside the repository and bound by the private-file hash in the manifest. Fixtures are independently written portable reproductions; the original application was not executed. The server authorization pair is explicitly synthetic.
 
 The owner probed all six modules through their exported interfaces. Probes reproduce the three buggy mechanisms and verify corrected behavior, successful flows, rejection recovery, and duplicate guards. Syntax and fixture hashes passed. These probes are delivery evidence outside the repository. Existing portability and renderer suites own structural contracts; no new permanent automated test layer was added.
 
 ## Identities and read boundaries
 
-Baseline sources were frozen from delivery base `1223722f46475f6a79611c826a49f2db6ef270e1` before editing. Entrypoint SHA-256 values are:
+Baseline sources were frozen from delivery base `1223722f46475f6a79611c826a49f2db6ef270e1` before editing. The following entrypoint SHA-256 values identify the versions used for the historical pilot:
 
 - Baseline `e9dac7ce74a30128794d6a22784fb3b838ed23b0de1df5a0c89fd732e7fa58b3`.
 - Revised `785ed77fc0fefae20ef8f1ab7d0ee3ea857c51e2e187d67004d1ab1f3cf05f27`.
 
-The [fixture manifest](../tests/fixtures/review-pilot/manifest.json) records full candidate and requirement hashes, triggers, defenses, and provenance. Its SHA-256 is `796d66fbc9a4764fca6999b6d7ca53c8ca29dd162c8b08b03206fcb138e5cc91`.
+The [fixture manifest](../tests/fixtures/review-pilot/manifest.json) records full candidate and requirement hashes, triggers, defenses, and neutral provenance. Its SHA-256 is `f4426a340e0d0aa39cf265726578f4a517f6877a06d220c031c964a88c62ba08`.
 
-All assessments used fresh Codex 0.163.0 contexts with no parent history and at most two concurrent jobs. Requested and observed settings were `gpt-5.6-sol`, `medium`. Exact source/input manifests, outputs, recovered plaintext tasks, tool receipts, times, and result hashes are indexed at `/Users/dee/agent-artifacts/delivery-review-pilot-2026-10-22/evidence/assessment-index.json`. `envelope-audit.json` records every accepted or rejected result. Source trees and all input bundles are retained alongside them; private provenance is separate under `private-source/` and is not committed.
+All assessments used fresh Codex 0.163.0 contexts with no parent history and at most two concurrent jobs. Requested and observed settings were `gpt-5.6-sol`, `medium`. Source/input manifests, outputs, recovered plaintext tasks, tool receipts, times, and result hashes are retained outside the repository. The retained assessment index and envelope audit identify every accepted or rejected result. Source trees and all input bundles remain alongside them; private provenance is withheld from this manifest and report.
 
 Reviewers received only neutral candidates, requirements, selected skill trees, and input manifests. Pair labels, expected findings, fix identities, source descriptions, private material, and other outputs stayed outside their bundles. Tool records show bundle reads and hashes; all input bytes remained unchanged. Filesystem isolation was instructional. No exploit, application mutation, gate, external request, or delegation was observed.
 
 ## Limits of the result
+
+The assessment bundles contained the candidate, requirements, and skills tree. They did not contain `agents/reviewer.md` or the canonical reviewer envelope template, and assessments used the default agent rather than the canonical reviewer role. The role-adapter change was therefore not behaviorally tested. The missing template could have contributed to malformed outputs, but this sample does not establish causation.
+
+Post-review wording clarifies where to put security notes in the string verdict, adds requirement uncertainty to `plausible`, and corrects terminology. Those guidance changes were not rerun through the behavioral comparison. The counts above apply to the frozen historical pilot versions, not to a behavioral evaluation of the current wording. Frozen fixture bytes and hashes are unchanged; the manifest records the duplicate-refusal wording ambiguity for its next revision.
 
 The [protocol](../tests/scenarios/delivery-review-pilot.md) includes illustrative `plausible`/`unclear` and `refuted`/invalid mappings for separate contract inspection. They are not extra scored behavioral runs. Verification state remains separate from severity; no role, mode, schema, review bound, or publication authority changed.
 

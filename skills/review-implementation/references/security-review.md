@@ -27,8 +27,8 @@ Judge realistic exploitability from source and supplied evidence without attempt
 
 ## Bound coverage and report gaps
 
-An exclusion needs a threat-model reason or a named control with applicable evidence. Do not categorically exclude documentation, tests, denial of service, dependencies, environment variables, URLs, shell scripts, prompt content, or unsafe and foreign-language interfaces. Inspect only relevant risks; this list does not require a repository-wide audit.
+An exclusion needs a threat-model reason or a named control with applicable evidence. Do not categorically exclude documentation, tests, denial of service, dependencies, environment variables, URLs, shell scripts, prompt content, or unsafe and foreign-function interfaces. Inspect only relevant risks; this list does not require a repository-wide audit.
 
 Documentation or test changes can alter runtime or instruction behavior. Keep standalone documentation review with `review-doc-changes`, and task correctness with `review-task-docs`; use their evidence when the implementation depends on it.
 
-Record inspected boundaries, justified exclusions, and limitations in the existing review summary and evidence fields. Missing required runtime acceptance stays in `unverified` and remains a delivery gate. A code review establishes neither runtime acceptance nor merge authority.
+Record inspected boundaries, justified exclusions, and limitations in the compact summary inside the `verdict_or_answer` string and existing evidence fields. Missing required runtime acceptance stays in `unverified` and remains a delivery gate. A code review establishes neither runtime acceptance nor merge authority.
