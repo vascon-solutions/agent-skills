@@ -8,7 +8,7 @@ This is one feature-grade delivery in `vascon-solutions/agent-skills`, targeting
 
 ## Source Context
 
-BE-01-01-q2 in bolamark-erp (2026-10-06) was measured from its session transcript by an independent reviewer:
+BE-01-01-q2 in an ERP project (2026-10-06) was measured from its session transcript by an independent reviewer:
 
 - ledger bookkeeping on the critical path: about 520s (range 350–640s);
 - about 17% of agent working time and about 20% of output tokens;
@@ -35,9 +35,9 @@ The rejections came from:
 One refused prepared record did not stop the script, and the push ran anyway.
 
 Sources:
-- session transcript `/Users/dee/.claude/projects/-Users-dee-Code-ALPHASKY-bolamark-erp/e895cee9-c247-477f-977a-cb3a87244630.jsonl`;
+- the session transcript, kept outside the repository;
 - the session's own delivery report (relayed in the 2026-10-06 skill-pack session);
-- partial artefacts in `/Users/dee/agent-artifacts/delivery-ledger-cost-2026-10-06/`. Its per-call table has no category labels, so the per-area figures are not reproducible from the retained files alone.
+- partial artefacts in `~/agent-artifacts/delivery-ledger-cost-2026-10-06/`. Its per-call table has no category labels, so the per-area figures are not reproducible from the retained files alone.
 
 This task was split out of a combined ledger task by an independent spec review.
 

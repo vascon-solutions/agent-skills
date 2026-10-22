@@ -14,7 +14,7 @@ This is one improvement-grade delivery in `vascon-solutions/agent-skills`, targe
 
 ## Source Context
 
-Codebase findings from the BE-01-01-q2 delivery in `bolamark-erp` (2026-10-06), reviewed with Dee:
+Codebase findings from the BE-01-01-q2 delivery in an ERP project (2026-10-06), reviewed with Dee:
 
 - A whole-repo `pnpm exec ultracite fix` changed an unrelated evidence file. The session reverted it, then ran a whole-repo check for more than 10 minutes before killing it.
 - After a lint fix, Biome printed nothing and the session went straight to the full gate. Gate-2 failed on lint after 166s.
@@ -25,10 +25,10 @@ Codebase findings from the BE-01-01-q2 delivery in `bolamark-erp` (2026-10-06), 
 
 | Repository | Whole-tree defaults | Existing changed-file tooling |
 | --- | --- | --- |
-| bolamark-erp | `format: biome format --write .` | none |
-| taf-marketplace | `fix: ultracite fix`; lint-staged runs `ultracite fix` on staged files | lint-staged (commit time only) |
-| ncdmb-procurement-ui | `fix: ultracite fix`; `AGENTS.md` instructs "Run `pnpm exec ultracite fix` to auto-fix formatting before committing"; lint-staged as taf | `AGENTS.md` changed-file `ultracite check <changed files>` guidance; `validate:affected` (receipt-backed) |
-| ncdmb-procurement-api | `lint: eslint "{src,apps,libs,test}/**/*.ts" --fix`; `format: prettier --write …` | `validate:changed` (read-only ESLint `--max-warnings=0` on changed files, build when triggered, `jest --findRelatedTests`) |
+| erp-project | `format: biome format --write .` | none |
+| marketplace-project | `fix: ultracite fix`; lint-staged runs `ultracite fix` on staged files | lint-staged (commit time only) |
+| procurement-ui | `fix: ultracite fix`; `AGENTS.md` instructs "Run `pnpm exec ultracite fix` to auto-fix formatting before committing"; lint-staged as marketplace-project | `AGENTS.md` changed-file `ultracite check <changed files>` guidance; `validate:affected` (receipt-backed) |
+| procurement-api | `lint: eslint "{src,apps,libs,test}/**/*.ts" --fix`; `format: prettier --write …` | `validate:changed` (read-only ESLint `--max-warnings=0` on changed files, build when triggered, `jest --findRelatedTests`) |
 
 Dee chose a cross-repository contract, a reference script copied into each repository, skill rules, and a user-level hook.
 
@@ -38,7 +38,7 @@ None external. This task defines the contract. Companion tasks:
 
 - `docs/tasks/2026-10-06-delivery-ledger-opt-in.md` and `docs/tasks/2026-10-06-delivery-ledger-ergonomics.md`
 - `docs/tasks/2026-10-06-delivery-audit-and-review-defaults.md`
-- Per-repository adoption: `.agent/tasks/agent-script-contract-adoption.md` in taf-marketplace, ncdmb-procurement-ui, ncdmb-procurement-api and bolamark-erp.
+- Per-repository adoption: `.agent/tasks/agent-script-contract-adoption.md` in marketplace-project, procurement-ui, procurement-api and erp-project.
 
 ## Architecture Summary
 
@@ -61,13 +61,13 @@ The canonical copy and its tests live in agent-skills. Repositories copy it with
 | Report paragraph (shipped, evidence, gaps, preserved files) | `SKILL.md:60` |
 | Owner cleanup is defined only for devbox environments | `SKILL.md:40`; `skills/docker-app-verify/SKILL.md:32` |
 | Skills install by symlink; no hook installer | `bin/link-skills.sh`, `bin/install.sh` |
-| Repository facts in the survey table | each repository's `package.json`, `AGENTS.md`, `.husky/pre-commit`; `ncdmb-procurement-api/scripts/validate-changed.mjs:250`, `:263` |
-| Node floors: bolamark `>=24 <25`; taf `>=22`; ncdmb UI and API have no `engines` (CI uses Node 24) | each `package.json`, CI config |
-| Three of the four are Biome repositories with different quote styles (bolamark and taf `single`, ncdmb-ui default `double`), and none excludes `tools/` or `scripts/` | each `biome.jsonc` |
+| Repository facts in the survey table | each repository's `package.json`, `AGENTS.md`, `.husky/pre-commit`; `procurement-api/scripts/validate-changed.mjs:250`, `:263` |
+| Node floors: erp-project `>=24 <25`; marketplace-project `>=22`; procurement UI and API have no `engines` (CI uses Node 24) | each `package.json`, CI config |
+| Three of the four are Biome repositories with different quote styles (erp-project and marketplace-project `single`, procurement-ui default `double`), and none excludes `tools/` or `scripts/` | each `biome.jsonc` |
 
 ## Current Behavior To Preserve
 
-- **Tooling choices.** Ultracite/Biome repositories keep Ultracite; ncdmb-api keeps ESLint (with Prettier through ESLint). The script runs configured tools and never chooses one.
+- **Tooling choices.** Ultracite/Biome repositories keep Ultracite; procurement-api keeps ESLint (with Prettier through ESLint). The script runs configured tools and never chooses one.
 - **Existing scripts.** `agent:*` are additions: `check`, `lint`, `fix`, `validate:affected`, `validate:changed` and lint-staged keep their behaviour.
 - **Gates.** Repository gates keep their lanes, receipts and heavy-command locks. `agent:gate` invokes them and never reimplements them.
 - **Portability.** Skills stay portable: without `agent:*`, the delivery loop falls back to the general rules.
@@ -217,7 +217,7 @@ The script with contract, README, config schema and version verification; the gu
 | The hook blocks scoped commands or misses whole-tree ones | Table-driven cases: zero-path forms, globs, `cd` plus segments, env prefixes, runners, `pnpm` script resolution, unparseable allow, both deny-reason variants | `tests/hooks.test.mjs` |
 | Pack regressions | `node --test tests/*.test.mjs` | owner |
 
-**Runtime acceptance:** in a scratch clone of bolamark-erp, add a throwaway, uncommitted `agentScripts` block and the four `agent:*` scripts to its `package.json` and copy the reference script in (bolamark's own adoption is a separate task and is not a prerequisite here). Then run:
+**Runtime acceptance:** in a scratch clone of the ERP project, add a throwaway, uncommitted `agentScripts` block and the four `agent:*` scripts to its `package.json` and copy the reference script in (that repository's own adoption is a separate task and is not a prerequisite here). Then run:
 1. `agent:lint` on a one-file change;
 2. `agent:serve --detach api web` on overridden ports;
 3. `--stop`, after which no listener is left.
@@ -236,6 +236,6 @@ The script with contract, README, config schema and version verification; the gu
 
 ## Follow-ups
 
-- Adoption tasks in taf-marketplace, ncdmb-procurement-ui, ncdmb-procurement-api and bolamark-erp.
+- Adoption tasks in marketplace-project, procurement-ui, procurement-api and erp-project.
 - An `owned-template-sync` check using `--verify`.
 - A Codex equivalent of the hook, if Codex gains a pre-tool hook.

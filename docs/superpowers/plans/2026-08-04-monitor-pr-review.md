@@ -364,7 +364,7 @@ Skip the commit when no files changed; never create an empty commit.
 Run:
 
 ```bash
-./bin/link-skills.sh /Users/dee/agent-skills/.worktrees/monitor-pr-review
+./bin/link-skills.sh ~/agent-skills/.worktrees/monitor-pr-review
 ```
 
 Expected: every target reports `monitor-pr-review` as linked or already pointing at the isolated checkout, with no missing skill errors.

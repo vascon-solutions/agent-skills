@@ -2248,7 +2248,7 @@ function writeReceipt(repo, owner, overrides = {}) {
   };
   const file = writeJson(path.join(repo.inputs, "receipt-" + randomUUID() + ".json"), receipt);
   const identity = { baseOid: receipt.baseOid, candidateOid: receipt.candidateOid, dependency: receipt.dependency, lane: receipt.lane, lockfileHash: receipt.lockfileHash, policyHash: receipt.policyHash };
-  return { file, receipt, record: commandValidation(repo, { kind: "receipt", command: null, log: null, oid: receipt.candidateOid, exit_code: receipt.exitCode, result: receipt.exitCode === 0 ? "pass" : "fail", receipt: { path: file, sha256: sha(fs.readFileSync(file)), adapter: "ncdmb-validation-receipt-v1", identity } }) };
+  return { file, receipt, record: commandValidation(repo, { kind: "receipt", command: null, log: null, oid: receipt.candidateOid, exit_code: receipt.exitCode, result: receipt.exitCode === 0 ? "pass" : "fail", receipt: { path: file, sha256: sha(fs.readFileSync(file)), adapter: "ui-validation-receipt-v1", identity } }) };
 }
 
 function completeCommit(owner, evidence) {

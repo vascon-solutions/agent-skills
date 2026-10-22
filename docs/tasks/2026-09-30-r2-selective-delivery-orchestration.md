@@ -14,13 +14,13 @@ This document prepares delivery. The current request authorizes task authoring, 
 
 ## Design Reference
 
-Source Spec: `/Users/dee/agent-artifacts/cross-agent-subagent-roster/markdown/implementation-spec.md`, version 4.2, including the Codex adapter correction.
+Source Spec: `~/agent-artifacts/cross-agent-subagent-roster/markdown/implementation-spec.md`, version 4.2, including the Codex adapter correction.
 
 Source SHA-256 at task creation is `a32323fe1b81828acb3ac2d45420e762d7054e82065c84ebccffaa6e5911c055`.
 
 The spec is authoritative for the R2 contracts. Use sections 7, 9, 10.1, 10.2, 11, and 13 together. Sections 3 and 16 preserve accepted decisions. Section 7.3 owns selective dispatch. Section 12 owns the later measurement boundary. Do not implement the whole spec through this task.
 
-The current decision in `/Users/dee/agent-artifacts/cross-agent-subagent-roster/markdown/r2-orchestration-addendum.md` supplies rationale. Earlier everyday-work proposals in that document are superseded.
+The current decision in `~/agent-artifacts/cross-agent-subagent-roster/markdown/r2-orchestration-addendum.md` supplies rationale. Earlier everyday-work proposals in that document are superseded.
 
 ## Architecture Summary
 
@@ -47,7 +47,7 @@ At authoring time, the current branch is `skills/review-delivery-guidance` with 
 
 Read-only executable checks reported Codex CLI `0.146.0` and Claude Code `2.1.285`. Codex also reported a denied PATH-alias setup operation. These version checks do not prove discovery, authentication, model availability, or successful dispatch.
 
-Existing pilot files are `/Users/dee/.codex/agents/ui-auditor.toml` and `/Users/dee/.claude/agents/ui-auditor.md`. Their ownership and content must be inspected before migration.
+Existing pilot files are `~/.codex/agents/ui-auditor.toml` and `~/.claude/agents/ui-auditor.md`. Their ownership and content must be inspected before migration.
 
 ## Current Behavior To Preserve
 
@@ -63,7 +63,7 @@ Existing pilot files are `/Users/dee/.codex/agents/ui-auditor.toml` and `/Users/
 
 Start from current remote `main`, retaining its merged R1 and R3 implementations. Verify the target and baseline again at execution time. Use a safe checkout selected by the delivery loop, with isolation when needed for unrelated changes.
 
-The task source is currently an uncommitted document in `/Users/dee/agent-skills/docs/tasks/`. If delivery uses another checkout, read this exact source and carry only this task document into the matching task path there. Do not copy unrelated dirty changes. The source spec and review report remain readable external inputs on this host.
+The task source is currently an uncommitted document in `~/agent-skills/docs/tasks/`. If delivery uses another checkout, read this exact source and carry only this task document into the matching task path there. Do not copy unrelated dirty changes. The source spec and review report remain readable external inputs on this host.
 
 Live R2 probes require authenticated Claude Code and Codex clients, access to the requested models, and a safe fixture environment. Inspect available discovery and dispatch controls before choosing adapters. Do not infer these capabilities from executable versions alone.
 
@@ -109,7 +109,7 @@ An implementation review dispatch must respect the frozen candidate, finalized b
 
 Qualify the replacement auditor separately in each required runtime. Show the migration diff and preserve a backup before changing owned pilot registrations. Retain a pilot where replacement probes fail. Do not overwrite an unowned conflict or leave ambiguous active aliases.
 
-Save redacted runtime probe reports outside the repository under `/Users/dee/agent-artifacts/cross-agent-subagent-roster/`. Identify the candidate, canonical definition hashes, renderer version, client version, selected adapter, overrides, observed settings, enforcement, and limitations. A fixture or generated file alone is not a successful native runtime probe.
+Save redacted runtime probe reports outside the repository under `~/agent-artifacts/cross-agent-subagent-roster/`. Identify the candidate, canonical definition hashes, renderer version, client version, selected adapter, overrides, observed settings, enforcement, and limitations. A fixture or generated file alone is not a successful native runtime probe.
 
 ## Excluded
 

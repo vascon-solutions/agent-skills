@@ -42,7 +42,7 @@ Add one global `implementation-map` skill instead of separate frontend/backend s
 - Existing skills must keep their current names, ordering, and behavior.
 - `bin/link-skills.sh` must remain idempotent and continue failing when a registered skill directory is missing.
 - `html-artifact` and `image-artifact` remain separate renderer skills; `implementation-map` only decides whether to invoke them after its Markdown map exists.
-- The new skill must stay global and framework-agnostic. It must not hardcode NCDMB, FLOATSTAR, TanStack, NestJS, or any repo-specific conventions as requirements.
+- The new skill must stay global and framework-agnostic. It must not hardcode client names, TanStack, NestJS, or any repo-specific conventions as requirements.
 - No scanner script is added in v1.
 
 ## Prerequisites

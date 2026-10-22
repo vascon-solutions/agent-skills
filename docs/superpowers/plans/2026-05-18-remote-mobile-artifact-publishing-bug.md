@@ -10,7 +10,7 @@ Source mode: issue.
 
 This task comes from a live failure while sharing an `html-artifact` output from a remote Codex session:
 
-- Generated artifact in `alphadigital-edge/taf-marketplace`: `docs/app-wiring.html`
+- Generated artifact in a marketplace project repository: `docs/app-wiring.html`
 - Local preview URL worked only on the remote host: `http://127.0.0.1:4317/docs/app-wiring.html`
 - User was on mobile through a remote Codex connection and could not open the URL
 - GitHub Pages fallback was too slow because Pages was not configured and no `gh-pages` branch existed

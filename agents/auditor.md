@@ -63,7 +63,7 @@ Reply with exactly one fenced `json` block and nothing else:
     {"id": "F1", "severity": "critical | important | minor | info", "summary": "", "location": "<actor, step or endpoint>", "expected": "", "actual": "", "reproduction": "", "evidence": "<path>"}
   ],
   "unverified": ["<scenario or checkpoint and why>"],
-  "artifacts": ["<report path>"],
+  "artifacts": ["<report path, or none when the report is returned inline>"],
   "cleanup": {"state": "complete | not_needed | failed", "detail": ""},
   "heavy_commands": [{"category": "", "cwd": "", "result": "", "evidence": "<path>"}],
   "block_reason": null
@@ -71,6 +71,8 @@ Reply with exactly one fenced `json` block and nothing else:
 ```
 
 Keep `block_reason` JSON `null` for a complete result. Otherwise set it to `missing_input`, `missing_capability`, `permission`, `model_unavailable`, `judgment`, `timeout` or `runtime_error`.
+
+If you cannot write files, put the full report in `verdict_or_answer` and list no report path in `artifacts`; the lifecycle owner saves it.
 
 Use `partial` when some requested coverage completed and the rest is listed in `unverified`. Include every actionable finding; never drop one to shorten the reply. List every heavy command you ran, such as a build, test suite, service start or install. Never include transcripts, credentials, raw network dumps, accessibility trees or screenshots inline.
 

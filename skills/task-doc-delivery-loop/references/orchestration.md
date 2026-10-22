@@ -42,7 +42,7 @@ Send one brief per dispatch:
 `{run_id, role, mode, goal, candidate: {branch, oid, content_id, content_manifest}, source_paths, questions_or_scenarios, writable_paths, forbidden_actions, stop_condition, timeout_seconds, requested_tier, requested_model, requested_effort, allow_escalation}`
 
 - `candidate` names the frozen commit, or for local-only work the content identity and manifest described in the [ledger reference](delivery-ledger.md#evidence) (without a ledger, the changed paths and their state).
-- A UI, API or accessibility brief also carries the proven candidate URL, the environment, actors with a secure credential source (never the credential), fixtures, allowed application mutations, startup commands if needed, cleanup requirements and the coverage level. Prove which URL serves the candidate before dispatch.
+- A UI, API or accessibility brief also carries the proven candidate URL, the environment, actors with a secure credential source (never the credential), fixtures, allowed application mutations, startup commands if needed, cleanup requirements and the coverage level. Name an external report path even when the auditor has no file-write capability. Prove which URL serves the candidate before dispatch.
 - Add the mode's extra fields from [role dispatch defaults](role-dispatch.md). Give facts the role would otherwise rediscover.
 - The purpose of a delegated job lives in `goal`; no separate decision artifact is needed.
 
@@ -73,6 +73,7 @@ Consume the result:
 
 - A reply without exactly one fenced, parseable envelope with valid values is malformed: treat it as `error` with `runtime_error` and accept nothing from it. Prose outside a single valid envelope is not evidence; ignore it and note the formatting deviation.
 - Check the returned run ID, scope, candidate identity, coverage and limitations. Verify material findings against sources before fixing; resolve disagreements without repeating the whole job.
+- For an auditor result with no report path in `artifacts`, including `artifacts: []`, treat `verdict_or_answer` as the full inline report. Save it at the brief's report path outside the tested repository before recording the audit or cleaning up the environment. Record the saved path in the ledger's `audits` or the delivery summary, and in the delegated `role_runs` record when using a ledger. Apply this to supplied environments as well as Docker runs. If saving fails, report the preservation gap and never claim a saved path.
 - `partial` coverage is usable only for what it covered; everything in `unverified` stays a gap.
 - An audit `FAIL` is a product result and stays failing until fixed and rechecked. A role error never clears it and is never accepted as merely a role failure.
 - Delivery-review roles run no heavy commands. A listed one is reported, with its evidence, as a boundary breach.
