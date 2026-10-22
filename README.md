@@ -41,6 +41,7 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
     ├── repo-design-context/
     ├── publish-artifact/
     ├── variant-board/
+    ├── walkthrough-artifact/
     ├── brainstorm/
     ├── unslop/
     ├── task-doc/
@@ -101,6 +102,7 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 | `markdown-artifact`         | Create polished Markdown artifact workspaces under `~/agent-artifacts/<slug>/` from ideas, notes, UI/backend designs, learning topics, tutorials, task plans, and other early-stage source docs                                                                                      |
 | `image-artifact`            | Create static visual companions from existing Markdown, including summary cards, comparison boards, decision boards, concept posters, architecture diagrams, and API flow images, plus `board-snapshot` browser captures of issued variant boards. Repo Markdown defaults to `~/agent-artifacts/<repo-name>-<source-stem>/images/` |
 | `variant-board`             | Build or revise a UI variant board (before/after, option comparison, state coverage, defect report) from a brief in the target app's own design system on a white editorial page; verify, issue frozen versions under `html/versions/`, resolve task-doc citations, migrate legacy boards, and export/import bundles for hosts without the filesystem |
+| `walkthrough-artifact`      | Build a product walkthrough of shipped features on a non-production environment: real screenshots captured through `audit-ui`, one HTML page from a starter, an A4 landscape PDF, and a manifest that traces every image to its raw capture; `check` compares page and manifest, `pdf` prints and counts pages |
 | `artifact-workbench`        | Serve an artifact workspace or single HTML artifact through a localhost workbench (read-only by default, optional live refresh and selection capture) for variant comparison, browser QA, and pre-publish inspection                                                                                                                           |
 | `repo-design-context`       | Discover whether local repo styling, design tokens, brand assets, or architecture vocabulary can safely inform generated artifacts                                                                                                                                                   |
 | `publish-artifact`          | Publish a `~/agent-artifacts/<slug>/` workspace to S3, GitHub Wikis, ClickUp Docs, native Google Docs, or raw Google Drive folders with explicit destination flags. Explicit command only                                                                                            |
@@ -322,6 +324,12 @@ Documentation audits and reviews report findings without editing. Existing clean
 2. `node skills/variant-board/scripts/verify-variant-board.js check <board.html>` — structure and token-map checks; then preview with `artifact-workbench` for the scenario, banner, Before-label and viewport checks.
 3. `node skills/variant-board/scripts/verify-variant-board.js issue <board.html>` — freeze `html/versions/<board>.v<N>.html` and record it in `boards.md`; task docs cite the familiar `Companion: <path> (vN) — "Heading"` line plus the scenario anchor `(#section?dimension=id&…)`, and `cite` resolves it. `bump`, `publish`, and `migrate` cover revisions, late publish URLs, and boards cited before issuance existed.
 4. `node skills/variant-board/scripts/export-board-bundle.js export|import` — the bundle path for hosts without this filesystem (ChatGPT); the candidate is imported and verified here before issue.
+
+### Building product walkthroughs
+
+1. `walkthrough-artifact` — take the brief into `manifest.md`, adopt matching `audit-ui` evidence or run `audit-ui` with a walkthrough brief, curate images into `img/` with their raw sources, and build the page from `starter.html`.
+2. `node skills/walkthrough-artifact/scripts/walkthrough-artifact.js check <page.html>` — image and manifest parity both ways, raw-capture links, alt text and captions, allowed origins, token strings, the status table, and the starter's print block.
+3. `node skills/walkthrough-artifact/scripts/walkthrough-artifact.js pdf <page.html>` — print with headless Chrome and require one PDF page per section; preview with `artifact-workbench` and publish only when asked.
 
 ### Previewing artifact workspaces locally
 

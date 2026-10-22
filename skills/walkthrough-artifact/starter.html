@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WALKTHROUGH TITLE</title>
+<style>
+/* walkthrough:tokens (set from the brief) */
+:root {
+  --accent: #0f766e;
+  --env-label: "Non-production environment test data";
+}
+/* /walkthrough:tokens */
+:root {
+  --bg: #ffffff; --paper: #ffffff; --ink: #1f2937; --muted: #6b7280; --line: #d6dbe1;
+  --accent-tint: color-mix(in srgb, var(--accent) 10%, #ffffff);
+  --done-bg: #dcf5e7; --done-fg: #166534; --partial-bg: #fdf0d5; --partial-fg: #92400e; --info-bg: #e0ecff; --info-fg: #1d4ed8; --neutral-bg: #f3f4f6; --neutral-fg: #4b5563; --blocked-bg: #fde8e8; --blocked-fg: #991b1b;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  color-scheme: light;
+}
+* { box-sizing: border-box; margin: 0; padding: 0 }
+body { background: var(--bg); color: var(--ink); font-family: var(--font); line-height: 1.5; padding-block: 24px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)) }
+.wrap { max-width: 1120px; margin: 0 auto; display: grid; gap: 28px }
+.page { background: var(--paper); border-bottom: 1px solid var(--line); padding: 8px 0 28px; position: relative }
+.page:last-child { border-bottom: 0 }
+.top { display: flex; justify-content: space-between; align-items: center; gap: 12px; border-bottom: 1px solid var(--line); padding-bottom: 8px; margin-bottom: 18px; font-size: 13px; color: var(--muted) }
+.tag { font-size: 12px; font-weight: 600; color: var(--accent); border: 1px solid var(--accent); border-radius: 999px; padding: 2px 10px; white-space: nowrap }
+.main { display: grid; grid-template-columns: minmax(0, 62fr) minmax(0, 38fr); gap: 28px; align-items: start }
+figure { min-width: 0 }
+figure img { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 3px; max-width: 100% }
+figcaption { margin-top: 8px; font-size: 12.5px; color: var(--muted) }
+.text { min-width: 0 }
+.text h2 { font-size: 22px; font-weight: 650; line-height: 1.2; margin-bottom: 12px; text-wrap: balance }
+.text p { font-size: 15px; margin-bottom: 10px; max-width: 60ch }
+.note { background: var(--accent-tint); border-left: 4px solid var(--accent); border-radius: 3px; padding: 10px 14px; margin-top: 14px; font-size: 14px; max-width: 60ch }
+.cover { padding: 56px 0 40px }
+.cover .bar { width: 80px; height: 6px; background: var(--accent); margin-bottom: 28px }
+.cover h1 { font-size: 40px; font-weight: 700; margin-bottom: 12px; text-wrap: balance }
+.cover .sub { font-size: 19px; color: var(--muted); margin-bottom: 28px; max-width: 48ch }
+.cover .date { font-size: 15px }
+.ov { display: grid; grid-template-columns: 1.15fr 1fr; gap: 36px }
+.ov h2 { font-size: 26px; margin-bottom: 12px; text-wrap: balance }
+.ov h3, .two h3 { font-size: 13px; color: var(--accent); margin: 0 0 8px; text-transform: uppercase; letter-spacing: 0.05em }
+.ov p { font-size: 15px; margin-bottom: 10px; max-width: 62ch }
+.role { margin-bottom: 12px; font-size: 14.5px }
+.role b { display: block }
+.strip { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 12px; margin-top: 26px }
+.step { border: 1px solid var(--line); border-top: 4px solid var(--accent); border-radius: 3px; padding: 12px 14px; font-size: 13.5px; line-height: 1.45 }
+.step .n { font-size: 11px; color: var(--accent); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase }
+.step .h { font-weight: 650; font-size: 15px; margin: 3px 0 5px }
+.badge { display: inline-block; font-size: 12px; border-radius: 999px; padding: 2px 10px; white-space: nowrap; font-weight: 500 }
+.t-done { background: var(--done-bg); color: var(--done-fg) }
+.t-partial { background: var(--partial-bg); color: var(--partial-fg) }
+.t-info { background: var(--info-bg); color: var(--info-fg) }
+.t-neutral { background: var(--neutral-bg); color: var(--neutral-fg) }
+.t-blocked { background: var(--blocked-bg); color: var(--blocked-fg) }
+.tablewrap { overflow-x: auto }
+table.status { width: 100%; border-collapse: collapse; font-size: 13.5px }
+table.status th, table.status td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top }
+table.status th { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); font-weight: 600 }
+table.status td.n { font-variant-numeric: tabular-nums; color: var(--muted); width: 3em }
+table.status td.w { white-space: nowrap }
+.legend { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; font-size: 13px; color: var(--muted); align-items: center }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 28px }
+.two p, .two li { font-size: 15px; margin-bottom: 10px; max-width: 60ch }
+.two ul { padding-left: 20px }
+@media screen and (max-width: 820px) {
+  .main, .ov, .two { grid-template-columns: 1fr }
+  .strip { grid-auto-flow: row; grid-template-columns: 1fr 1fr }
+  .cover { padding: 32px 0 24px }
+  .cover h1 { font-size: 30px }
+}
+/* walkthrough:print (keep exactly as shipped; check compares it to the starter) */
+@media print {
+  @page { size: A4 landscape; margin: 0 }
+  body { background: #fff; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact }
+  .wrap { max-width: none; gap: 0; display: block }
+  .page { width: 297mm; height: 210mm; padding: 12mm 14mm 0; border: 0; overflow: hidden; page-break-after: always; break-after: page }
+  .page:last-child { page-break-after: auto; break-after: auto }
+  .page::after { content: var(--env-label); position: absolute; left: 14mm; right: 14mm; bottom: 7mm; font-size: 8pt; color: var(--muted); border-top: 0.3mm solid var(--line); padding-top: 2mm }
+  .top { height: 8mm; margin-bottom: 7mm; padding-bottom: 0; font-size: 9pt }
+  .tag { font-size: 8pt }
+  .main { display: flex; gap: 9mm; height: 160mm }
+  figure { flex: 0 0 62% }
+  figure img { width: auto; max-height: 148mm; max-width: 100% }
+  figcaption { font-size: 8.5pt; margin-top: 2.5mm }
+  .text { flex: 1 }
+  .text h2 { font-size: 17pt; margin-bottom: 5mm }
+  .text p { font-size: 10.5pt; margin-bottom: 3.5mm }
+  .note { font-size: 10pt; margin-top: 5mm; padding: 3.5mm 4mm }
+  .cover { display: flex; flex-direction: column; justify-content: center; padding: 0 0 0 28mm }
+  .cover .bar { width: 22mm; height: 1.6mm; margin-bottom: 8mm }
+  .cover h1 { font-size: 34pt; margin-bottom: 5mm }
+  .cover .sub { font-size: 15pt; margin-bottom: 14mm }
+  .cover .date { font-size: 11pt }
+  .ov { gap: 12mm }
+  .ov h2 { font-size: 20pt; margin-bottom: 5mm }
+  .ov h3, .two h3 { font-size: 11pt; margin-bottom: 3mm }
+  .ov p { font-size: 10.5pt; margin-bottom: 3mm }
+  .role { font-size: 10pt; margin-bottom: 3mm }
+  .strip { gap: 4mm; margin-top: 7mm }
+  .step { font-size: 9.5pt; padding: 3.5mm 4mm }
+  .step .n { font-size: 8pt } .step .h { font-size: 11pt }
+  table.status { font-size: 8.5pt; line-height: 1.25 }
+  table.status th, table.status td { padding: 1mm 2mm }
+  table.status th { font-size: 7pt }
+  .badge { font-size: 7.5pt; padding: 0.3mm 2mm }
+  .legend { font-size: 8pt; margin-top: 2.5mm }
+  .two { gap: 12mm }
+  .two p, .two li { font-size: 10.5pt; margin-bottom: 3mm }
+}
+/* /walkthrough:print */
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<section class="page cover">
+<div class="bar"></div>
+<h1>WALKTHROUGH TITLE</h1>
+<div class="sub">One sentence on what this walkthrough shows and where it runs.</div>
+<div class="date">DD Month YYYY · ENVIRONMENT LABEL</div>
+</section>
+
+<section class="page overview">
+<div class="top"><span>Overview</span><span class="tag">SCOPE TAG</span></div>
+<div class="ov">
+<div>
+<h2>What changed</h2>
+<p>One short paragraph per scope item, in product language.</p>
+</div>
+<div>
+<h3>Who does what</h3>
+<div class="role"><b>Role name</b>What this role does in the walkthrough.</div>
+</div>
+</div>
+<div class="strip">
+<div class="step"><div class="n">ITEM 1</div><div class="h">Scope item title</div>One line on what the pages show.</div>
+</div>
+</section>
+
+<!-- Optional; delete if unused. Rows must match the manifest's ## Status table: item, tone class, label. -->
+<section class="page status">
+<div class="top"><span>Overview · Where each item stands</span><span class="tag">DD Month YYYY</span></div>
+<div class="tablewrap">
+<table class="status">
+<thead><tr><th>Item</th><th>Title</th><th>Status</th><th>Note</th></tr></thead>
+<tbody>
+<tr><td class="n">1</td><td>Scope item title</td><td class="w"><span class="badge t-done">DONE LABEL</span></td><td>This walkthrough</td></tr>
+</tbody>
+</table>
+</div>
+<div class="legend"><span class="badge t-done">DONE LABEL</span> what the label means</div>
+</section>
+
+<!-- One section per step. Caption: actor · record · screen. -->
+<section class="page shot">
+<div class="top"><span>Item 1 · Scope item title</span><span class="tag">Item 1</span></div>
+<div class="main">
+<figure><img src="img/1-01-slug.png" alt="What the screenshot shows, in words"><figcaption>Actor · record · screen</figcaption></figure>
+<div class="text"><h2>Step heading</h2><p>What the reader should notice.</p><div class="note">Optional note.</div></div>
+</div>
+</section>
+
+<!-- Optional; delete if unused. Closing page for items that are API only or not pictured. -->
+<section class="page closing">
+<div class="top"><span>Not pictured</span><span class="tag">SCOPE TAG</span></div>
+<div class="two">
+<div>
+<h3>Item N · Title</h3>
+<p>What changed and why it is not on screen.</p>
+</div>
+</div>
+</section>
+
+</div>
+</body>
+</html>

@@ -114,7 +114,9 @@ Map the feature's acceptance criteria to observable checkpoints before acting. C
 ## Capture Critical Evidence
 
 Default to at most 12 screenshots. Capture critical transitions, terminal states,
-and defects—not every click. Prefer shallow or element-scoped snapshots and keep
+and defects—not every click. A walkthrough brief from
+[walkthrough-artifact](../walkthrough-artifact/SKILL.md) sets its own screenshot
+maximum, demo records and capture rules; follow the brief. Prefer shallow or element-scoped snapshots and keep
 full accessibility trees, console histories, and network dumps out of chat.
 
 Read [references/evidence-and-verdicts.md](references/evidence-and-verdicts.md)

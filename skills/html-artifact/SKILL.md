@@ -36,6 +36,7 @@ Use `image-artifact` when the user wants a low-text concept visual such as a pos
 - To host or serve the HTML file directly — hand local preview to `artifact-workbench`
 - When the destination expects Markdown (Slack, GitHub, README)
 - For a UI variant board — before/after panes, option trios, state coverage or defect reports drawn in the target app's design system and cited by a task doc at a version — use `variant-board`. `clickable-flow` and `approach-comparison` stay here for walkthroughs and comparisons no task doc will cite as a companion; if it will be cited as a companion, it is a board.
+- For a walkthrough of shipped features with real screenshots from a running environment, printed to PDF, use `walkthrough-artifact`
 
 ## Input
 
