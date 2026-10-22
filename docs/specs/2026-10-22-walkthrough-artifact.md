@@ -1,6 +1,6 @@
 # Accepted: walkthrough-artifact skill
 
-Status: accepted on 22 October 2026, from a brainstorm read against agent-skills `bdd85c0`. No skill, helper or test changes have been made.
+Status: accepted on 22 October 2026, from a brainstorm read against agent-skills `bdd85c0`. Implemented by `docs/tasks/2026-10-22-walkthrough-artifact.md`.
 
 ## Problem
 

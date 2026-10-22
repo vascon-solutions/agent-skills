@@ -1,6 +1,6 @@
 # Walkthrough artifact skill
 
-- Status: Ready for delivery.
+- Status: Implemented 2026-10-22 on `feat/walkthrough-artifact`. Both pilots passed; publishing to claude.ai is still unverified (see `skills/walkthrough-artifact/references/hosts.md`). The link script runs from the canonical checkout after merge.
 - Prepared: 2026-10-22.
 - Classification: Improvement; one new self-contained skill plus boundary lines in two existing skills and the pack catalogue.
 - Repository baseline: `1223722f46475f6a79611c826a49f2db6ef270e1` (`origin/main`). Recheck at execution time.
