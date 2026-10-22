@@ -2,6 +2,8 @@
 
 Use this protocol to compare two frozen implementation-review versions on six portable candidates. These are reviewer experiments, separate from product regression tests and the shipping candidate's independent review.
 
+The corrected bundle and role-contract requirements below apply to future comparisons. The historical pilot used frozen bundles without the canonical role template; its results and that limitation remain documented in the [comparison report](../../artifacts/delivery-review-pilot-results.md). The focused follow-up checks exercise the corrected contract separately and do not replace the historical paired assessments.
+
 ## Freeze the evidence and isolate each assessment
 
 Read the [pilot task](../../docs/tasks/2026-10-18-delivery-review-pilot.md) and the evaluator-only [manifest](../fixtures/review-pilot/manifest.json). The manifest owns provenance, candidate and requirement hashes, expected mechanisms, pair membership, and corrected defenses. Keep it with the evaluator.
@@ -10,7 +12,7 @@ Verify historical admission against the original candidate, accepted fix, and re
 
 Freeze baseline skill sources from the verified delivery base before editing, then freeze revised sources before evaluating. Copy each version's linked references so relative links load that version. Do not invoke an installed skill by name or load one version's references from the other checkout.
 
-Prepare twelve neutral input directories, one per candidate and guidance version. Each contains only the candidate, requirements, selected skill tree, and a SHA-256 input manifest. Keep pair labels, fix identities, source descriptions, provenance, expected findings, and other assessments outside every directory. Use fresh contexts without parent history and restrict reads to the supplied directory. Verify actual read paths afterward; isolation is instructional where the runtime cannot enforce a per-job filesystem boundary.
+Prepare twelve neutral input directories, one per candidate and guidance version. Each contains only the candidate, requirements, selected skill tree, the matching [canonical reviewer contract](../../agents/reviewer.md) at `agents/reviewer.md`, and a SHA-256 input manifest. Keep pair labels, fix identities, source descriptions, provenance, expected findings, and other assessments outside every directory. Use fresh contexts without parent history and restrict reads to the supplied directory. Verify actual read paths afterward; isolation is instructional where the runtime cannot enforce a per-job filesystem boundary.
 
 ## Probe behavior before scoring
 
@@ -31,6 +33,8 @@ A suitable brief is:
 ```text
 Perform one independent implementation review using only the supplied
 <run-root>/skills/review-implementation/SKILL.md and its linked references.
+Read <run-root>/agents/reviewer.md for the complete matching role contract;
+use its envelope exactly, including every finding field and enum.
 Review <run-root>/candidate.mjs against <run-root>/requirements.md.
 The complete intended diff adds this module to an empty fixture base.
 Verify the candidate identity against <run-root>/input-manifest.json.
@@ -52,7 +56,7 @@ Allow one replacement per infrastructure failure, malformed result, or contamina
 
 ## Validate the envelope before accepting evidence
 
-Validate the entire result against the canonical reviewer envelope before scoring it. Require a string `verdict_or_answer`, lowercase `critical`, `important`, or `minor` finding severities, the existing status and blocker enums, arrays for findings and evidence collections, and the cleanup object with state and detail. Require a null blocker for a complete result and a permitted non-null blocker otherwise. Check string entries in `unverified`, artifact references, and the experiment's prohibition on heavy commands. A valid top-level status alone is insufficient. Preserve malformed raw outputs as errors and accept no findings or scores from them. Do not silently normalize an invalid enum or verdict type into valid evidence.
+Validate the entire result against the same canonical reviewer envelope supplied in that run before scoring it. A validator must not impose an undisclosed field, type, enum, or collection-entry rule. Require a string `verdict_or_answer`, lowercase `critical`, `important`, or `minor` finding severities, the existing status and blocker enums, arrays for findings and evidence collections, and the cleanup object with state and detail. Require a null blocker for a complete result and a permitted non-null blocker otherwise. Check string entries in `unverified`, artifact references, and the experiment's prohibition on heavy commands. A valid top-level status alone is insufficient. Preserve malformed raw outputs as errors and accept no findings or scores from them. Do not silently normalize an invalid enum or verdict type into valid evidence.
 
 A replacement may restate the existing serialization constraints explicitly without revealing findings or changing candidate, guidance, model, effort, or tools. Record that brief clarification and keep the original failure. A replacement that also fails cannot start another retry without explicit authorization.
 
@@ -61,6 +65,10 @@ A replacement may restate the existing serialization constraints explicitly with
 For each final assessment, record whether it detected the expected mechanism, any extra findings, and any proposed fix that would break required corrected behavior. Adjudicate extras against source and requirements; the answer key is not proof that an extra finding is false. Validate disputed mechanisms with an owner probe rather than another unrestricted assessment.
 
 Count detection per buggy candidate, false positives per corrected candidate, and harmful suggestions separately. Compare both versions for each pair. Do not score different fixture revisions against each other. Report review time and actual remediation cycles without assuming missing timing or cost data.
+
+## Check evidence states separately from comparison scores
+
+For the evidence-state acceptance gate, retain actual canonical reviewer outputs and have an independent reviewer inspect them with their source inputs and owner-triage classifications. Use source-proven behavior, a named missing configuration or requirement fact, and an external claim defeated by an effective defense. Supply the matching role contract in each context. Do not substitute illustrative instructions for these outputs, add them to comparison scores, or discard a valid result for a desired label.
 
 Inspect the textual evidence-state contract separately from the score. A source-proven failure is `confirmed` but still needs owner scope triage. A credible vulnerability with an unknown deployed guard is `plausible`, starts as `unclear`, and names the smallest guard inspection in `unverified`. A rejected external allegation against an effective tenant check is `refuted`, cites that check, and follows the existing invalid/rejected path. These are contract examples, not extra scored assessments or claims of observed fixture findings.
 

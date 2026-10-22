@@ -1,0 +1,285 @@
+{
+  "scope": "Focused post-review evidence-state checks: five attempts, four accepted and one excluded for contamination. These are not part of the historical six-candidate comparison. p04 and its single replacement p05 are an isolated synthetic missing-configuration scenario, not a real deployment claim.",
+  "runs": [
+    {
+      "case": "p01",
+      "candidate_fixture": "c03",
+      "candidate_sha256": "ab6c81106fea6af4bb224e387e8d3b69e352da30f565bcac3df2d6d3111feede",
+      "requirements_sha256": "90db5ddf5fb24e255de82b34ca14331be560545fa2de0907fc31a68cd3f3ec97",
+      "guidance_sha256": "eac8edf1150b9233ec6ecbf9d31d1ae1c6c102e7bff29a868c374658f22232da",
+      "role_contract_sha256": "6b65a81f1b1897c816970dde240228b4163a7e9a1da237361ee22490e0947ca4",
+      "input_manifest_sha256": "95db6fa288653b7a6e9f298df5883c981e99422253d519a9e239250920c15fa6",
+      "brief_sha256": "62a3bf86d6f9121a48e18bfc53257d837a37674d9e714d0a7a2b1185eb9d33ad",
+      "dispatch_sha256": "e7842d71bf862c6aadbc1bcff4bd339212193ed523c30014e97aad0cb702c418",
+      "observed_model": "gpt-5.6-sol",
+      "observed_effort": "medium",
+      "observed_role": "reviewer",
+      "output": {
+        "run_id": "contract-p01",
+        "status": "complete",
+        "verdict_or_answer": "fail \u2014 The verified candidate exposes protected record contents without enforcing the required role, tenant, and object authorization. Independent local source review inspected the actor-to-global-record trust boundary and consumed the matching owner syntax-check evidence; cryptography and transport were excluded by the requirements.",
+        "findings": [
+          {
+            "id": "R1",
+            "severity": "critical",
+            "summary": "Download returns record contents without role or tenant authorization",
+            "location": "candidate.mjs:5",
+            "requirement_or_risk": "Only an active reader in the record's tenant may receive its contents, and denied downloads must not disclose them. Missing server-side role and tenant checks create a cross-tenant protected-read authorization leak.",
+            "evidence": "confirmed: An active actor controls `id`, and `repository.find(id)` performs a global lookup. After checking only `actor.active` and record existence, the entry point returns `record.contents`; therefore an active non-reader or an active actor from another tenant who supplies a known record ID receives status 200 and the protected contents. Authentication middleware validates claims but explicitly does not enforce object authorization, and no downstream defense exists.",
+            "fix": "Before returning contents, require `actor.role === \"reader\"` and `actor.tenantId === record.tenantId`; otherwise return a denial response without a body.",
+            "shape": "authorization-leak"
+          }
+        ],
+        "unverified": [],
+        "artifacts": [],
+        "cleanup": {
+          "state": "not_needed",
+          "detail": ""
+        },
+        "heavy_commands": [],
+        "block_reason": null
+      },
+      "acceptance": "accepted"
+    },
+    {
+      "case": "p02",
+      "candidate_fixture": "c02",
+      "candidate_sha256": "1f50a7f29b87e78dff5037af59f824dfa63130087eb1f38509e7673373f6ac72",
+      "requirements_sha256": "b9651599e9f0cf6a86f7452b2d7f18aee80e138296bcd605bed3cfb84074d63c",
+      "guidance_sha256": "eac8edf1150b9233ec6ecbf9d31d1ae1c6c102e7bff29a868c374658f22232da",
+      "role_contract_sha256": "6b65a81f1b1897c816970dde240228b4163a7e9a1da237361ee22490e0947ca4",
+      "input_manifest_sha256": "a5c555825566ead3db1b305e4d7b639c466067586a6044763bf0765189efafb9",
+      "brief_sha256": "1cc2e1425c66623eed9f3b76950b42de880d041c9d8415f1766ff77b280f0ac0",
+      "dispatch_sha256": "62e1d8032cb93c65b2b51b2b670b7a653e52bbd1d7f3c71dc221bdcf61b12cf7",
+      "observed_model": "gpt-5.6-sol",
+      "observed_effort": "medium",
+      "observed_role": "reviewer",
+      "output": {
+        "run_id": "contract-p02",
+        "status": "complete",
+        "verdict_or_answer": "pass \u2014 Independent source review of the hash-matched complete module found no actionable defects. Pending-state action gating, trimmed-reason validation, authoritative cancellation state, refresh-failure recovery, and pending release satisfy the supplied requirements. EC1 is refuted. The inspected trust boundary was the trimmed caller-supplied reason passed to api.cancel; server authorization is explicitly outside this module. Validation was limited to the owner's hash-attributed node --check evidence and source inspection; no runtime audit was required.",
+        "findings": [
+          {
+            "id": "EC1",
+            "severity": "minor",
+            "summary": "External claim refuted: duplicate pending cancellation is correctly declined",
+            "location": "candidate.mjs:10",
+            "requirement_or_risk": "The requirement says duplicate pending cancellation must be rejected as an operation, but specifies no rejected-Promise return contract.",
+            "evidence": "refuted: While a cancellation is pending, the guard at candidate.mjs:10 prevents a second api.cancel call and the async function resolves false. requirements.md:3 requires rejection of duplicate pending cancellation, while external-claim.txt expressly forbids assuming an additional return-contract requirement. The existing guard therefore satisfies the stated behavior.",
+            "fix": "No change required; this rejected external claim is not an actionable defect.",
+            "shape": "external-claim-refuted"
+          }
+        ],
+        "unverified": [],
+        "artifacts": [],
+        "cleanup": {
+          "state": "not_needed",
+          "detail": ""
+        },
+        "heavy_commands": [],
+        "block_reason": null
+      },
+      "external_claim": "External claim EC1: The cancellation wrapper violates a requirement because a duplicate pending call resolves false rather than returning a rejected Promise. Evaluate this claim against the complete supplied module and requirement text. Do not assume an additional return-contract requirement.",
+      "acceptance": "accepted"
+    },
+    {
+      "case": "p03",
+      "candidate_fixture": "c06",
+      "candidate_sha256": "8bb54870629f75af8b40b4b0dbb6c95030b6dac5b6dfdbfdf064e7f5a144bff1",
+      "requirements_sha256": "90db5ddf5fb24e255de82b34ca14331be560545fa2de0907fc31a68cd3f3ec97",
+      "guidance_sha256": "eac8edf1150b9233ec6ecbf9d31d1ae1c6c102e7bff29a868c374658f22232da",
+      "role_contract_sha256": "6b65a81f1b1897c816970dde240228b4163a7e9a1da237361ee22490e0947ca4",
+      "input_manifest_sha256": "562fdb472e19a149ccaba8769f74b81d50b54caf0b2488cc980a9fb1a9ebe22f",
+      "brief_sha256": "c37cca660e8a4f61b3915a920716dd9c24a57db15f6aea989b6766d1b5781d09",
+      "dispatch_sha256": "0f1264529941d9a2c77696664297a882ce2f94b3a27387da9198cfc9418496ae",
+      "observed_model": "gpt-5.6-sol",
+      "observed_effort": "medium",
+      "observed_role": "reviewer",
+      "output": {
+        "run_id": "contract-p03",
+        "status": "complete",
+        "verdict_or_answer": "pass \u2014 Candidate identity matches the manifest, and the supplied syntax validation applies to that hash. The protected-download actor, tenant, and object-authorization boundary was inspected: the server-side role-and-tenant guard prevents contents from crossing tenants, so EC1 is refuted. Cryptography and HTTP transport are excluded by the requirements; no runtime audit was requested.",
+        "findings": [
+          {
+            "id": "R1",
+            "severity": "critical",
+            "summary": "EC1 refuted: the entry point blocks an active reader from downloading another tenant's record",
+            "location": "candidate.mjs:5",
+            "requirement_or_risk": "Only an active reader in the record's tenant may receive its contents; otherwise a global ID lookup could create an authorization leak.",
+            "evidence": "refuted: A caller can supply a known foreign-tenant ID and repository.find performs the global lookup, but candidate.mjs:5 compares actor.tenantId with record.tenantId and candidate.mjs:6 returns 403 on mismatch before candidate.mjs:8 can return record.contents. The complete supplied module therefore contains an effective server-side defense for EC1.",
+            "fix": "None; retain the existing tenant and reader authorization guard.",
+            "shape": "authorization-leak"
+          }
+        ],
+        "unverified": [],
+        "artifacts": [],
+        "cleanup": {
+          "state": "not_needed",
+          "detail": ""
+        },
+        "heavy_commands": [],
+        "block_reason": null
+      },
+      "external_claim": "External claim EC1: An active reader can request a known record from another tenant and receive its contents from this download entry point. Evaluate this claim against the complete supplied module and requirements.",
+      "acceptance": "accepted"
+    },
+    {
+      "case": "p04",
+      "candidate_fixture": "c03",
+      "candidate_sha256": "ab6c81106fea6af4bb224e387e8d3b69e352da30f565bcac3df2d6d3111feede",
+      "requirements_sha256": "18c2da4de0abd275148bdb1c5eab684c2fb9bb6228d12ecb64937407265c48c5",
+      "guidance_sha256": "eac8edf1150b9233ec6ecbf9d31d1ae1c6c102e7bff29a868c374658f22232da",
+      "role_contract_sha256": "6b65a81f1b1897c816970dde240228b4163a7e9a1da237361ee22490e0947ca4",
+      "input_manifest_sha256": "555df3b3968d07766f2e7e8334db7a63f89e325ac4adf0c283304e0870b903d2",
+      "brief_sha256": "83e8685bbe075b9a9789976cdfe1f3c160ca483344da819ca0a8ed6413e5841d",
+      "dispatch_sha256": "1e9e401cedba3915ce3aa3147ddad58e8295bde5cab7a4cf79c6cef46613da21",
+      "observed_model": "gpt-5.6-sol",
+      "observed_effort": "medium",
+      "observed_role": "reviewer",
+      "output": {
+        "run_id": "contract-p04",
+        "status": "complete",
+        "verdict_or_answer": "fail \u2014 EC1 is plausible but unconfirmed: the handler permits an active actor to retrieve any globally resolved record, while the supplied evidence does not establish whether the deployed gateway enforces reader-role and tenant scope. Inspected the caller-controlled ID boundary, trusted actor claims, global repository lookup, response path, and possible gateway defense; deployment middleware registration and enabled flags remain unavailable.",
+        "findings": [
+          {
+            "id": "R1",
+            "severity": "critical",
+            "summary": "Endpoint authorization depends on an unverified gateway guard",
+            "location": "candidate.mjs:download",
+            "requirement_or_risk": "Only an active reader in the record's tenant may receive its contents. Without the gateway guard, an active actor can cross the caller-controlled ID boundary into the global repository lookup and receive another tenant's record contents.",
+            "evidence": "plausible: candidate.mjs checks only actor.active, then passes the caller-controlled id to repository.find and returns record.contents without checking actor.role or comparing actor.tenantId with record.tenantId. requirements.md confirms that no handler-level defense exists and that an effective gateway guard could enforce both checks, but the deployed route's middleware registration and enabled flags were not supplied. The source therefore proves the exploit path for an unguarded deployment but does not prove that the deployed endpoint is unguarded.",
+            "fix": "Provide authoritative evidence that the current route has the reader-role and object-tenant gateway guard enabled; if it does not, configure that guard or add equivalent role and tenant checks before returning record contents.",
+            "shape": "authorization-leak"
+          }
+        ],
+        "unverified": [
+          "Inspect the current route's deployed middleware registration and enabled flags to determine whether the reader-role and object-tenant guard executes before this handler; this settles whether EC1 is confirmed or refuted."
+        ],
+        "artifacts": [],
+        "cleanup": {
+          "state": "not_needed",
+          "detail": ""
+        },
+        "heavy_commands": [],
+        "block_reason": null
+      },
+      "external_claim": "External claim EC1: Active actors can exploit the deployed endpoint to read a known record from another tenant. Assess the claimed exploit against the handler and available deployment evidence.",
+      "supplemental_requirements": "# Protected record endpoint in a synthetic gateway configuration\n\nOnly an active reader in the record's tenant may receive record contents. The authenticated actor carries trusted active, role and tenantId claims. The caller controls id; repository.find(id) is a global lookup that returns an immutable record with tenantId and contents or no record. This module is the complete handler behind a gateway.\n\nA supported gateway deployment can enforce both reader-role and object-tenant authorization before reaching this handler. It is also possible to deploy the gateway without that guard; deployment configuration determines which path applies. The current route's deployed middleware registration and enabled flags were not supplied. No other defense exists in the handler itself. The whole endpoint must enforce authorization, but the requirement permits the guard to live in the gateway when it is actually configured.\n\nThis is an isolated synthetic configuration scenario, not evidence about any real deployment. Do not infer whether the gateway guard is enabled. Preserve active-reader downloads when allowed, 401 for inactive actors, and 404 for missing records. Cryptography and transport are outside scope.",
+      "acceptance": "excluded_contaminated",
+      "exclusion_reason": "Tool observations record an outside-bundle read of an unrelated task-document review skill before loading the correct implementation skill. The raw output is retained but is not acceptance evidence."
+    },
+    {
+      "case": "p05",
+      "candidate_fixture": "c03",
+      "candidate_sha256": "ab6c81106fea6af4bb224e387e8d3b69e352da30f565bcac3df2d6d3111feede",
+      "requirements_sha256": "18c2da4de0abd275148bdb1c5eab684c2fb9bb6228d12ecb64937407265c48c5",
+      "guidance_sha256": "eac8edf1150b9233ec6ecbf9d31d1ae1c6c102e7bff29a868c374658f22232da",
+      "role_contract_sha256": "6b65a81f1b1897c816970dde240228b4163a7e9a1da237361ee22490e0947ca4",
+      "input_manifest_sha256": "555df3b3968d07766f2e7e8334db7a63f89e325ac4adf0c283304e0870b903d2",
+      "brief_sha256": "eee6ea2382687cda8c8ab3d11f5cf748eb8c6c58a7902ff32fc6de169f43b535",
+      "dispatch_sha256": "30d19a5c5d950d978f3fd904ba06e482b3def8dab17e246fea8475de448d99d2",
+      "observed_model": "gpt-5.6-sol",
+      "observed_effort": "medium",
+      "observed_role": "reviewer",
+      "output": {
+        "run_id": "contract-p05",
+        "status": "complete",
+        "verdict_or_answer": "fail \u2014 EC1 is plausible but not confirmed: the handler has a source-proven cross-tenant authorization gap, while the supplied evidence does not establish whether the deployed gateway guard blocks it. Inspected boundary: caller-controlled record id through the handler's global repository lookup to disclosure of record contents; the active-claim check does not enforce reader role or tenant scope. Review was local and read-only; no live deployment evidence was available.",
+        "findings": [
+          {
+            "id": "R1",
+            "severity": "critical",
+            "summary": "Cross-tenant record disclosure is possible when the gateway authorization guard is absent or disabled",
+            "location": "candidate.mjs:3",
+            "requirement_or_risk": "Only an active reader in the record's tenant may receive contents. Without an effective gateway guard, an active actor can supply another tenant's record id and receive protected contents, causing an authorization leak.",
+            "evidence": "plausible: The caller controls id, repository.find(id) performs a global lookup, and lines 3-5 return the located record's contents after checking only actor.active. The handler never checks actor.role or compares actor.tenantId with record.tenantId. requirements.md states that no other handler defense exists, but also permits a gateway guard and does not supply the current route's middleware registration or enabled flags. Therefore the source proves the failure path when that guard is absent, but available evidence cannot establish that the deployed endpoint is exploitable. The owner syntax check applies to the same candidate bytes: candidate.mjs hashes to the brief's content identity ab6c81106fea6af4bb224e387e8d3b69e352da30f565bcac3df2d6d3111feede; syntax validation does not settle authorization behavior.",
+            "fix": "Ensure the current route has an enabled gateway guard that enforces both reader role and record-tenant scope before invoking this handler; if that cannot be guaranteed, add those checks in the handler before returning contents.",
+            "shape": "authorization-leak"
+          }
+        ],
+        "unverified": [
+          "Inspect the current route's deployed middleware registration and enabled flags to determine whether reader-role and object-tenant authorization is enforced before this handler. This is the smallest check that would confirm or refute EC1 and is required to establish endpoint compliance."
+        ],
+        "artifacts": [],
+        "cleanup": {
+          "state": "not_needed",
+          "detail": ""
+        },
+        "heavy_commands": [],
+        "block_reason": null
+      },
+      "external_claim": "External claim EC1: Active actors can exploit the deployed endpoint to read a known record from another tenant. Assess the claimed exploit against the handler and available deployment evidence.",
+      "supplemental_requirements": "# Protected record endpoint in a synthetic gateway configuration\n\nOnly an active reader in the record's tenant may receive record contents. The authenticated actor carries trusted active, role and tenantId claims. The caller controls id; repository.find(id) is a global lookup that returns an immutable record with tenantId and contents or no record. This module is the complete handler behind a gateway.\n\nA supported gateway deployment can enforce both reader-role and object-tenant authorization before reaching this handler. It is also possible to deploy the gateway without that guard; deployment configuration determines which path applies. The current route's deployed middleware registration and enabled flags were not supplied. No other defense exists in the handler itself. The whole endpoint must enforce authorization, but the requirement permits the guard to live in the gateway when it is actually configured.\n\nThis is an isolated synthetic configuration scenario, not evidence about any real deployment. Do not infer whether the gateway guard is enabled. Preserve active-reader downloads when allowed, 401 for inactive actors, and 404 for missing records. Cryptography and transport are outside scope.",
+      "acceptance": "accepted",
+      "replacement_for": "contract-p04",
+      "replacement_reason": "One protocol-permitted replacement for a contaminated context; all input-manifest files are byte-identical. Only neutral run identity and bundle paths changed in the brief."
+    }
+  ],
+  "independent_triage_status": "complete for all four accepted outputs; contaminated p04 excluded",
+  "owner_triage": [
+    {
+      "run_id": "contract-p01",
+      "classification": "valid",
+      "disposition": "expected source-proven synthetic defect; retained as fixture control",
+      "reason": "Reachable handler path conflicts with explicit reader-role and tenant requirement."
+    },
+    {
+      "run_id": "contract-p02",
+      "classification": "unclear",
+      "disposition": "Do not change frozen fixture or infer a Promise-return contract.",
+      "reason": "Reviewer refuted the claim, but the owner retains uncertainty because reject is ambiguous in the original requirements. This is a calibration limit, not proof of resolved requirements."
+    },
+    {
+      "run_id": "contract-p03",
+      "classification": "invalid",
+      "disposition": "rejected external claim; retain effective guard",
+      "reason": "Existing role and tenant checks reject the asserted cross-tenant path before contents are returned."
+    },
+    {
+      "run_id": "contract-p04",
+      "classification": "unclear",
+      "disposition": "Retained as a contaminated attempt; p05 is the single allowed replacement.",
+      "reason": "The source path is conditional on an unknown gateway guard. No real deployment is claimed.",
+      "acceptance": "excluded_contaminated"
+    },
+    {
+      "run_id": "contract-p05",
+      "classification": "unclear",
+      "disposition": "inspect named middleware registration before confirming or refuting the synthetic deployment claim",
+      "reason": "A credible handler failure depends on an unknown gateway guard; the plausible evidence names that fact and the smallest check. No real deployment is claimed."
+    }
+  ],
+  "independent_inspections": [
+    {
+      "run_id": "remediation-independent-triage",
+      "candidate": "5d7da9e5113e42a0c5628145d911deadd2bd9b3f",
+      "raw_result_sha256": "8c6b8026f800e0fa5e70049eaa61cc6743695cd10569862913d8bd93ac2d3531",
+      "retention": "Raw result and tool observations retained outside the repository.",
+      "reported_verdict": "pass-with-fixes",
+      "case_judgments": {
+        "contract-p01": "confirmed / valid",
+        "contract-p02": "refutation defensible; owner unclear preserves ambiguous requirement",
+        "contract-p03": "refuted / invalid",
+        "contract-p04": "substantive plausible / unclear, but contaminated context; exclude from acceptance"
+      },
+      "finding": "The sole plausible assessment read outside its supplied bundle and loaded the wrong mode skill.",
+      "owner_disposition": "Valid: exclude p04 and collect its one allowed replacement, p05.",
+      "boundary_limit": "The independent inspector ran a read-only diff check despite a no-gates brief and reported no retained command evidence. This boundary breach remains recorded; no suite or application execution was observed."
+    },
+    {
+      "run_id": "replacement-output-inspection",
+      "scope": "Focused documentary inspection of p05 replacement output, exact inputs, read boundaries, and owner triage; not another shipping-candidate implementation review.",
+      "raw_result_sha256": "e48e7c464e70fb285b23db46f1f33792a1390d902634a47c10509829b5b862c2",
+      "brief_sha256": "2e8c454d2a08578f2e9aef2ba72996bb434fcafa5c2551d6af455db0d1d2668e",
+      "reviewed_content_manifest_sha256": "cb34845d9c60e7ac2533f0509634283858cff9c402f9f4e22c09a8d9cf17b1c2",
+      "retention": "Raw result and tool observations retained outside the repository.",
+      "reported_verdict": "pass",
+      "case_judgments": {
+        "contract-p05": "plausible / unclear; critical potential impact is separate from verification state; settling configuration check named"
+      },
+      "input_comparison": "All manifested p04 and p05 inputs byte-identical; only neutral run identity and bundle paths differ in briefs.",
+      "boundary_check": "Bundle-local reads and hashes only; no candidate execution, gates, network requests, or delegation observed.",
+      "findings": []
+    }
+  ]
+}

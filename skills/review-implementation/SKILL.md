@@ -36,6 +36,8 @@ For each actionable finding include file:line or symbol, the failure scenario, v
 - `plausible`: a credible mechanism depends on a named runtime, dependency, configuration, or authoritative requirement fact that remains unverified. Put the smallest check or requirement clarification that would settle it in `unverified`.
 - `refuted`: evidence disproves a claim or an applicable defense handles it. Use this state when recording rejected external findings, with the defense cited. Discard internal refuted hypotheses instead of reporting them as new actionable findings.
 
+An alleged requirement violation that depends on ambiguous wording is `plausible` until the authoritative meaning is established. Name that clarification in `unverified`.
+
 Verification state describes evidence; severity describes impact. Preserve plausible consequential risks without numerical confidence cutoffs or presenting them as confirmed. During owner triage, plausible findings begin as `unclear`; confirmed findings still need scope and disposition evaluation. Refuted external findings follow the existing invalid/rejected path.
 
 Classify severity:
