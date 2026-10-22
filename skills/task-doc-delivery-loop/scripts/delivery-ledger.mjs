@@ -27,7 +27,7 @@ const COMMITTED_ENDPOINTS = new Set(["commit", "push", "draft_pr", "ready_pr"]);
 const TERMINAL_STEPS = new Set(["verified", "failed"]);
 const INDEPENDENT_REVIEW_SOURCES = new Set(["delegated", "codex-bot", "human"]);
 const INDEPENDENCE_REQUIRED = "independence_required";
-const RECEIPT_ADAPTER = "ncdmb-validation-receipt-v1";
+const RECEIPT_ADAPTER = "ui-validation-receipt-v1";
 
 const EXIT_BY_CODE = {
   argument_error: 1,
