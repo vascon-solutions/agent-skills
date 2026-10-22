@@ -1,0 +1,139 @@
+{
+  "version": 1,
+  "delivery_base": "1223722f46475f6a79611c826a49f2db6ef270e1",
+  "historical_sources": {
+    "repository": "floatstar/ncdmb-procurement-ui",
+    "pr": 443,
+    "candidate": "8f290a2bca56e6311c2868128e21978839045a08",
+    "fix": "d7981e74cb626cfab99ffdffba7881d7e9f65c50",
+    "retrieved_at": "2026-10-22",
+    "evidence_directory": "/Users/dee/agent-artifacts/delivery-review-pilot-2026-10-22/private-source",
+    "source_files": [
+      {
+        "path": "apps/procurement-ui/src/routes/_authenticated/direct-order.$id.tsx",
+        "revision": "8f290a2bca56e6311c2868128e21978839045a08",
+        "sha256": "b1c095a18883e6833522ca064036be931f551e34b60cb522f00b4fe4bccde843"
+      },
+      {
+        "path": "apps/procurement-ui/src/features/service-requests/components/direct-orders/direct-order-detail-workspace.tsx",
+        "revision": "8f290a2bca56e6311c2868128e21978839045a08",
+        "sha256": "6006525e73a036b4059c49b32742261e0de38e6cc58cd1da4b654af240652682"
+      },
+      {
+        "path": ".agent/tasks/qa-direct-order-cancel-and-reissue.md",
+        "revision": "8f290a2bca56e6311c2868128e21978839045a08",
+        "sha256": "eea28da77b9491fdd4f7ef2bafedb2f695e5da60797911c3b0f839ad872a998b"
+      },
+      {
+        "path": "apps/procurement-ui/src/routes/_authenticated/direct-order.$id.tsx",
+        "revision": "d7981e74cb626cfab99ffdffba7881d7e9f65c50",
+        "sha256": "332c8a4dc70642b6e40415c06ee474dfec85a7a68373a66a82ecd8f2f1a22726"
+      },
+      {
+        "path": "apps/procurement-ui/src/features/service-requests/components/direct-orders/direct-order-detail-workspace.tsx",
+        "revision": "d7981e74cb626cfab99ffdffba7881d7e9f65c50",
+        "sha256": "7cfd96bb746e1b44fefd46763320011b6da9335736bc2d22643088cef9b2490f"
+      },
+      {
+        "path": ".agent/tasks/qa-direct-order-cancel-and-reissue.md",
+        "revision": "d7981e74cb626cfab99ffdffba7881d7e9f65c50",
+        "sha256": "eea28da77b9491fdd4f7ef2bafedb2f695e5da60797911c3b0f839ad872a998b"
+      }
+    ]
+  },
+  "cases": [
+    {
+      "id": "c01",
+      "pair": "identity",
+      "state": "buggy",
+      "candidate_sha256": "36f7851fb5273491c706563f16cd167fe41ec03cdeaaac0f6453c985d7af8d6e",
+      "requirements_sha256": "3a0dde0d8f25f7fab2bb5c91f1d614f57889b6abbc5dfdc01ba48c04560d8087",
+      "trigger": "open confirmation on record A, enter a reason, visit B, then confirm without reopening",
+      "expected_mechanism": "confirmation crosses record identity",
+      "defense": "new view on identity change; old async closure remains bound to prior view",
+      "provenance": "sanitized independent reproduction of verified historical mechanism",
+      "source_evidence": {
+        "candidate_symbol": "DirectOrderDetailPage / DirectOrderDetailWorkspace",
+        "fix_symbol": "key={id}",
+        "requirement": "confirmation and reason are record-bound",
+        "original_candidate_runtime": "not executed; candidate and fix inspected; portable mechanism probed separately"
+      }
+    },
+    {
+      "id": "c02",
+      "pair": "mutation",
+      "state": "corrected",
+      "candidate_sha256": "1f50a7f29b87e78dff5037af59f824dfa63130087eb1f38509e7673373f6ac72",
+      "requirements_sha256": "b9651599e9f0cf6a86f7452b2d7f18aee80e138296bcd605bed3cfb84074d63c",
+      "trigger": "successful cancel returns cancelled record; subsequent refresh rejects",
+      "expected_mechanism": "authoritative command response retained before refresh",
+      "defense": "store authoritative cancellation response before attempting refresh",
+      "provenance": "sanitized independent reproduction of verified historical mechanism",
+      "source_evidence": {
+        "candidate_symbol": "DirectOrderDetailPage / DirectOrderDetailWorkspace",
+        "fix_symbol": "cancelMutation.onSuccess / queryClient.setQueryData",
+        "requirement": "cancelled orders have no mutation or PDF actions",
+        "original_candidate_runtime": "not executed; candidate and fix inspected; portable mechanism probed separately"
+      }
+    },
+    {
+      "id": "c03",
+      "pair": "auth",
+      "state": "buggy",
+      "candidate_sha256": "ab6c81106fea6af4bb224e387e8d3b69e352da30f565bcac3df2d6d3111feede",
+      "requirements_sha256": "90db5ddf5fb24e255de82b34ca14331be560545fa2de0907fc31a68cd3f3ec97",
+      "trigger": "active reader of tenant A requests known record in tenant B; same-tenant non-reader also denied",
+      "expected_mechanism": "active actors can read another tenant or disallowed role",
+      "defense": "server enforces reader role and record tenant",
+      "provenance": "synthetic actor/tenant example",
+      "source_evidence": null
+    },
+    {
+      "id": "c04",
+      "pair": "identity",
+      "state": "corrected",
+      "candidate_sha256": "88cef036b4b6d8cd2f6e825022056fc9e8f5d79131a2656c985b103d0203a02f",
+      "requirements_sha256": "3a0dde0d8f25f7fab2bb5c91f1d614f57889b6abbc5dfdc01ba48c04560d8087",
+      "trigger": "open confirmation on record A, enter a reason, visit B, then confirm without reopening",
+      "expected_mechanism": "each record owns independent confirmation and request lifecycle state",
+      "defense": "record-keyed workspaces retain pending and failed state without sharing state between IDs",
+      "provenance": "sanitized independent reproduction of verified historical mechanism",
+      "source_evidence": {
+        "candidate_symbol": "DirectOrderDetailPage / DirectOrderDetailWorkspace",
+        "fix_symbol": "key={id}",
+        "requirement": "confirmation and reason are record-bound",
+        "original_candidate_runtime": "not executed; candidate and fix inspected; portable mechanism probed separately"
+      }
+    },
+    {
+      "id": "c05",
+      "pair": "mutation",
+      "state": "buggy",
+      "candidate_sha256": "6fb5403feac57cb4977fb39f69af7de1ef35c4a2bb025cc9ff21ff90ffd2f2ef",
+      "requirements_sha256": "b9651599e9f0cf6a86f7452b2d7f18aee80e138296bcd605bed3cfb84074d63c",
+      "trigger": "successful cancel returns cancelled record; subsequent refresh rejects",
+      "expected_mechanism": "successful cancellation leaves approved actions after refresh failure",
+      "defense": "store authoritative cancellation response before attempting refresh",
+      "provenance": "sanitized independent reproduction of verified historical mechanism",
+      "source_evidence": {
+        "candidate_symbol": "DirectOrderDetailPage / DirectOrderDetailWorkspace",
+        "fix_symbol": "cancelMutation.onSuccess / queryClient.setQueryData",
+        "requirement": "cancelled orders have no mutation or PDF actions",
+        "original_candidate_runtime": "not executed; candidate and fix inspected; portable mechanism probed separately"
+      }
+    },
+    {
+      "id": "c06",
+      "pair": "auth",
+      "state": "corrected",
+      "candidate_sha256": "8bb54870629f75af8b40b4b0dbb6c95030b6dac5b6dfdbfdf064e7f5a144bff1",
+      "requirements_sha256": "90db5ddf5fb24e255de82b34ca14331be560545fa2de0907fc31a68cd3f3ec97",
+      "trigger": "active reader of tenant A requests known record in tenant B; same-tenant non-reader also denied",
+      "expected_mechanism": "server checks role and record tenant before contents",
+      "defense": "server enforces reader role and record tenant",
+      "provenance": "synthetic actor/tenant example",
+      "source_evidence": null
+    }
+  ],
+  "fixture_revision": "identity fixture revised once after valid extra lifecycle findings; original inputs and results retained externally"
+}

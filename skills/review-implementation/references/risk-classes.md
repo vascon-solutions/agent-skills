@@ -9,8 +9,14 @@ For stateful UI (dialogs, forms, drafts, retry or idempotency tokens):
 - **Async prerequisites (`async-prerequisite`):** distinguish loading, failure and absence; allow independent input where safe, but block dependent actions until required reads succeed.
 - **Version conflicts (`version-conflict-recovery`):** block blind retries; refresh and reset or explicitly reconcile edits against the new version before resubmission.
 
+For removed behavior and changed contracts:
+
+- Identify the invariant enforced by a removed guard, validation, or recovery path and trace its replacement.
+- Follow changed contracts through relevant callers and consumers, including unchanged code newly exposed by the change. For shared contracts, inspect one concrete consumer scenario with supplied dependency and generated-output identities.
+
 For protected reads and mutations:
 
+- Load [security inspection](security-review.md) when an entry point, trust boundary, or sensitive operation changes. Include instruction and tooling privileges where relevant.
 - **Authorization (`authorization-leak`):** verify server-enforced actor, tenant, and object scope; UI hiding is not enforcement. Include stale-permission, wrong-actor, and denied-transition behavior where relevant.
 
 Also consider `stale-cache-after-mutation` for affected cached reads and
