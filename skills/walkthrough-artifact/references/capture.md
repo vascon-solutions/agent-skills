@@ -4,16 +4,17 @@ audit-ui runs every capture. This file says what a walkthrough's audit brief mus
 
 ## Audit brief for a walkthrough
 
-Start from audit-ui's own brief template and fill these lines for the walkthrough:
+Start from audit-ui's brief template (`assets/templates/audit-brief.md` in the audit-ui skill) and fill these fields for the walkthrough:
 
+- **Feature.** "Product walkthrough of <scope items>", naming the walkthrough folder it feeds.
+- **Acceptance source and required checkpoints.** The scope items and, for each, the steps the walkthrough will show. Each step is a checkpoint.
+- **Relevant UI/API/shared candidate and served source identities.** The served builds and how they were confirmed, copied from the manifest.
 - **Mode.** `journey`.
-- **Feature.** "product walkthrough of <scope items>", naming the walkthrough folder it feeds.
-- **Candidate identity.** The served builds and how they were confirmed, copied from the manifest.
+- **Actors and credential sources (never secret values).** One task session per account, and where each password comes from.
 - **Screenshot maximum.** A range per scope item plus a total, for example "4-8 per item, 40 total". audit-ui's default of 12 is too low for a walkthrough; the brief overrides it.
-- **Actors and credential sources.** One task session per account. Name where each password comes from; never write it in the brief.
 - **Allowed mutations.** Only the demo records the walkthrough needs, each carrying the marker text from the manifest, such as "Walkthrough demo". Name the end state for each, for example "cancelled after capture".
+- **Bounded assumptions.** "Walkthrough capture: follow the capture rules in walkthrough-artifact's capture reference", then list the rules below.
 - **Cleanup requirement.** Release every account (for example logout-all), restore or cancel every demo record, close every browser session, and record all of it in `report.md` under Created Records and Cleanup.
-- **Capture rules.** The rules below.
 
 A capture needed after the report is written is a new run under the same audit slug, with its own short brief and report. Do not add files to a finished run.
 

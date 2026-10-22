@@ -5,6 +5,7 @@ const childProcess = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { pathToFileURL } = require('url');
 
 const STARTER = path.join(__dirname, '..', 'starter.html');
 const TONES = ['done', 'partial', 'info', 'neutral', 'blocked'];
@@ -74,6 +75,18 @@ function attr(tag, name) {
 
 /* ---------- page ---------- */
 
+function stripComments(html) {
+  return html.replace(/<!--[\s\S]*?-->/g, '');
+}
+
+function isRemote(value) {
+  return /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(value);
+}
+
+function normalizeRef(value) {
+  return value.trim().replace(/^\.\//, '');
+}
+
 function sections(html) {
   const out = [];
   const re = /<section\b([^>]*)>([\s\S]*?)<\/section>/gi;
@@ -86,14 +99,18 @@ function sections(html) {
 }
 
 function images(html) {
-  return [...html.matchAll(/<img\b[^>]*>/gi)].map((m) => ({ src: attr(m[0], 'src'), alt: attr(m[0], 'alt') }));
+  return [...html.matchAll(/<img\b[^>]*>/gi)].map((m) => {
+    const src = attr(m[0], 'src');
+    return { src: src === null ? null : normalizeRef(src), alt: attr(m[0], 'alt') };
+  });
 }
 
 function figures(html) {
   return [...html.matchAll(/<figure\b[^>]*>([\s\S]*?)<\/figure>/gi)].map((m) => {
     const caption = m[1].match(/<figcaption\b[^>]*>([\s\S]*?)<\/figcaption>/i);
     const img = m[1].match(/<img\b[^>]*>/i);
-    return { src: img ? attr(img[0], 'src') : null, caption: caption ? stripTags(caption[1]) : '' };
+    const src = img ? attr(img[0], 'src') : null;
+    return { src: src === null ? null : normalizeRef(src), caption: caption ? stripTags(caption[1]) : '' };
   });
 }
 
@@ -108,23 +125,37 @@ function pageStatusRows(html) {
   });
 }
 
+function localRefs(html) {
+  const found = [];
+  for (const m of html.matchAll(/<[a-z][\w-]*\b[^>]*>/gi)) {
+    for (const name of ['src', 'poster']) {
+      const value = attr(m[0], name);
+      if (value && value.trim()) found.push(value);
+    }
+    const srcset = attr(m[0], 'srcset');
+    if (srcset) found.push(...srcset.split(',').map((candidate) => candidate.trim().split(/\s+/)[0]).filter(Boolean));
+  }
+  for (const m of html.matchAll(/url\(\s*["']?([^"')]+)/gi)) found.push(m[1]);
+  return found.map(normalizeRef).filter((value) => value && !isRemote(value) && !value.startsWith('#'));
+}
+
 function remoteLoads(html) {
   const found = [];
   for (const m of html.matchAll(/<(?:img|script|iframe|source|video|audio|embed|object|link)\b[^>]*>/gi)) {
     for (const name of ['src', 'href', 'data', 'srcset']) {
       const value = attr(m[0], name);
-      if (value && /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(value.trim())) found.push(value.trim());
+      if (value && isRemote(value.trim())) found.push(value.trim());
     }
   }
   for (const m of html.matchAll(/url\(\s*["']?([^"')]+)/gi)) {
-    if (/^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(m[1].trim())) found.push(m[1].trim());
+    if (isRemote(m[1].trim())) found.push(m[1].trim());
   }
   for (const m of html.matchAll(/@import\s+(?:url\()?["']?([^"');]+)/gi)) found.push(m[1].trim());
   return found;
 }
 
 function visibleText(html) {
-  const body = html.replace(/<style\b[\s\S]*?<\/style>/gi, '').replace(/<script\b[\s\S]*?<\/script>/gi, '').replace(/<!--[\s\S]*?-->/g, '');
+  const body = stripComments(html).replace(/<style\b[\s\S]*?<\/style>/gi, '').replace(/<script\b[\s\S]*?<\/script>/gi, '');
   const alts = images(body).map((img) => img.alt).filter(Boolean);
   const blocks = body
     .replace(/<(?:\/(?:p|h[1-6]|li|div|span|figcaption|td|th|tr|section)|br\s*\/?)>/gi, '\n')
@@ -167,7 +198,7 @@ function readManifest(text, manifestDir) {
     .filter((line) => /^\s*-\s+/.test(line))
     .map((line) => path.resolve(manifestDir, expandHome(pathToken(line.replace(/^\s*-\s+/, '')))));
   const imageLines = [];
-  for (const line of text.split('\n')) {
+  for (const line of parts.images || []) {
     const m = line.match(/^\s*-\s+`?([^\s`:]+)`?:/);
     if (!m || !IMAGE_EXT.test(m[1])) continue;
     const from = line.match(/\bfrom:\s*(`[^`]+`|\S+)/);
@@ -175,7 +206,9 @@ function readManifest(text, manifestDir) {
   }
   let status = null;
   if (parts.status) {
-    const rows = parts.status.filter((line) => /^\s*\|/.test(line)).map((line) => line.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim()));
+    const rows = parts.status
+      .filter((line) => /^\s*\|/.test(line))
+      .map((line) => line.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.replace(/[*`]/g, '').trim()));
     const header = rows.shift() || [];
     const col = (name) => header.findIndex((h) => h.toLowerCase() === name);
     const [item, tone, label] = [col('item'), col('tone'), col('label')];
@@ -184,7 +217,8 @@ function readManifest(text, manifestDir) {
       .map((cells) => ({ item: cells[item] || '', tone: (cells[tone] || '').toLowerCase(), label: cells[label] || '' }));
     if (item < 0 || tone < 0 || label < 0) status = { malformed: true };
   }
-  return { origins, runs, imageLines, status };
+  const withoutRevisions = text.replace(/^##\s+Revisions\s*$[\s\S]*?(?=^##\s|(?![\s\S]))/m, '');
+  return { origins, runs, imageLines, status, withoutRevisions };
 }
 
 /* ---------- check ---------- */
@@ -231,12 +265,13 @@ function check(pagePath, manifestPath) {
   const notes = [];
   const pageDir = path.dirname(pagePath);
   const html = fs.readFileSync(pagePath, 'utf8');
+  const rendered = stripComments(html);
   const manifestText = fs.existsSync(manifestPath) ? fs.readFileSync(manifestPath, 'utf8') : null;
   if (manifestText === null) failures.push(`manifest not found: ${manifestPath}`);
   const manifest = readManifest(manifestText || '', path.dirname(manifestPath));
 
   if (!/^\s*<!doctype html>/i.test(html)) failures.push('page does not start with <!DOCTYPE html>');
-  const pages = sections(html);
+  const pages = sections(rendered);
   if (!pages.length) failures.push('page has no <section class="page"> elements');
   else if (!pages[0].classes.includes('cover')) failures.push('first page section is not the cover');
 
@@ -246,18 +281,20 @@ function check(pagePath, manifestPath) {
   if (!pageBlock) failures.push('print block (/* walkthrough:print */ ... /* /walkthrough:print */) is missing');
   else if (squash(pageBlock[1]) !== squash(starterBlock[1])) failures.push('print block differs from the starter');
 
-  const imgs = images(html);
-  for (const img of imgs) {
+  for (const img of images(rendered)) {
     if (!img.src) failures.push('an <img> has no src');
-    else if (!/^img\/[^/]+$/.test(img.src)) failures.push(`${img.src}: image is not under img/`);
-    else if (!fs.existsSync(path.join(pageDir, img.src))) failures.push(`${img.src}: file is missing`);
     if (!img.alt || !img.alt.trim()) failures.push(`${img.src || '<img>'}: alt text is empty`);
   }
-  for (const figure of figures(html)) {
+  for (const figure of figures(rendered)) {
     if (!figure.caption) failures.push(`${figure.src || '<figure>'}: figure has no caption`);
   }
 
-  const used = new Set(imgs.map((img) => img.src).filter(Boolean));
+  const used = new Set();
+  for (const ref of new Set(localRefs(rendered))) {
+    if (!/^img\/[^/]+$/.test(ref)) failures.push(`${ref}: reference is not under img/`);
+    else if (!fs.existsSync(path.join(pageDir, ref))) failures.push(`${ref}: file is missing`);
+    if (/^img\/[^/]+$/.test(ref)) used.add(ref);
+  }
   for (const file of listImageFiles(pageDir)) {
     if (!used.has(file)) failures.push(`${file}: file in img/ is not used by the page`);
   }
@@ -271,12 +308,13 @@ function check(pagePath, manifestPath) {
     checkFrom(line, manifest.runs, path.dirname(manifestPath), failures, notes);
   }
 
-  for (const url of remoteLoads(html)) failures.push(`page loads a remote resource: ${url}`);
+  for (const url of remoteLoads(rendered)) failures.push(`page loads a remote resource: ${url}`);
   if (!manifest.origins) {
     failures.push('manifest has no "- Allowed origins:" line');
   } else {
     const allowed = new Set(manifest.origins);
-    for (const [label, text] of [['page', html], ['manifest', manifestText || '']]) {
+    const pageText = rendered.replace(/\sxmlns(?::[\w-]+)?\s*=\s*(?:"[^"]*"|'[^']*')/gi, '');
+    for (const [label, text] of [['page', pageText], ['manifest', manifest.withoutRevisions]]) {
       for (const url of new Set(urlsIn(text))) {
         if (!allowed.has(originOf(url))) failures.push(`${label} names ${url}, whose origin is not in Allowed origins`);
       }
@@ -288,7 +326,7 @@ function check(pagePath, manifestPath) {
     }
   }
 
-  const pageRows = pageStatusRows(html);
+  const pageRows = pageStatusRows(rendered);
   const manifestRows = manifest.status;
   if (manifestRows && manifestRows.malformed) {
     failures.push('manifest ## Status table needs Item, Tone and Label columns');
@@ -350,11 +388,12 @@ function printPdf(pagePath, outPath) {
   const binary = findChrome();
   if (!binary) throw new Error('no Chrome or Chromium binary found; set CHROME_BIN');
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'walkthrough-chrome-'));
+  fs.rmSync(outPath, { force: true });
   try {
     const result = childProcess.spawnSync(binary, [
       '--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
-      `--user-data-dir=${profile}`, '--no-pdf-header-footer', `--print-to-pdf=${outPath}`,
-      `file://${path.resolve(pagePath)}`,
+      `--user-data-dir=${profile}`, '--no-pdf-header-footer', '--print-to-pdf-no-header', `--print-to-pdf=${outPath}`,
+      pathToFileURL(path.resolve(pagePath)).href,
     ], { encoding: 'utf8', timeout: 120000 });
     if (result.status !== 0 || !fs.existsSync(outPath)) {
       throw new Error(`Chrome did not write ${outPath}: ${(result.stderr || '').trim().split('\n').slice(-3).join(' ')}`);
@@ -398,8 +437,17 @@ function main(argv) {
   }
 
   if (args.command === 'pdf') {
+    if (!/\.html?$/i.test(page)) {
+      process.stderr.write(`pdf needs an .html page: ${page}\n`);
+      return 2;
+    }
+    const copyTo = args.flags['copy-to'] ? path.resolve(expandHome(args.flags['copy-to'])) : null;
+    if (copyTo && !(fs.existsSync(copyTo) && fs.statSync(copyTo).isDirectory())) {
+      process.stderr.write(`--copy-to folder not found: ${copyTo}\n`);
+      return 2;
+    }
     const out = path.resolve(args.flags.out || page.replace(/\.html?$/i, '.pdf'));
-    const expected = sections(fs.readFileSync(page, 'utf8')).length;
+    const expected = sections(stripComments(fs.readFileSync(page, 'utf8'))).length;
     try {
       printPdf(page, out);
     } catch (error) {
@@ -412,10 +460,9 @@ function main(argv) {
       return 1;
     }
     process.stdout.write(`${out}: ${actual} pages, one per section\n`);
-    if (args.flags['copy-to']) {
-      const dir = path.resolve(expandHome(args.flags['copy-to']));
-      fs.copyFileSync(out, path.join(dir, path.basename(out)));
-      process.stdout.write(`copied to ${path.join(dir, path.basename(out))}\n`);
+    if (copyTo) {
+      fs.copyFileSync(out, path.join(copyTo, path.basename(out)));
+      process.stdout.write(`copied to ${path.join(copyTo, path.basename(out))}\n`);
     }
     return 0;
   }
