@@ -39,13 +39,22 @@ checkpoint is requested. No additional code or guard exists beyond the
 requirements. Use delivery-review context. Only reads and hashing inside
 this bundle are permitted. Do not run code, gates, edits, external requests,
 or delegation, and do not inspect other runs or evaluator material.
-Return exactly the standard JSON envelope with this run ID. Stop after
-this assessment, within the recorded task-bound timeout.
+Return exactly the canonical reviewer JSON envelope with this run ID.
+Use a string verdict_or_answer and lowercase critical, important, or minor
+severity values. cleanup is an object with state and detail, not a string.
+status must be complete, blocked, partial, or error. Stop after this
+assessment, within the recorded task-bound timeout.
 ```
 
 Run at most two assessments concurrently. Record requested and runtime-observed model and effort separately, full input hashes, the exact brief and output, elapsed time, and unavailable cost data. Keep fixture bytes stable while reviewers run.
 
 Allow one replacement per infrastructure failure, malformed result, or contaminated context. Retain the failed attempt and reason. Never rerun a valid result for a better score. After a material correction, repeat only affected pairs for both variants once; retain the initial findings and identify the final comparison cohort.
+
+## Validate the envelope before accepting evidence
+
+Validate the entire result against the canonical reviewer envelope before scoring it. Require a string `verdict_or_answer`, lowercase `critical`, `important`, or `minor` finding severities, the existing status and blocker enums, arrays for findings and evidence collections, and the cleanup object with state and detail. A valid top-level status alone is insufficient. Preserve malformed raw outputs as errors and accept no findings or scores from them. Do not silently normalize an invalid enum or verdict type into valid evidence.
+
+A replacement may restate the existing serialization constraints explicitly without revealing findings or changing candidate, guidance, model, effort, or tools. Record that brief clarification and keep the original failure. A replacement that also fails cannot start another retry without explicit authorization.
 
 ## Adjudicate mechanisms and suggestions
 
