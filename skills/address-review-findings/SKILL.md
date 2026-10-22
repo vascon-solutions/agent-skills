@@ -24,6 +24,7 @@ Explicit ongoing PR-review watching or repeated remediation until quiet routes t
 ## Evaluate And Remediate
 
 - Classify each item as `valid`, `invalid`, `unclear`, `out_of_scope`, `informational`, `duplicate`, or `already_resolved`. Verify code, tests, source contracts, current dependencies, and established decisions. Seek actual usage before adding speculative functionality.
+- Read verification state separately from severity. A `plausible` finding begins as `unclear`; investigate its named missing fact and settling check. A `confirmed` finding still needs scope and disposition evaluation. A `refuted` external finding follows the existing `invalid`/rejected path with the effective defense cited. Do not treat `pass-with-fixes` as completed remediation or let any verdict clear pending findings or required acceptance gaps.
 - Explain rejection with evidence. An invalid finding can expose a different real issue; treat it separately and verify it rather than accepting the original premise wholesale.
 - Investigate unclear technical facts when available evidence can settle them. Ask about unresolved product or architectural choices; pause only the affected cluster and continue independent fixes.
 - A report/evaluation-only request does not authorize edits or messages. A request to address PR findings authorizes scoped remediation and the necessary publication/replies, subject to explicit user limits. Preserve a local-only or no-posting request.

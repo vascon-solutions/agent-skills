@@ -62,6 +62,8 @@ Reply with exactly one fenced `json` block and nothing else:
 
 Keep `block_reason` JSON `null` for a complete result. Otherwise set it to `missing_input`, `missing_capability`, `permission`, `model_unavailable`, `judgment`, `timeout` or `runtime_error`.
 
+In implementation mode, put the failure scenario and verification state in the existing textual `evidence` field. Keep certainty separate from severity; name the settling check for plausible findings in `unverified`. Security inspection uses this same mode and envelope, with inspected boundaries and limitations in the compact summary inside the `verdict_or_answer` string.
+
 Include every actionable finding with its evidence; never drop one to shorten the reply. If you ran any heavy command despite the boundary, list it in `heavy_commands` with its category, directory, result and evidence path. Never include transcripts or credentials.
 
 Report `judgment` as the block reason only when a concrete unresolved judgment question remains; state that question in `verdict_or_answer`.

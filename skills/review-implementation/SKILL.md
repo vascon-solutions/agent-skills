@@ -18,11 +18,27 @@ Infer the context from the request; do not ask the user to choose a mode when it
 
 Read relevant repo instructions and review the full intended diff, including uncommitted changes when in scope. Evaluate both requirement compliance and implementation quality: preserved behavior, excluded scope, contracts, errors/recovery, authorization, state transitions, accessibility, and adequacy of validation. Scale inspection to risk; do not demand a full repository tour or additional tests for cosmetic details.
 
-Load [risk classes](references/risk-classes.md) for the standing pre-PR checklist. Label every finding with its defect shape and check recorded sweeps across the candidate and equivalent touched paths, including sibling fixes. This skill remains implementation review; document diffs belong to `review-doc-changes`, and spec-correctness belongs to `review-task-docs`.
+Load [risk classes](references/risk-classes.md) for the standing pre-PR checklist. When the intended diff affects an entry point, trust boundary, or sensitive operation, also load [security inspection](references/security-review.md). Inspect an uncertain boundary before deciding that reference is unnecessary. Label every finding with its defect shape and check recorded sweeps across the candidate and equivalent touched paths, including sibling fixes. This skill remains implementation review; document diffs belong to `review-doc-changes`, and spec-correctness belongs to `review-task-docs`.
 
 Use direct review unless a fresh reviewer is explicitly requested or required by the calling workflow and delegation is available. A delivery owner dispatches the canonical `reviewer` role as its [orchestration](../task-doc-delivery-loop/references/orchestration.md) describes. When delegating, supply focused source paths, repo/base/head or diff, candidate evidence, prior decisions, and the review context. The reviewer does not inherit broad chat history or delegate again. One reviewer can assess both compliance and quality; separate agents per pass are not mandatory. The coordinating agent may delegate; the reviewer itself must not recursively delegate.
 
-For each actionable finding include file:line or symbol, violated requirement or concrete risk, impact, supporting evidence, and the smallest credible fix. Classify severity:
+## Verify findings
+
+Before reporting a finding, establish its trigger or input state, incorrect result, relevant code path, and applicable requirement or concrete risk. Inspect relevant callers, existing guards, and realistic execution conditions. Cite the actual applicable rule for an instruction violation. Source evidence can establish a reachable failure without executing it; do not rerun delivery gates to confirm a finding.
+
+For removed guards, validation, or recovery paths, identify the invariant they enforced and locate its replacement. Trace changed contracts to callers and consumers. For shared contracts, include a concrete consumer scenario and the supplied dependency revision and generated-output identity where relevant. Request missing identity evidence instead of assuming the consumer is current.
+
+Distinguish newly introduced defects, existing defects newly exposed by this change, and unrelated pre-existing problems. A changed caller can expose a defect on an unchanged line. Keep unrelated problems outside the current remediation scope.
+
+For each actionable finding include file:line or symbol, the failure scenario, violated requirement or concrete risk, impact, supporting evidence, and the smallest credible fix. Start its existing textual `evidence` field with a verification state:
+
+- `confirmed`: source evidence proves a reachable trigger and incorrect result, or an attributed reproduction demonstrates them.
+- `plausible`: a credible mechanism depends on a named runtime, dependency, configuration, or authoritative requirement fact that remains unverified. Put the smallest check or requirement clarification that would settle it in `unverified`.
+- `refuted`: evidence disproves a claim or an applicable defense handles it. Use this state when recording rejected external findings, with the defense cited. Discard internal refuted hypotheses instead of reporting them as new actionable findings.
+
+Verification state describes evidence; severity describes impact. Preserve plausible consequential risks without numerical confidence cutoffs or presenting them as confirmed. During owner triage, plausible findings begin as `unclear`; confirmed findings still need scope and disposition evaluation. Refuted external findings follow the existing invalid/rejected path.
+
+Classify severity:
 
 - **Critical:** broken required behavior, data loss, security/permission regression, build blocker, or severe requirement mismatch.
 - **Important:** missed requirement, likely defect, meaningful validation gap, risky design, or accessibility failure.
@@ -36,6 +52,14 @@ Keep review within the changed scope; do not start an unrelated suite audit.
 
 ## Output
 
-Report `pass`, `pass-with-fixes`, or `fail`, findings ordered by severity, and missing validation. Distinguish inspected evidence from checks you ran and note whether review was local or independent. A pass applies to the stated scope and evidence, not to unverified runtime behavior.
+Report `pass`, `pass-with-fixes`, or `fail`, findings ordered by severity, and missing validation. Include every material actionable finding without a minimum count or output cap. Keep optional cleanup advisory unless an accepted requirement makes it actionable.
+
+- `pass` means no actionable findings in the reviewed scope.
+- `pass-with-fixes` identifies actionable corrections; it does not mean remediation is complete.
+- `fail` identifies blocking defects or required evidence gaps. Critical defects block; explain why any other finding blocks the task's required outcome. Minor advisory cleanup alone does not fail a review.
+
+Pending-finding gates remain binding for every verdict. Put missing required acceptance in `unverified`; a reviewer verdict cannot waive it. Record inspected security boundaries and limitations in the compact summary inside the `verdict_or_answer` string and existing evidence fields.
+
+Distinguish inspected evidence from checks you ran and note whether review was local or independent. A pass applies to the stated scope and evidence, not to unverified runtime behavior.
 
 For authorized remediation, return findings to `address-review-findings`. Report-only review does not independently trigger a fix, another review, or publication.
