@@ -261,8 +261,11 @@ function checkFrom(line, runs, manifestDir, failures, notes) {
     notes.push(`${line.path}: no listed audit run is present; raw capture not checked`);
     return;
   }
-  if (!present.some((run) => fs.existsSync(path.join(run, raw)))) {
+  const found = present.filter((run) => fs.existsSync(path.join(run, raw)));
+  if (!found.length) {
     failures.push(`${line.path}: raw capture ${line.from} is missing from the listed audit runs`);
+  } else if (found.length > 1) {
+    failures.push(`${line.path}: raw capture ${line.from} exists in ${found.length} listed audit runs; write the full path to the run it came from`);
   }
 }
 
@@ -294,6 +297,10 @@ function check(pagePath, manifestPath) {
   for (const figure of figures(rendered)) {
     if (!figure.caption) failures.push(`${figure.src || '<figure>'}: figure has no caption`);
   }
+  for (const img of images(rendered.replace(/<figure\b[\s\S]*?<\/figure>/gi, ''))) {
+    failures.push(`${img.src || '<img>'}: image is not inside a <figure> with a caption`);
+  }
+  if (/<base\b[^>]*\shref\s*=/i.test(rendered)) failures.push('page has a <base href>, which changes where img/ paths load from');
 
   const used = new Set();
   for (const ref of new Set(localRefs(rendered))) {
@@ -453,6 +460,10 @@ function main(argv) {
       return 2;
     }
     const out = path.resolve(args.flags.out || page.replace(/\.html?$/i, '.pdf'));
+    if (!/\.pdf$/i.test(out)) {
+      process.stderr.write(`--out needs a .pdf path: ${out}\n`);
+      return 2;
+    }
     const expected = sections(stripComments(fs.readFileSync(page, 'utf8'))).length;
     try {
       printPdf(page, out);

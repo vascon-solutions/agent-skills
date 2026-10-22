@@ -103,6 +103,14 @@ test('every image line must trace to a raw capture in a present audit run', (t) 
   assert.ok(!result.failures.some((f) => /raw capture/.test(f)), result.failures.join('\n'));
   assert.ok(result.notes.some((n) => /not checked/.test(n)));
 
+  const twoRuns = workspace(t);
+  fs.cpSync(path.join(twoRuns.root, 'audit-run'), path.join(twoRuns.root, 'audit-run-2'), { recursive: true });
+  twoRuns.edit(twoRuns.manifest, '## Accounts', '- `../audit-run-2/`: top-up capture\n\n## Accounts');
+  assertReported(failuresOf(twoRuns), [/1-01-job-list\.png: raw capture .* exists in 2 listed audit runs/]);
+  twoRuns.edit(twoRuns.manifest, 'from: `screenshots/1-01-job-list.png`', `from: \`${path.join(twoRuns.root, 'audit-run', 'screenshots', '1-01-job-list.png')}\``);
+  twoRuns.edit(twoRuns.manifest, 'from: `screenshots/1-02-job-assigned.png`', `from: \`${path.join(twoRuns.root, 'audit-run-2', 'screenshots', '1-02-job-assigned.png')}\``);
+  assert.deepEqual(failuresOf(twoRuns), []);
+
   const cited = workspace(t);
   cited.edit(cited.manifest, '- None.', '- img/1-02-job-assigned.png: the confirmation says "sent" before delivery.');
   assert.deepEqual(failuresOf(cited), []);
@@ -183,7 +191,11 @@ test('structure: doctype, cover first, starter print block, alt text and caption
   ws.edit(ws.page, 'figure { flex: 0 0 62% }', 'figure { flex: 0 0 70% }');
   ws.edit(ws.page, 'alt="Jobs list with JOB-0007 Pump inspection scheduled and JOB-0008 Valve repair awaiting parts"', 'alt=""');
   ws.edit(ws.page, '<figcaption>Dispatcher · JOB-0007 · after assigning</figcaption>', '');
+  ws.edit(ws.page, '<p>The Jobs list shows every open job with its status.</p>', '<p>The Jobs list shows every open job with its status.</p><img src="img/1-01-job-list.png" alt="Jobs list">');
+  ws.edit(ws.page, '<head>', '<head>\n<base href="https://fieldops.example.test/">');
   assertReported(failuresOf(ws), [
+    /img\/1-01-job-list\.png: image is not inside a <figure> with a caption/,
+    /page has a <base href>/,
     /does not start with <!DOCTYPE html>/,
     /first page section is not the cover/,
     /print block differs from the starter/,
@@ -192,6 +204,11 @@ test('structure: doctype, cover first, starter print block, alt text and caption
   ]);
 });
 
-test('PDF pages are counted from Chrome page objects', () => {
+test('pdf counts Chrome page objects and never writes over the page', (t) => {
   assert.equal(countPdfPages(fs.readFileSync(path.join(fixtures, 'three-pages.pdf'))), 3);
+  const ws = workspace(t);
+  const result = childProcess.spawnSync(process.execPath, [script, 'pdf', ws.page, '--out', ws.page], { encoding: 'utf8' });
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /--out needs a \.pdf path/);
+  assert.ok(fs.existsSync(ws.page));
 });
