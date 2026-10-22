@@ -1,0 +1,4 @@
+interface:
+  display_name: "Walkthrough Artifact"
+  short_description: "Build a screenshot walkthrough of shipped features on a non-production environment, with a PDF and a manifest"
+  default_prompt: "Use $walkthrough-artifact to build or revise a product walkthrough: take the brief into manifest.md, adopt matching audit-ui evidence or run audit-ui for fresh captures, curate images into img/ with their raw sources, build the page from the starter, run check and pdf, preview locally, and publish only when asked."
