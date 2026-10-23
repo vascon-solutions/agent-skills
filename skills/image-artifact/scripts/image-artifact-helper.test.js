@@ -164,7 +164,7 @@ test('inferred UI-board sources hand off to variant-board; an explicit non-board
 test('workflow-map header blocks lossy generic prompt writes before creating output paths', () => {
   const root = tempDir();
   const source = path.join(root, 'workflow.md');
-  write(source, '# Equipment checkout\n\n- Recipe: workflow-map\n\n## Matrix\n\nA before/after state and flow comparison.\n');
+  write(source, '# Equipment checkout\n\n<!--\n```\n## Commented heading\n-->\n\n~~~markdown\n<!--\n## Example heading\n~~~\n\n- Recipe: workflow-map\n\n## Matrix\n\nA before/after state and flow comparison.\n');
   for (const command of ['prompt-plan', 'prompt-pack']) {
     for (const kind of [null, 'comparison-board', 'summary-card', 'prompt-pack', 'ui-variant-board']) {
       const outputDir = path.join(root, `${command}-${kind || 'inferred'}`);
@@ -177,10 +177,13 @@ test('workflow-map header blocks lossy generic prompt writes before creating out
   }
 
   const ordinary = path.join(root, 'ordinary.md');
-  write(ordinary, '# Ordinary source\n\n- A concise summary\n\n## Quoted recipe\n\n- Recipe: workflow-map\n');
-  const output = path.join(root, 'ordinary-plan.md');
-  assert.equal(runStatus(['prompt-plan', ordinary, '--kind', 'summary-card', '--out', output]).status, 0);
-  assert.equal(fs.existsSync(output), true, 'a body reference is not a header declaration');
+  write(ordinary, '# Ordinary source\n\n```markdown\n- Recipe: workflow-map\n## Example heading\n```\n\n<!--\n- Recipe: workflow-map\n-->\n\n## Quoted recipe\n\n- Recipe: workflow-map\n');
+  for (const command of ['prompt-plan', 'prompt-pack']) {
+    const output = path.join(root, `ordinary-${command}.md`);
+    const result = runStatus([command, ordinary, '--kind', 'summary-card', '--out', output]);
+    assert.equal(result.status, 0, result.out);
+    assert.equal(fs.existsSync(output), true, 'examples, comments and body references are not declarations');
+  }
 });
 
 test('metadata appends versioned outputs to one image-only table without losing existing columns', () => {

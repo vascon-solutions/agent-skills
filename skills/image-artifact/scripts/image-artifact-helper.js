@@ -136,8 +136,43 @@ function resolveWorkspace(flags, sourcePath, markdown) {
 }
 
 function hasWorkflowMapRecipe(markdown) {
-  const header = markdown.split(/^#{2,6}[ \t]+/m, 1)[0];
-  return /^[ \t]*-[ \t]+Recipe:[ \t]*workflow-map[ \t]*$/im.test(header);
+  let fence = null;
+  let inComment = false;
+  for (const raw of markdown.split(/\r?\n/)) {
+    if (fence) {
+      const closing = raw.match(/^ {0,3}(`+|~+)[ \t]*$/);
+      if (closing && closing[1][0] === fence[0] && closing[1].length >= fence.length) fence = null;
+      continue;
+    }
+    let remaining = raw;
+    let visible = '';
+    while (remaining) {
+      if (inComment) {
+        const end = remaining.indexOf('-->');
+        if (end < 0) break;
+        remaining = remaining.slice(end + 3);
+        inComment = false;
+      } else {
+        const start = remaining.indexOf('<!--');
+        if (start < 0) {
+          visible += remaining;
+          break;
+        }
+        visible += remaining.slice(0, start);
+        remaining = remaining.slice(start + 4);
+        inComment = true;
+      }
+    }
+    const opening = visible.match(/^ {0,3}(`{3,}|~{3,})/);
+    if (opening) {
+      fence = opening[1];
+      inComment = false;
+      continue;
+    }
+    if (/^ {0,3}#{2,6}[ \t]+/.test(visible)) break;
+    if (/^ {0,3}-[ \t]+Recipe:[ \t]*workflow-map[ \t]*$/i.test(visible)) return true;
+  }
+  return false;
 }
 
 function inferKind(markdown, explicitKind) {

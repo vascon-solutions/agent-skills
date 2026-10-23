@@ -22,7 +22,7 @@ This is a bounded improvement to existing skills and helper behavior. It introdu
 | Existing tests own routing, output placement and issued-board capture | `skills/image-artifact/scripts/image-artifact-helper.test.js` |
 | Citation boundaries currently capture conceptual comparisons too broadly | `skills/variant-board/SKILL.md`, Boundaries |
 
-Evidence checked against `68bf2c0`, the verified `origin/main` base at delivery start.
+Code observations from `68bf2c0` were rechecked against the actual worktree base `4f8da81`, the verified `origin/main` revision used for this delivery. The relevant helper behavior was unchanged.
 
 ## Scope and preserved behavior
 
