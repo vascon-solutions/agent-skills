@@ -1,6 +1,6 @@
 ---
 name: image-artifact
-description: Use when an existing Markdown source document needs a static visual companion such as a summary card, comparison board, decision board, concept poster, architecture diagram, or API flow image under an artifact workspace or explicit output path, or when an issued variant board needs a browser snapshot image. Not for building UI variant boards; use variant-board for those.
+description: Use when existing Markdown needs a static visual companion, including illustrated Before and After workflow maps, summary cards, comparison boards, architecture or API diagrams, or a browser snapshot of an issued variant board. Not for building UI mockups or UI variant boards; use variant-board for those.
 ---
 
 # image-artifact
@@ -15,7 +15,9 @@ For browser-readable or interactive companions, use `html-artifact` instead. Use
 
 This skill is for low-text visual companionship: concept posters, illustrations, comparison boards, architecture diagrams, mood visuals, and stakeholder visuals. When a user asks for an "image artifact for this spec/doc/source" and the source is text-heavy, default to a low-text illustrative companion and recommend `html-artifact` if the user needs exact wording.
 
-UI variant boards are not generated here. `variant-board` builds and issues them in the app's own design system; this skill's `board-snapshot` captures an issued frozen version at a validated scenario as a PNG (see Board Snapshots). A request to draw UI variants, states, or before/after options is a `variant-board` request even when it says "image".
+For an illustrated Before and After map of people, lifecycle statuses, actions and documents, read [the workflow-map recipe](references/workflow-map.md) and use [its brief template](templates/workflow-map-brief.md). It uses `comparison-board` with a structured text budget, saved exact prompts, version retention and visual inspection. Markdown stays authoritative.
+
+UI variant boards are not generated here. `variant-board` builds and issues them in the app's own design system; this skill's `board-snapshot` captures an issued frozen version at a validated scenario as a PNG (see Board Snapshots). Before and After UI screens, UI states or options drawn in the app's design system belong to `variant-board`, including requests worded as images. Conceptual workflow maps use generic illustrations here. Ask which is intended only when the distinction is material and unclear.
 
 ## Inputs
 
@@ -47,12 +49,14 @@ node <this-skill-dir>/scripts/image-artifact-helper.js board-snapshot <workspace
 
 The script does not generate images. It handles prompt plans, prompt-pack fallback files, metadata updates, path resolution, file-level image validation, and browser capture of issued variant boards. An explicit or inferred UI-variant-board request exits with a handoff to `variant-board` instead of writing a prompt plan or pack. It resolves repo Markdown sources to repo-aware `~/agent-artifacts/<repo-name>-<source-stem>/` workspaces by default. Use `--format svg` only when exact-text static-image work needs deterministic SVG filename guidance. Validation recognizes deterministic SVG files and reads dimensions from `width`/`height` or `viewBox`.
 
+A brief declaring `- Recipe: workflow-map` in its bullet header uses the linked recipe. Both generic prompt commands refuse it before creating outputs, including with explicit `--kind`; follow the recipe directly to retain tables and steps.
+
 ## Output Kinds
 
 | Kind | Use when | Default filename |
 |---|---|---|
 | `summary-card` | Concise low-text visual summary; for dense text prefer html-artifact | `<source-stem>-summary.png` |
-| `comparison-board` | Options, variants, or tradeoffs that are not UI states | `<source-stem>-comparison-board.png` |
+| `comparison-board` | Conceptual workflow comparisons, options or tradeoffs that are not UI states | `<source-stem>-comparison-board.png`; workflow maps use `<map>.v<N>.png` |
 | `architecture-diagram` | Systems, services, APIs, or data flow | `<source-stem>-architecture.png` |
 | `api-flow` | Endpoints, actors, states, or request flow | `<source-stem>-api-flow.png` |
 | `concept-poster` | Product, business, or campaign concept | `<source-stem>-poster.png` |
@@ -64,8 +68,8 @@ The script does not generate images. It handles prompt plans, prompt-pack fallba
 
 If `--kind` is absent, infer from source signals:
 
-- workspace metadata doc type, when available, before prose-only inference
-- UI/component/flow docs with multiple variants, states, screens, options, or approaches -> hand off to `variant-board`
+- a declared workflow-map recipe -> `comparison-board`, through the linked recipe instead of generic prompt commands
+- UI/component/flow docs with a separate variant, state, option or comparison signal -> hand off to `variant-board`; a lone lifecycle word such as `state` is insufficient
 - UI/component/flow docs describing one component or one flow without variants -> `summary-card`
 - architecture/backend/API/data-model docs -> `architecture-diagram` or `api-flow`
 - option/tradeoff docs -> `comparison-board`
@@ -101,9 +105,13 @@ Create missing directories automatically. Default `~/agent-artifacts` outputs ar
 
 If a target file exists, ask before overwriting unless the user provided `--force` or explicitly requested replacement. If the user says "recreate", "regenerate", "refresh", "replace", or "update", overwrite the existing image and update only required sidecars. When refreshing from changed Markdown without replacement language or `--force`, write a versioned file such as `-2`, `-v2`, or a dated suffix. For variants, append `-variant-a`, `-variant-b`, or descriptive slugs.
 
+Workflow maps always retain every image version and its exact prompt, including on regeneration. Use the recipe's version and split-part naming instead of this ordinary replacement rule.
+
 ## Repo Design Context
 
 Default to neutral visual direction. Only scan and apply repo design context when the user passes `--use-repo-design`.
+
+For workflow maps, verified repo vocabulary may inform status, role and document names. Keep the recipe's neutral semantic palette and generic illustrations; do not apply the app's theme.
 
 Invoke the `repo-design-context` skill to resolve scan root, discovery precedence, confidence, and reporting. Pass the source Markdown path or captured title, optional output kind, explicit repo path if the user provided one, artifact target such as `image companion` or `architecture diagram`, and current working directory.
 
@@ -240,6 +248,8 @@ If using the image-only `Type | Source | Output | Tool` table and creating it fr
 ```
 
 ## Workflow
+
+For conceptual workflow comparisons, read [the workflow-map recipe](references/workflow-map.md), derive its brief from the supplied source and follow its preparation, prompting, inspection and retention steps. Its saved prompt and version history are required even for one image. The generic steps below apply to other kinds; issued UI-board captures follow Board Snapshots.
 
 1. Receive Markdown, workspace, pasted source, or explicit source.
 2. Verify source exists or capture pasted source.

@@ -1,6 +1,6 @@
 ---
 name: variant-board
-description: "Use to build or revise a UI variant board (before/after, option comparison, state coverage, or defect report) for a section, page, feature or UX change: drawn in the target app's own design system on a white editorial page, issued in frozen versions that specs and task docs cite by section and scenario, and rendered with whichever host is in use. Use it whenever someone asks for a variant board, a before/after board, UI variants or options to compare, a mock of proposed UI states for a task doc, or a revision or new version of an existing board, even if they call it a prototype or a companion."
+description: "Use to build or revise a UI variant board (before/after, option comparison, state coverage, or defect report) for a section, page, feature or UX change: drawn in the target app's own design system on a white editorial page, issued in frozen versions that specs and task docs cite by section and scenario, and rendered with whichever host is in use. Use it for a before/after UI board, UI variants or options to compare, a mock of proposed UI states for a task doc, or a revision of an existing board, even if called a prototype or companion. Conceptual workflow maps without screens belong to image-artifact."
 ---
 
 # variant-board
@@ -109,7 +109,8 @@ Publication is optional and host-specific; a URL learned after issue goes into `
 
 ## Boundaries
 
-- `html-artifact` keeps document companions, clickable flows and approach comparisons that no task doc will cite as a board. If it will be cited as a companion, it is a board.
+- `html-artifact` keeps document companions, clickable flows and approach comparisons that no task doc will cite as a UI board. A cited companion showing UI mockups follows this board's issuance and citation rules.
+- `image-artifact` owns conceptual workflow maps of people, lifecycle statuses, actions and documents drawn with generic illustrations. Specs and task docs may link their brief and inspected image versions as illustrations without making them UI boards or runtime acceptance evidence.
 - `image-artifact` no longer generates variant boards; its `board-snapshot` captures an issued frozen version at a validated scenario for a static image.
 - `artifact-workbench` is unchanged and serves boards and their `versions/` folder as it serves any workspace HTML.
 - Do not retrofit existing boards in bulk, generate a per-product component kit, or publish anywhere without the owner's instruction.
