@@ -152,6 +152,60 @@ test('inferred UI-board sources hand off to variant-board; an explicit non-board
   const plan = fs.readFileSync(path.join(root, 'plan.md'), 'utf8');
   assert.match(plan, /summary-card/);
   assert.doesNotMatch(plan, /ui-variant-board/);
+
+  const backend = path.join(root, 'backend.md');
+  write(backend, '# Reconciler\n\nThe reconciler stores state in Postgres.\n');
+  const backendPlan = path.join(root, 'backend-plan.md');
+  const stateOnly = runStatus(['prompt-plan', backend, '--out', backendPlan]);
+  assert.equal(stateOnly.status, 0, stateOnly.out);
+  assert.equal(fs.existsSync(backendPlan), true);
+});
+
+test('workflow-map header blocks lossy generic prompt writes before creating output paths', () => {
+  const root = tempDir();
+  const source = path.join(root, 'workflow.md');
+  write(source, '# Equipment checkout\n\n<!--\n```\n## Commented heading\n-->\n\n~~~markdown\n<!--\n## Example heading\n~~~\n\n- Recipe: workflow-map\n\n## Matrix\n\nA before/after state and flow comparison.\n');
+  for (const command of ['prompt-plan', 'prompt-pack']) {
+    for (const kind of [null, 'comparison-board', 'summary-card', 'prompt-pack', 'ui-variant-board']) {
+      const outputDir = path.join(root, `${command}-${kind || 'inferred'}`);
+      const result = runStatus([command, source, '--out', path.join(outputDir, 'prompt.md'), ...(kind ? ['--kind', kind] : [])]);
+      assert.equal(result.status, 1, result.out);
+      assert.match(result.out, /workflow-map/);
+      assert.match(result.out, /references\/workflow-map\.md/);
+      assert.equal(fs.existsSync(outputDir), false);
+    }
+  }
+
+  const ordinary = path.join(root, 'ordinary.md');
+  write(ordinary, '# Ordinary source\n\n```markdown\n- Recipe: workflow-map\n## Example heading\n```\n\n<!--\n- Recipe: workflow-map\n-->\n\n## Quoted recipe\n\n- Recipe: workflow-map\n');
+  for (const command of ['prompt-plan', 'prompt-pack']) {
+    const output = path.join(root, `ordinary-${command}.md`);
+    const result = runStatus([command, ordinary, '--kind', 'summary-card', '--out', output]);
+    assert.equal(result.status, 0, result.out);
+    assert.equal(fs.existsSync(output), true, 'examples, comments and body references are not declarations');
+  }
+});
+
+test('metadata appends versioned outputs to one image-only table without losing existing columns', () => {
+  for (const repoDesign of [null, 'neutral vocabulary']) {
+    const root = tempDir();
+    const source = path.join(root, 'markdown', 'brief.md');
+    write(source, '# Synthetic brief\n');
+    const first = path.join(root, 'images', 'map.v1.png');
+    const second = path.join(root, 'images', 'map.v2.png');
+    const base = ['metadata', root, '--source', source, '--kind', 'comparison-board', '--tool', 'example-generator'];
+    run([...base, '--output', first, ...(repoDesign ? ['--repo-design', repoDesign] : [])]);
+    run([...base, '--output', second]);
+    run([...base, '--output', first]);
+    const metadata = fs.readFileSync(path.join(root, 'metadata.md'), 'utf8');
+    assert.equal((metadata.match(/^## Artifacts$/gm) || []).length, 1);
+    const rows = metadata.split('\n').filter(line => line.startsWith('| comparison-board |'));
+    assert.equal(rows.length, 2);
+    assert.match(rows[0], /map\.v1\.png/);
+    assert.match(rows[1], /map\.v2\.png/);
+    assert.equal(rows[0].split('|').length, repoDesign ? 7 : 6);
+    if (repoDesign) assert.match(rows[0], /neutral vocabulary/);
+  }
 });
 
 test('board-snapshot accepts only issued frozen boards with a resolvable scenario and plans the capture', () => {

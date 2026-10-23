@@ -34,7 +34,7 @@ variant-board skill; board-snapshot captures an issued frozen version at a valid
 }
 
 function boardHandoff(reason) {
-  process.stderr.write(`${reason}\nUI variant boards are not generated here. Use the \`${BOARD_HANDOFF}\` skill to build or revise the board from a brief in the app's own design system, issue a frozen version, and cite it. To snapshot an issued board as an image, run: image-artifact-helper.js board-snapshot <html/versions/<board>.v<N>.html> --scenario '<#section?...>'. For an illustrative non-board companion, pass an explicit --kind such as summary-card or comparison-board.\n`);
+  process.stderr.write(`${reason}\nUI variant boards are not generated here. Use the \`${BOARD_HANDOFF}\` skill to build or revise the board from a brief in the app's own design system, issue a frozen version, and cite it. To snapshot an issued board as an image, run: image-artifact-helper.js board-snapshot <html/versions/<board>.v<N>.html> --scenario '<#section?...>'. For conceptual process comparisons, use the workflow-map recipe at references/workflow-map.md. For another illustrative non-board companion, pass an explicit --kind such as summary-card or comparison-board.\n`);
   process.exit(2);
 }
 
@@ -135,10 +135,51 @@ function resolveWorkspace(flags, sourcePath, markdown) {
   return path.join(process.env.HOME, 'agent-artifacts', slugify(extractTitle(markdown, path.basename(sourcePath, path.extname(sourcePath)))));
 }
 
+function hasWorkflowMapRecipe(markdown) {
+  let fence = null;
+  let inComment = false;
+  for (const raw of markdown.split(/\r?\n/)) {
+    if (fence) {
+      const closing = raw.match(/^ {0,3}(`+|~+)[ \t]*$/);
+      if (closing && closing[1][0] === fence[0] && closing[1].length >= fence.length) fence = null;
+      continue;
+    }
+    let remaining = raw;
+    let visible = '';
+    while (remaining) {
+      if (inComment) {
+        const end = remaining.indexOf('-->');
+        if (end < 0) break;
+        remaining = remaining.slice(end + 3);
+        inComment = false;
+      } else {
+        const start = remaining.indexOf('<!--');
+        if (start < 0) {
+          visible += remaining;
+          break;
+        }
+        visible += remaining.slice(0, start);
+        remaining = remaining.slice(start + 4);
+        inComment = true;
+      }
+    }
+    const opening = visible.match(/^ {0,3}(`{3,}|~{3,})/);
+    if (opening) {
+      fence = opening[1];
+      inComment = false;
+      continue;
+    }
+    if (/^ {0,3}#{2,6}[ \t]+/.test(visible)) break;
+    if (/^ {0,3}-[ \t]+Recipe:[ \t]*workflow-map[ \t]*$/i.test(visible)) return true;
+  }
+  return false;
+}
+
 function inferKind(markdown, explicitKind) {
+  if (hasWorkflowMapRecipe(markdown)) return 'comparison-board';
   if (explicitKind) return explicitKind;
   const text = markdown.toLowerCase();
-  const hasUi = /\b(ui|component|screen|flow|responsive|state|props?)\b/.test(text);
+  const hasUi = /\b(ui|component|screen|flow|responsive|props?)\b/.test(text);
   const hasVariants = /\b(variant|option|approach|tradeoff|comparison|alternative|state)\b/.test(text);
   if (hasUi && hasVariants) return BOARD_HANDOFF;
   if (hasUi) return 'summary-card';
@@ -288,6 +329,9 @@ function buildPromptPack(source, kind, flags) {
 function writePromptArtifact(command, args) {
   if (args.positionals.length < 1) usage(1);
   const source = readSource(args.positionals[0]);
+  if (hasWorkflowMapRecipe(source.markdown)) {
+    die('Declared workflow-map briefs use comparison-board. Generic prompt-plan and prompt-pack would lose their tables and steps; follow references/workflow-map.md and retain the exact prompt instead.');
+  }
   const explicitKind = args.flags.kind === 'prompt-pack' ? null : args.flags.kind;
   if (RETIRED_BOARD_KINDS.includes(explicitKind)) boardHandoff(`--kind ${explicitKind} is retired.`);
   const kind = inferKind(source.markdown, explicitKind);
@@ -344,20 +388,48 @@ function updateMetadata(args) {
   } else {
     const tool = args.flags.tool || 'unknown';
     const repoDesign = args.flags['repo-design'];
-    const header = metadata.trim() ? `${metadata.trim()}\n\n` : `# Image Artifact Metadata\n\n`;
-    const tableHeader = repoDesign
-      ? '| Type | Source | Output | Tool | Repo Design |\n|---|---|---|---|---|\n'
-      : '| Type | Source | Output | Tool |\n|---|---|---|---|\n';
-    const row = repoDesign
-      ? `| ${kind} | \`${sourceRel}\` | \`${outputRel}\` | \`${tool}\` | \`${repoDesign}\` |\n`
-      : `| ${kind} | \`${sourceRel}\` | \`${outputRel}\` | \`${tool}\` |\n`;
-    metadata = `${header}## Artifacts\n\n${tableHeader}${row}`;
+    const imageTable = updateImageArtifactTable(metadata, {
+      Type: kind, Source: `\`${sourceRel}\``, Output: `\`${outputRel}\``,
+      Tool: args.flags.tool ? `\`${tool}\`` : undefined,
+      'Repo Design': repoDesign ? `\`${repoDesign}\`` : undefined,
+    });
+    if (imageTable !== null) {
+      metadata = imageTable;
+    } else {
+      const header = metadata.trim() ? `${metadata.trim()}\n\n` : `# Image Artifact Metadata\n\n`;
+      const tableHeader = repoDesign
+        ? '| Type | Source | Output | Tool | Repo Design |\n|---|---|---|---|---|\n'
+        : '| Type | Source | Output | Tool |\n|---|---|---|---|\n';
+      const row = repoDesign
+        ? `| ${kind} | \`${sourceRel}\` | \`${outputRel}\` | \`${tool}\` | \`${repoDesign}\` |\n`
+        : `| ${kind} | \`${sourceRel}\` | \`${outputRel}\` | \`${tool}\` |\n`;
+      metadata = `${header}## Artifacts\n\n${tableHeader}${row}`;
+    }
   }
-  if (args.flags['repo-design'] && /\|\s*Type\s*\|\s*Markdown\s*\|\s*HTML\s*\|\s*Images\s*\|/.test(metadata)) {
-    metadata = `${metadata.trim()}\n\nRepo design context: ${args.flags['repo-design']}\n`;
+  if (args.flags['repo-design'] && !/^\|\s*Type\s*\|\s*Source\s*\|\s*Output\s*\|\s*Tool\s*\|[^\n]*Repo Design\s*\|/m.test(metadata)) {
+    const note = `Repo design context: ${args.flags['repo-design']}`;
+    if (!metadata.split('\n').includes(note)) metadata = `${metadata.trim()}\n\n${note}\n`;
   }
   fs.writeFileSync(metadataPath, metadata.endsWith('\n') ? metadata : `${metadata}\n`);
   process.stdout.write(`Updated: ${metadataPath}\n`);
+}
+
+function updateImageArtifactTable(metadata, values) {
+  const lines = metadata.split('\n');
+  const cells = line => line.split('|').slice(1, -1).map(cell => cell.trim());
+  const headerIndex = lines.findIndex(line => /^\|\s*Type\s*\|\s*Source\s*\|\s*Output\s*\|\s*Tool\s*\|/.test(line));
+  if (headerIndex < 0) return null;
+  const headers = cells(lines[headerIndex]);
+  let insertIndex = headerIndex + 2;
+  for (; insertIndex < lines.length && lines[insertIndex].trim().startsWith('|'); insertIndex += 1) {
+    const existing = cells(lines[insertIndex]);
+    if (existing[2]?.replace(/`/g, '') !== values.Output.replace(/`/g, '')) continue;
+    lines[insertIndex] = `| ${headers.map((name, index) => values[name] ?? existing[index] ?? '').join(' | ')} |`;
+    return lines.join('\n');
+  }
+  const row = headers.map(name => values[name] ?? (name === 'Tool' ? '`unknown`' : ''));
+  lines.splice(insertIndex, 0, `| ${row.join(' | ')} |`);
+  return lines.join('\n');
 }
 
 function imageInfo(filePath) {
