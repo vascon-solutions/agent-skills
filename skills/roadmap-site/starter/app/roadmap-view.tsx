@@ -310,7 +310,7 @@ export default function RoadmapView(props: {
 
   return (
     <div className="page">
-      <header className="masthead">
+      <header className="masthead" inert={Boolean(open)}>
         <div className="masthead-inner">
           <p className="eyebrow">Roadmap</p>
           <h1>{config.title}</h1>
@@ -340,7 +340,7 @@ export default function RoadmapView(props: {
         </div>
       </header>
 
-      <main className="content">
+      <main className="content" inert={Boolean(open)}>
         <section className="summary" aria-label="Status summary">
           <p className="done-count">{counted.filter((item) => item.status === "done").length} of {counted.length} done</p>
           <ul>

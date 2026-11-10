@@ -61,7 +61,7 @@ export async function POST(request: Request) {
     const commit = typeof body.commit === "string" ? body.commit.slice(0, 7) : "";
     const author = typeof body.author === "string" && body.author ? body.author.slice(0, 200) : "sync";
     const results = await db.batch([
-      activityInsert(db, [{ kind: "pull", actorName: author, detail: `Pulled at ${commit}: ${applied} applied to the repo file, ${discard.length} page change(s) discarded` }]),
+      activityInsert(db, [{ kind: "pull", actorName: author, detail: `Pulled at ${commit}: ${applied} applied to the repo file, ${discard.length} page change(s) sent for discard` }]),
       ...discard.map((edit) =>
         db.update(itemState).set(clearState).where(and(eq(itemState.itemId, String(edit.id)), eq(itemState.status, String(edit.status)))),
       ),
