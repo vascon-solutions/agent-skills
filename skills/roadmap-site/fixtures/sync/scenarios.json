@@ -1,0 +1,14 @@
+{
+  "description": "Every repo-changed x page-changed cell for one pending page edit. base is the repo status the edit started from, repo is the file's status at pull time, page is the pending page status.",
+  "cases": [
+    { "name": "neither side changed", "base": "todo", "repo": "todo", "page": "todo", "expect": "converged" },
+    { "name": "page changed, repo unchanged", "base": "todo", "repo": "todo", "page": "done", "expect": "apply" },
+    { "name": "repo changed, page unchanged", "base": "todo", "repo": "blocked", "page": "todo", "expect": "discard" },
+    { "name": "both changed to the same value", "base": "todo", "repo": "done", "page": "done", "expect": "converged" },
+    { "name": "both changed to different values", "base": "todo", "repo": "blocked", "page": "done", "expect": "conflict" },
+    { "name": "conflict resolved with --prefer page", "base": "todo", "repo": "blocked", "page": "done", "prefer": "page", "expect": "apply" },
+    { "name": "conflict resolved with --prefer repo", "base": "todo", "repo": "blocked", "page": "done", "prefer": "repo", "expect": "discard" },
+    { "name": "edit for an item no longer in the file", "base": "todo", "repo": null, "page": "done", "expect": "orphan" },
+    { "name": "orphan dropped with --prefer repo", "base": "todo", "repo": null, "page": "done", "prefer": "repo", "expect": "discard" }
+  ]
+}

@@ -14,7 +14,7 @@ Convert any Markdown document into a rich, self-contained HTML companion. The Ma
 - You want a browser-ready version of any `.md` file
 - You want an interactive single-file artifact whose source content lives in Markdown
 - You need article-style artifacts such as annotated diffs, design token sheets, slide decks, animation sandboxes, clickable flows, SVG figure sheets, chart reports, draggable Kanban boards, or split-view editors
-- After task-doc, roadmap-todo, prepare-qa-handoff, or prepare-frontend-handoff writes its output (opt-in)
+- After task-doc, prepare-qa-handoff, or prepare-frontend-handoff writes its output (opt-in)
 - Standalone on any Markdown file — repo docs, specs, notes, handoffs
 
 ## When To Use vs. image-artifact

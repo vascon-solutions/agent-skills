@@ -22,11 +22,14 @@ Do not pack verification details or execution checklists into the roadmap.
 
 ```markdown
 ## Auth & Access Control
+Outcome: Only the right people reach admin screens.
 
-| # | Item | Status | Task doc |
-|---|---|---|---|
-| 1 | Role-based route guards | done | tasks/001-rbac-guards.md |
-| 2 | Session token rotation | in-progress | tasks/002-token-rotation.md |
-| 3 | Audit log for permission changes | todo | — |
+| # | Item | Outcome | Status | Task doc |
+|---|---|---|---|---|
+| 1 | Role-based route guards | Admin routes refuse other roles | done | tasks/001-rbac-guards.md |
+| 2 | Session token rotation | Stolen sessions expire quickly | in-progress | tasks/002-token-rotation.md |
+| 3 | Audit log for permission changes | — | todo | — |
 ```
+
+The `Outcome:` line and the `Outcome` column are optional: a plain-language result for readers who do not know the item names. This is also the minimum format a `roadmap-site` page reads: a level 2 or 3 heading per group, an `ID` or `#` column, `Item`, `Status` with one of the six status words (text after the word is a note), and optional `Outcome` and `Task doc` or `Link` columns.
 

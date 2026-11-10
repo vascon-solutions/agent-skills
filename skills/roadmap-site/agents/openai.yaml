@@ -1,0 +1,4 @@
+interface:
+  display_name: "Roadmap Site"
+  short_description: "Set up, sync or verify a hosted roadmap page whose status stays in agreement with the repo roadmap"
+  default_prompt: "Use $roadmap-site to set up, sync or verify the project's hosted roadmap page: check the roadmap file, apply the starter overlay with the project's config and token map, follow references/hosts.md for the host steps, run pull and push with tokens from the environment or stdin, ask the owner before preferring either side of a conflict, and never commit."
