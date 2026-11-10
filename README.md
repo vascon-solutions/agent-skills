@@ -34,6 +34,7 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
     ├── implementation-map/
     ├── repo-skill-scan/
     ├── roadmap-todo/
+    ├── roadmap-site/
     ├── html-artifact/
     ├── markdown-artifact/
     ├── image-artifact/
@@ -84,6 +85,7 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 | `implementation-map`        | Create requested implementation maps or deep review dossiers of existing code with file evidence; not for routine code explanations unless explicitly invoked                       |
 | `repo-skill-scan`           | Scan a repo for repeated patterns; recommend skills, commands, or no action, then scaffold approved candidates into correctly structured files with link-script and README wiring                                                                                                     |
 | `roadmap-todo`              | Create and maintain durable roadmap or todo files for feature-grade work across repos                                                                                                                                                                                                |
+| `roadmap-site` | Set up, sync and verify a hosted roadmap page from one fixed app in the project's tokens: readers see groups and items, named editors change status, note and link, and a three-way `pull`/`push` keeps the repo roadmap's status column and the page in agreement; `check` enforces the minimum roadmap format and `verify` reports overlay drift |
 | `brainstorm` | Explore unsettled ideas through discussion and research; produce a recommendation, research brief, or optional design spec without automatic delivery handoff |
 | `unslop` | Make agent output readable on the first read: outcome first, gaps stated, no narration, evidence not adjectives, per-surface shapes for replies, findings, PR bodies, commits, and docs, plus a scanner for mechanical tells |
 | `task-doc`                  | Create durable task documents for bounded handoff work; return small immediate fixes to normal execution                                                                                                                                                                      |
@@ -308,11 +310,17 @@ Documentation audits and reviews report findings without editing. Existing clean
 3. `address-review-findings` — evaluate and fix valid review findings; when asked to "review and fix," run the review first, then remediate
 4. `roadmap-todo` — keep feature-grade backlog items concise, durable, and linked to task docs
 
+### Running a hosted roadmap page
+
+1. `roadmap-site` — `node skills/roadmap-site/scripts/roadmap-site.js check <roadmap.md>` enforces the minimum format (`roadmap-todo` normalises a failing file with the owner's consent).
+2. Create the host's starter, fill the site config and token map from `skills/roadmap-site/templates/`, then `build <site-dir> --config <file> --tokens <file>` applies the overlay; host steps and the conformance record are in `skills/roadmap-site/references/hosts.md`.
+3. `pull` brings page status edits into the roadmap file as status-word changes for the owner to review and commit; `push` uploads the committed roadmap as the page snapshot. Tokens come from the environment or stdin. `verify <site-dir>` lists overlay files that drifted from the skill's starter.
+
 `address-review-findings` is self-contained: it evaluates findings with its own bundled rules — verify before implementing, push back on invalid feedback with evidence, no blind compliance — independent of any external code-review skill.
 
 ### Generating HTML artifact companions
 
-1. `html-artifact` — convert any `.md` file into a self-contained browser-ready HTML file stored in `~/agent-artifacts/`. Works standalone or as an opt-in step after `task-doc`, `roadmap-todo`, `prepare-qa-handoff`, or `prepare-frontend-handoff`.
+1. `html-artifact` — convert any `.md` file into a self-contained browser-ready HTML file stored in `~/agent-artifacts/`. Works standalone or as an opt-in step after `task-doc`, `prepare-qa-handoff`, or `prepare-frontend-handoff`.
 
 ### Generating image artifact companions
 

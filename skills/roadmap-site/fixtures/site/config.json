@@ -1,0 +1,9 @@
+{
+  "title": "Example Shop roadmap",
+  "summary": "Milestones and items for a synthetic shop, used by the tests and the local gate.",
+  "repo": ".",
+  "roadmapPath": ".agent/roadmap.md",
+  "repositoryUrl": "https://example.test/example-shop",
+  "ref": "main",
+  "siteUrl": "http://localhost:5173"
+}

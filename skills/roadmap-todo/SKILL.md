@@ -54,6 +54,8 @@ Read [references/status-model.md](references/status-model.md) when the repo has 
 3. Flag any entry that has grown too detailed — recommend a linked task doc.
 4. Output the updated roadmap. Use [references/roadmap-template.md](references/roadmap-template.md) only when starting from scratch.
 
+A roadmap that backs a hosted `roadmap-site` page must keep its minimum format: a level 2 or 3 heading per group, an optional `Outcome:` line under it, and item tables with an `ID` or `#` column, `Item` and `Status` (one of the six status words), plus optional `Outcome` and `Task doc` or `Link` columns. Normalise an existing roadmap to that format only with the owner's consent; never as a side effect of another edit.
+
 Do not implement. Do not start coding.
 
 ## Output
@@ -65,7 +67,7 @@ Produce one or more of:
 
 ## Optional Companion
 
-Offer `html-artifact` only when a browser board would help the requested review or planning. Do not append an offer after routine status updates.
+Offer `roadmap-site` only when the project wants a hosted, editable roadmap page that stays in sync with this file. Do not append an offer after routine status updates. This skill never touches a site.
 
 ## Cautions
 

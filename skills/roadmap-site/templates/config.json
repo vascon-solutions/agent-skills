@@ -1,0 +1,9 @@
+{
+  "title": "<Project> roadmap",
+  "summary": "<One line on what this roadmap tracks and for whom.>",
+  "repo": "~/Code/<org>/<repo>",
+  "roadmapPath": ".agent/roadmap.md",
+  "repositoryUrl": "",
+  "ref": "main",
+  "siteUrl": ""
+}
