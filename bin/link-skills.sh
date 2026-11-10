@@ -40,6 +40,7 @@ monitor-pr-review
 github-issue-intake
 implementation-map
 repo-skill-scan
+repo-code-audit
 roadmap-todo
 task-doc
 task-doc-intake
