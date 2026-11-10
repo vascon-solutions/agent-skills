@@ -1,6 +1,6 @@
 # Audit Categories
 
-What to look for in each category, and the shape every finding takes. Scale depth to the code in scope. A claim without a location is not a finding: "probably has N+1 queries" is a guess, "`orders/api.ts:142` issues one query per order item inside a loop" is a finding.
+What to look for in each category, and the shape every finding takes. Scale depth to the code in scope. A claim without a location is not a finding; for something missing, the location is the manifest or configuration file where the absence shows, or the paths searched. For example, "probably has N+1 queries" is a guess, "`orders/api.ts:142` issues one query per order item inside a loop" is a finding.
 
 Framework-specific rules belong to the repository's own standards and any installed standards skill. Use them where they apply; do not restate them here.
 
@@ -77,11 +77,11 @@ Estimate the number of files a migration touches. That drives effort and whether
 ## Tooling And Developer Experience
 
 - Missing or broken typecheck, lint, format, or pre-commit configuration.
-- Feedback loops measured in minutes: slow startup, no watch mode, uncached pipelines.
-- Setup instructions that are wrong or incomplete, undocumented required environment variables.
+- Feedback loops measured in minutes: slow startup, no watch mode.
+- Required environment variables with no example file or declared schema.
 - Services with unstructured logs or no request correlation.
 
-Instruction files and documentation sets belong to `repair-agent-files` and `repo-docs-audit`. Note the gap in one line and name the owner.
+Instruction files and documentation, including wrong or incomplete setup instructions, belong to `repair-agent-files` and `repo-docs-audit`. Note the gap in one line and name the owner.
 
 ## Direction Signals
 
