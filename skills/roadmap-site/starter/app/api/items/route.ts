@@ -1,10 +1,10 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { getDb } from "@/db";
-import { itemState } from "@/db/schema";
+import { activity, itemState } from "@/db/schema";
 import { authorize, checkVersion } from "@/lib/roadmap/access.mjs";
-import { snapshotItems } from "@/lib/roadmap/merge.mjs";
+import { nextItemState, pageView, snapshotItems } from "@/lib/roadmap/merge.mjs";
 import { STATUSES } from "@/lib/roadmap/parse.mjs";
-import { currentViewer, failure, json, loadRoadmap, loadSnapshot, readJson, record, requestGuard } from "@/lib/roadmap/server";
+import { type ActivityEntry, currentViewer, failure, json, loadRoadmap, loadSnapshot, readJson, requestGuard } from "@/lib/roadmap/server";
 
 export const dynamic = "force-dynamic";
 
@@ -32,28 +32,35 @@ export async function PUT(request: Request) {
   const stale = checkVersion(version, body.version);
   if (stale) return failure(stale);
 
-  const displayed = state?.status ?? item.status;
-  const status = (body.status as string | undefined) ?? displayed;
-  const pending = status === item.status ? null : status;
+  const displayed = pageView(state, item.status).status;
+  const next = nextItemState(state, item.status, body.status as string | undefined);
+  const status = next.status ?? item.status;
+  const updatedAt = new Date().toISOString();
   const values = {
-    status: pending,
-    base: pending === null ? null : state?.status != null ? state.base : item.status,
+    ...next,
     note: ((body.note as string | undefined) ?? state?.note ?? "").trim(),
     link: ((body.link as string | undefined) ?? state?.link ?? "").trim(),
     version: version + 1,
     editorName: viewer.name,
-    updatedAt: new Date().toISOString(),
+    updatedAt,
   };
-  const result = state
-    ? await db.update(itemState).set(values).where(and(eq(itemState.itemId, item.id), eq(itemState.version, version))).run()
-    : await db.insert(itemState).values({ itemId: item.id, ...values }).onConflictDoNothing().run();
-  if (!result.meta.changes) return failure(checkVersion(-1, version)!);
-
   const actorName = viewer.name as string;
-  const entries = [];
+  const entries: ActivityEntry[] = [];
   if (status !== displayed) entries.push({ kind: "status", itemId: item.id, actorName, detail: `${displayed} → ${status}` });
   if (values.note !== (state?.note ?? "")) entries.push({ kind: "note", itemId: item.id, actorName, detail: "Updated the note" });
   if (values.link !== (state?.link ?? "")) entries.push({ kind: "link", itemId: item.id, actorName, detail: "Updated the link" });
-  await record(db, entries);
+
+  // The activity rows are inserted only if this request's write landed, so a lost version race records nothing.
+  const written = sql`${itemState.itemId} = ${item.id} and ${itemState.version} = ${version + 1} and ${itemState.updatedAt} = ${updatedAt}`;
+  const write = state
+    ? db.update(itemState).set(values).where(and(eq(itemState.itemId, item.id), eq(itemState.version, version)))
+    : db.insert(itemState).values({ itemId: item.id, ...values }).onConflictDoNothing();
+  const [result] = await db.batch([
+    write,
+    ...entries.map((entry) =>
+      db.insert(activity).select(sql`select null, ${updatedAt}, ${entry.kind}, ${entry.itemId}, ${entry.actorName}, ${entry.detail} from ${itemState} where ${written}`),
+    ),
+  ]);
+  if (!result.meta.changes) return failure(checkVersion(-1, version)!);
   return json(await loadRoadmap(viewer));
 }

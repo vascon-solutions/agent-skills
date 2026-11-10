@@ -62,6 +62,8 @@ Host notes:
 - status filters, search and the URL filter state, including after reload;
 - no page-level horizontal scroll at 390 px and 1280 px, with the drawer closed and open; no console errors.
 
+**Local recheck after review fixes: passed** on 2026-11-10, same setup: `build` (second run 0 files), `verify`, host build and type check; same-site and `text/plain` writes refused with 403 and an anonymous same-origin write with 401; editor form save and stale-save conflict; comment added and deleted; one push cleared a pending edit; a conflicted item's drawer took focus on Close and returned it to the row on Escape; an edit saved back to its base after the repo moved showed the repo status with no marker, matching `pull`, which reported only the real conflict; no console errors.
+
 **Hosted: `unverified: not run`.** No Site was created; the Sites tools are not available outside a Codex session with the plugin. Still to run on a private Site built from the same synthetic roadmap: real sign-in, an editor edit, a non-editor refused (if a second account can be shared), the service-token reach for sync, deploy and migration apply, and one pull and push round trip. Record the date, plugin version and each result here; do not record the Site URL or any account.
 
 ## Any other host

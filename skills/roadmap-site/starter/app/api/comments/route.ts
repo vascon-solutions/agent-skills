@@ -3,7 +3,7 @@ import { getDb } from "@/db";
 import { comments } from "@/db/schema";
 import { authorize } from "@/lib/roadmap/access.mjs";
 import { snapshotItems } from "@/lib/roadmap/merge.mjs";
-import { currentViewer, failure, json, loadRoadmap, loadSnapshot, readJson, record, requestGuard } from "@/lib/roadmap/server";
+import { activityInsert, currentViewer, failure, json, loadRoadmap, loadSnapshot, readJson, requestGuard } from "@/lib/roadmap/server";
 
 export const dynamic = "force-dynamic";
 
@@ -18,14 +18,16 @@ export async function POST(request: Request) {
   const snap = await loadSnapshot(db);
   const item = snap && snapshotItems(snap).find((entry: { id: string }) => entry.id === body?.itemId);
   if (!item) return json({ error: "Unknown item." }, 404);
-  await db.insert(comments).values({
-    itemId: item.id,
-    authorId: viewer.userId as string,
-    authorName: viewer.name as string,
-    body: text,
-    createdAt: new Date().toISOString(),
-  });
-  await record(db, [{ kind: "comment", itemId: item.id, actorName: viewer.name as string, detail: "Commented" }]);
+  await db.batch([
+    db.insert(comments).values({
+      itemId: item.id,
+      authorId: viewer.userId as string,
+      authorName: viewer.name as string,
+      body: text,
+      createdAt: new Date().toISOString(),
+    }),
+    activityInsert(db, [{ kind: "comment", itemId: item.id, actorName: viewer.name as string, detail: "Commented" }]),
+  ]);
   return json(await loadRoadmap(viewer), 201);
 }
 

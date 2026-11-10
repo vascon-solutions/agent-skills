@@ -297,7 +297,11 @@ async function readTokens(flags) {
       else tokens.service = value;
     }
   }
+  tokens.sync = tokens.sync.trim();
+  tokens.service = tokens.service.trim();
   if (!tokens.sync) die('ROADMAP_SYNC_TOKEN is required: set it in the environment, or pass KEY=value lines on stdin with --token-stdin');
+  if (!/^[\x21-\x7e]+$/.test(tokens.sync)) die('ROADMAP_SYNC_TOKEN contains characters a header cannot carry (spaces, line breaks or non-ASCII)');
+  if (tokens.service && !/^[\x21-\x7e]+$/.test(tokens.service)) die('ROADMAP_SERVICE_TOKEN contains characters a header cannot carry (spaces, line breaks or non-ASCII)');
   return tokens;
 }
 
@@ -316,7 +320,7 @@ async function syncRequest(url, tokens, method, body) {
   try {
     response = await fetch(endpoint, { method, headers, body: body ? JSON.stringify(body) : undefined, redirect: 'manual' });
   } catch (error) {
-    return die(`cannot reach ${endpoint.origin}: ${(error.cause && error.cause.code) || error.message}`);
+    return die(`cannot reach ${endpoint.origin}: ${(error.cause && error.cause.code) || error.name}`);
   }
   if (response.status >= 300 && response.status < 400) {
     return die(`${method} ${endpoint.pathname} was redirected (${response.status}); a private Site needs a current ROADMAP_SERVICE_TOKEN`);
@@ -345,7 +349,9 @@ async function commandPull(args) {
   const site = await syncRequest(ctx.url, tokens, 'GET');
   const plan = L.planPull({ repo: new Map(parsed.items.map((item) => [item.id, item.status])), pending: site.pending || [], prefer: args.prefer });
 
-  plan.ignoredPrefers.forEach((id) => process.stdout.write(`WARN --prefer ${id} ignored: it is not a conflict or an orphaned edit\n`));
+  plan.ignoredPrefers.forEach(({ id, orphan }) => process.stdout.write(orphan
+    ? `WARN --prefer page ${id} ignored: ${id} is an orphaned edit; only --prefer repo ${id} drops it\n`
+    : `WARN --prefer ${id} ignored: it is not a conflict or an orphaned edit\n`));
   plan.orphans.forEach((edit) => process.stdout.write(`WARN orphaned ${edit.id}: page status ${edit.status} has no row in the roadmap; --prefer repo ${edit.id} drops it\n`));
   if (plan.conflicts.length) {
     plan.conflicts.forEach((c) => process.stdout.write(`CONFLICT ${c.id}: repo ${c.repo}, page ${c.page} (both changed from ${c.base}); rerun with --prefer repo ${c.id} or --prefer page ${c.id}\n`));

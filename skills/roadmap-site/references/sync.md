@@ -8,7 +8,9 @@ The repo roadmap's status column is canonical. A page edit records the repo stat
 - **Item state,** one row per item that has a page edit: pending `status` and `base`, note, link, version, editor name, time. A save whose status equals the snapshot's repo status leaves nothing pending.
 - **Comments** (flat, plain text) and **activity** (status, note and link edits, comments, pushes and pulls).
 
-Displayed status is the pending page status when there is one, otherwise the snapshot's. A pending item shows "Changed on the page, not yet in the repo"; when the snapshot has moved away from the edit's base, the item shows a conflict marker naming both values.
+The page classifies each pending edit with the same rule `pull` uses (the table below), so it never shows a state that `pull` would not report. An edit `pull` would apply shows its page status with "Changed on the page, not yet in the repo". An edit `pull` would report as a conflict shows a conflict marker naming both values. Any other edit shows the snapshot's status.
+
+Saving a page status equal to the edit's base while the repo has moved (base `todo`, repo now `blocked`, page saved back to `todo`) leaves the page side unchanged by the three-way rule. The page shows the repo status, and the next `pull` drops the page edit.
 
 ## `pull`
 

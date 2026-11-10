@@ -158,6 +158,16 @@ test('every repo-changed x page-changed cell, convergence, conflict, each prefer
     }
     if (c.expect === 'apply') assert.equal(plan.apply[0].to, c.page, c.name);
   }
+
+  assert.deepEqual(L.nextItemState(undefined, 'todo', 'done'), { status: 'done', base: 'todo' }, 'first edit takes the snapshot status as base');
+  assert.deepEqual(L.nextItemState({ status: 'done', base: 'todo' }, 'todo', 'blocked'), { status: 'blocked', base: 'todo' }, 'a follow-up edit keeps the base');
+  assert.deepEqual(L.nextItemState({ status: 'done', base: 'todo' }, 'todo', 'todo'), { status: null, base: null }, 'a save equal to the repo leaves nothing pending');
+  assert.deepEqual(L.nextItemState({ status: 'done', base: 'todo' }, 'blocked', 'in-progress'), { status: 'in-progress', base: 'todo' }, 'an edit after the repo moved keeps the original base');
+
+  const reverted = { status: 'todo', base: 'todo' };
+  assert.deepEqual(L.planPull({ repo: new Map([['X', 'blocked']]), pending: [{ id: 'X', ...reverted }] }).discard.map((e) => e.id), ['X']);
+  assert.deepEqual(L.pageView(reverted, 'blocked'), { status: 'blocked', pending: false, conflict: null }, 'the page shows no conflict that pull will not report');
+  assert.deepEqual(L.pageView({ status: 'done', base: 'todo' }, 'blocked').conflict, { repo: 'blocked', page: 'done' });
 });
 
 test('a server push clears only edits equal to the new repo status and keeps the rest with their original base', () => {
@@ -296,6 +306,16 @@ test('writes, comments and deletes are authorised by role; stale versions and ba
   assert.equal(L.authorizeSync('wrong', SYNC_TOKEN).status, 401);
   assert.equal(L.authorizeSync(SYNC_TOKEN, SYNC_TOKEN), null);
   assert.equal(L.authorizeSync(SYNC_TOKEN, undefined).status, 503);
+  const origin = 'https://roadmap.example.test';
+  const write = (fields) => L.browserWriteRefusal({ fetchSite: 'same-origin', origin, requestOrigin: origin, contentType: 'application/json', ...fields });
+  assert.equal(write({}), null);
+  assert.equal(write({ contentType: 'application/json; charset=utf-8' }), null);
+  assert.equal(write({ fetchSite: 'same-site' }).status, 403);
+  assert.equal(write({ fetchSite: 'cross-site' }).status, 403);
+  assert.equal(write({ fetchSite: null, origin: 'https://sibling.example.test' }).status, 403);
+  assert.equal(write({ fetchSite: null, origin: null }).status, 403);
+  assert.equal(write({ fetchSite: null }), null);
+  assert.equal(write({ contentType: 'text/plain; application/json' }).status, 415);
 });
 
 test('read payloads carry no email or user id, and a user with no full name is shown by the part before @', () => {
@@ -357,6 +377,11 @@ test('neither token reaches output, the activity payload or any request field ot
     const argToken = await run(['pull', '--config', config, '--sync-token', SYNC_TOKEN]);
     assert.equal(argToken.status, 1);
     assert.ok(!argToken.out.includes(SYNC_TOKEN));
+    const broken = 'sync-secret\r9a7e41';
+    const crlf = await run(['pull', '--config', config], { env: { ROADMAP_SYNC_TOKEN: broken } });
+    assert.equal(crlf.status, 1);
+    assert.match(crlf.out, /ROADMAP_SYNC_TOKEN contains characters/);
+    assert.ok(!crlf.out.includes('sync-secret') && !crlf.out.includes('9a7e41'), crlf.out);
     const none = await run(['pull', '--config', config]);
     assert.equal(none.status, 1);
     assert.match(none.out, /ROADMAP_SYNC_TOKEN is required/);

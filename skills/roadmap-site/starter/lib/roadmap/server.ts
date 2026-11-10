@@ -3,7 +3,7 @@ import { desc, eq } from "drizzle-orm";
 import { getChatGPTUser } from "@/app/chatgpt-auth";
 import { getDb } from "@/db";
 import { activity, comments, itemState, snapshot } from "@/db/schema";
-import { parseEditorEmails, projectRoadmap, viewerFor } from "./access.mjs";
+import { browserWriteRefusal, parseEditorEmails, projectRoadmap, viewerFor } from "./access.mjs";
 
 export type Viewer = ReturnType<typeof viewerFor>;
 export type Db = ReturnType<typeof getDb>;
@@ -41,10 +41,11 @@ export async function loadRoadmap(viewer: Viewer) {
   return projectRoadmap({ snapshot: snap, states, comments: commentRows, activity: activityRows, viewer });
 }
 
-export async function record(db: Db, entries: { kind: string; itemId?: string | null; actorName: string; detail?: string }[]) {
-  if (!entries.length) return;
+export type ActivityEntry = { kind: string; itemId?: string | null; actorName: string; detail?: string };
+
+export function activityInsert(db: Db, entries: ActivityEntry[]) {
   const at = new Date().toISOString();
-  await db.insert(activity).values(entries.map((entry) => ({ at, itemId: null, detail: "", ...entry })));
+  return db.insert(activity).values(entries.map((entry) => ({ at, itemId: null, detail: "", ...entry })));
 }
 
 export function json(body: unknown, status = 200) {
@@ -55,11 +56,13 @@ export function failure(denied: { status: number; error: string }) {
   return json({ error: denied.error }, denied.status);
 }
 
-/* Browser writes must be same-site JSON requests; a cross-site form post cannot set this content type without a preflight. */
 export function requestGuard(request: Request) {
-  if (request.headers.get("sec-fetch-site") === "cross-site") return { status: 403, error: "Cross-site requests are refused." };
-  if (!(request.headers.get("content-type") || "").includes("application/json")) return { status: 415, error: "Send JSON." };
-  return null;
+  return browserWriteRefusal({
+    fetchSite: request.headers.get("sec-fetch-site"),
+    origin: request.headers.get("origin"),
+    requestOrigin: new URL(request.url).origin,
+    contentType: request.headers.get("content-type"),
+  });
 }
 
 export async function readJson(request: Request): Promise<Record<string, unknown> | null> {

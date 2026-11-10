@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { STATUSES } from "@/lib/roadmap/parse.mjs";
 
 type Comment = { id: number; author: string; body: string; at: string; canDelete: boolean };
@@ -166,13 +166,15 @@ function Drawer(props: {
 }) {
   const { item, data, config } = props;
   const [draft, setDraft] = useState("");
+  const closeButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => closeButton.current?.focus(), [item.id]);
   const history = data.activity.filter((entry) => entry.itemId === item.id);
   const pageLink = item.link && safeHref(item.link);
   return (
     <aside className="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
       <header>
         <p className="eyebrow">{item.id}</p>
-        <button className="ghost" onClick={props.onClose} aria-label="Close">Close</button>
+        <button ref={closeButton} className="ghost" onClick={props.onClose} aria-label="Close">Close</button>
       </header>
       <h2 id="drawer-title"><Inline text={item.item} /></h2>
       {item.outcome && <p className="lede"><Inline text={item.outcome} /></p>}
@@ -238,6 +240,19 @@ export default function RoadmapView(props: {
   const [filter, setFilter] = useState(() => new Set(props.initialStatus.split(",").filter((s) => STATUSES.includes(s))));
   const [query, setQuery] = useState(props.initialQuery);
   const [openId, setOpenId] = useState<string | null>(null);
+  const opener = useRef<HTMLElement | null>(null);
+
+  function openItem(id: string) {
+    if (!openId) opener.current = document.activeElement as HTMLElement | null;
+    setMessage("");
+    setOpenId(id);
+  }
+
+  useEffect(() => {
+    if (openId || !opener.current) return;
+    opener.current.focus();
+    opener.current = null;
+  }, [openId]);
   const [message, setMessage] = useState("");
 
   useEffect(() => {
@@ -373,7 +388,7 @@ export default function RoadmapView(props: {
               <ul className="items">
                 {shown.map((item) => (
                   <li key={item.id} id={`item-${item.id}`}>
-                    <button className="row" onClick={() => { setMessage(""); setOpenId(item.id); }}>
+                    <button className="row" onClick={() => openItem(item.id)}>
                       <span className="row-id">{item.id}</span>
                       <span className="row-text"><Inline text={item.outcome || item.item} /></span>
                       <span className="row-meta">
@@ -401,7 +416,7 @@ export default function RoadmapView(props: {
                   <li key={entry.id}>
                     {entry.at.slice(11, 16)} · {entry.actor}: {entry.detail}
                     {entry.itemId && (
-                      <> · <a href={`#item-${entry.itemId}`} onClick={() => setOpenId(entry.itemId)}>{entry.itemId}</a></>
+                      <> · <a href={`#item-${entry.itemId}`} onClick={() => openItem(entry.itemId as string)}>{entry.itemId}</a></>
                     )}
                   </li>
                 ))}

@@ -1,15 +1,49 @@
 import { STATUSES } from "./parse.mjs";
 
 /*
+ * The three-way rule for one pending page edit ({ status, base }) against the repo status. Pull and the page both use
+ * it, so the page never shows a state that pull would classify differently.
+ */
+export function classifyEdit(edit, repoStatus) {
+  if (edit.status === repoStatus) return "converged";
+  const pageChanged = edit.status !== edit.base;
+  const repoChanged = repoStatus !== edit.base;
+  if (pageChanged && !repoChanged) return "apply";
+  if (!pageChanged) return "discard";
+  return "conflict";
+}
+
+/* What the page shows for an item: a pending edit only when pull would apply it or report it as a conflict. */
+export function pageView(state, snapshotStatus) {
+  const kind = state && state.status != null ? classifyEdit(state, snapshotStatus) : "none";
+  if (kind !== "apply" && kind !== "conflict") return { status: snapshotStatus, pending: false, conflict: null };
+  return { status: state.status, pending: true, conflict: kind === "conflict" ? { repo: snapshotStatus, page: state.status } : null };
+}
+
+/*
+ * The stored edit after an editor saves `requestedStatus` (undefined keeps the shown status). The base is the snapshot
+ * status when the first unsynced edit was made and is kept on later edits; a save equal to the repo status leaves
+ * nothing pending.
+ */
+export function nextItemState(state, snapshotStatus, requestedStatus) {
+  const shown = pageView(state, snapshotStatus);
+  const status = requestedStatus ?? shown.status;
+  if (status === snapshotStatus) return { status: null, base: null };
+  return { status, base: shown.pending ? state.base : snapshotStatus };
+}
+
+/*
  * Three-way plan for `sync pull`. `repo` maps item id to the repo file's status; `pending` holds the site's page edits
  * ({ id, status, base }); `prefer` maps a conflicted or orphaned id to "repo" or "page".
  */
 export function planPull({ repo, pending, prefer = new Map() }) {
   const plan = { apply: [], discard: [], conflicts: [], orphans: [], converged: [], ignoredPrefers: [] };
   const used = new Set();
+  const orphanIds = new Set();
   for (const edit of pending) {
     const choice = prefer.get(edit.id);
     if (!repo.has(edit.id)) {
+      orphanIds.add(edit.id);
       if (choice === "repo") {
         plan.discard.push(edit);
         used.add(edit.id);
@@ -17,18 +51,18 @@ export function planPull({ repo, pending, prefer = new Map() }) {
       continue;
     }
     const current = repo.get(edit.id);
-    const pageChanged = edit.status !== edit.base;
-    const repoChanged = current !== edit.base;
-    if (edit.status === current) plan.converged.push(edit);
-    else if (pageChanged && !repoChanged) plan.apply.push({ id: edit.id, from: current, to: edit.status, edit });
-    else if (!pageChanged) plan.discard.push(edit);
+    const kind = classifyEdit(edit, current);
+    const change = { id: edit.id, from: current, to: edit.status, edit };
+    if (kind === "converged") plan.converged.push(edit);
+    else if (kind === "apply") plan.apply.push(change);
+    else if (kind === "discard") plan.discard.push(edit);
     else if (choice) {
       used.add(edit.id);
-      if (choice === "page") plan.apply.push({ id: edit.id, from: current, to: edit.status, edit });
+      if (choice === "page") plan.apply.push(change);
       else plan.discard.push(edit);
     } else plan.conflicts.push({ id: edit.id, base: edit.base, repo: current, page: edit.status });
   }
-  for (const id of prefer.keys()) if (!used.has(id)) plan.ignoredPrefers.push(id);
+  for (const id of prefer.keys()) if (!used.has(id)) plan.ignoredPrefers.push({ id, orphan: orphanIds.has(id) });
   return plan;
 }
 

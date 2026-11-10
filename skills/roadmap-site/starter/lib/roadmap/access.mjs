@@ -1,3 +1,5 @@
+import { pageView } from "./merge.mjs";
+
 export const STALE_DAYS = 14;
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -38,6 +40,17 @@ export function authorize(viewer, action, comment) {
     return { status: 403, error: "Only the comment's author or an editor can delete it." };
   }
   return { status: 403, error: "Not allowed." };
+}
+
+/*
+ * Browser writes must be same-origin JSON. `same-site` is refused because a sibling site could post, and the content type
+ * is compared by MIME essence because `text/plain; application/json` is CORS-safelisted and needs no preflight.
+ */
+export function browserWriteRefusal({ fetchSite, origin, requestOrigin, contentType }) {
+  const sameOrigin = fetchSite ? fetchSite === "same-origin" : Boolean(origin) && origin === requestOrigin;
+  if (!sameOrigin) return { status: 403, error: "Only same-origin requests can write." };
+  if (String(contentType || "").split(";")[0].trim().toLowerCase() !== "application/json") return { status: 415, error: "Send JSON." };
+  return null;
 }
 
 export function checkVersion(currentVersion, sentVersion) {
@@ -89,16 +102,16 @@ export function projectRoadmap({ snapshot, states, comments, activity, viewer, n
     outcome: group.outcome || null,
     items: group.items.map((item) => {
       const state = stateById.get(item.id);
-      const pageStatus = state && state.status != null && state.status !== item.status ? state.status : null;
-      if (pageStatus) pendingCount += 1;
+      const view = pageView(state, item.status);
+      if (view.pending) pendingCount += 1;
       return {
         id: item.id,
         item: item.item,
         outcome: item.outcome || null,
         repoStatus: item.status,
-        status: pageStatus || item.status,
-        pending: Boolean(pageStatus),
-        conflict: pageStatus && state.base !== item.status ? { repo: item.status, page: pageStatus } : null,
+        status: view.status,
+        pending: view.pending,
+        conflict: view.conflict,
         repoNote: item.note || "",
         taskDoc: item.link || null,
         note: state ? state.note : "",
