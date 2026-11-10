@@ -33,6 +33,7 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
     ├── github-issue-intake/
     ├── implementation-map/
     ├── repo-skill-scan/
+    ├── repo-code-audit/
     ├── roadmap-todo/
     ├── html-artifact/
     ├── markdown-artifact/
@@ -83,6 +84,7 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 | `github-issue-intake`       | Turn bug reports, improvements, screenshots, or code findings into approved, code-grounded GitHub issues for teammate handoff before optional task-doc creation                                                                                                                       |
 | `implementation-map`        | Create requested implementation maps or deep review dossiers of existing code with file evidence; not for routine code explanations unless explicitly invoked                       |
 | `repo-skill-scan`           | Scan a repo for repeated patterns; recommend skills, commands, or no action, then scaffold approved candidates into correctly structured files with link-script and README wiring                                                                                                     |
+| `repo-code-audit` | Report-only audit of a codebase for the improvements most worth making: vetted, ranked findings with file evidence, then handoff of selected findings to the owning skills |
 | `roadmap-todo`              | Create and maintain durable roadmap or todo files for feature-grade work across repos                                                                                                                                                                                                |
 | `brainstorm` | Explore unsettled ideas through discussion and research; produce a recommendation, research brief, or optional design spec without automatic delivery handoff |
 | `unslop` | Make agent output readable on the first read: outcome first, gaps stated, no narration, evidence not adjectives, per-surface shapes for replies, findings, PR bodies, commits, and docs, plus a scanner for mechanical tells |
@@ -248,6 +250,11 @@ Documentation audits and reviews report findings without editing. Existing clean
 ### Discovering and creating repo-specific skills or commands
 
 1. `repo-skill-scan` — scan for repeated patterns and get a ranked candidate list; then, for each approved candidate, propose the file structure → wait for approval → scaffold the skill, command, or script with link-script and README wiring (scaffolding folded in from the retired `scaffold-repo-skill`)
+
+### Finding what to improve in a codebase
+
+1. `repo-code-audit` — audit the requested scope and report vetted, ranked findings with file evidence, direction signals, and rejected items.
+2. For selected findings: normal execution for small fixes, `task-doc-intake` for improvements and feature-grade changes, `github-issue-intake` for teammate handoff, `roadmap-todo` for feature-grade backlog entries, `brainstorm` for direction signals, `audit-ui` or `audit-api` for runtime proof.
 
 ### Creating teammate-ready GitHub issues
 
