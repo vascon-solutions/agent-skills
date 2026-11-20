@@ -1,0 +1,4 @@
+interface:
+  display_name: "Environment Profile"
+  short_description: "Load or maintain a repo's deployed-environment profile for audits and walkthroughs"
+  default_prompt: "Use $environment-profile to load this repo's dev environment profile before the audit."

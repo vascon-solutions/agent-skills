@@ -47,6 +47,8 @@ Collect, and write at the top of `manifest.md` from [templates/manifest.md](temp
 - audit runs to adopt, and an earlier walkthrough to carry the status table from
 - the accent colour and the label for each status tone in use
 
+For a deployed environment, take the origins, build check, accounts, credential sources and allowed changes from the repo's environment profile through `environment-profile`.
+
 Ask one question only when the environment, the accounts or the allowed demo changes are unclear. Refuse a production environment.
 
 ## 2. Get the evidence

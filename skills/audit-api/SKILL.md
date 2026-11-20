@@ -41,6 +41,10 @@ outcomes, evidence budget, cleanup, and assumptions. Ask one question only when
 safety, mutation authority, authentication, the selected endpoint surface, or
 the required outcome is materially unclear.
 
+For a deployed non-production environment, load the repo's environment profile
+through `environment-profile` first; it supplies base URLs, actors, credential
+references, session rules and allowed mutations.
+
 ## Enforce Safety
 
 - Production is semantic read-only: reject operations that can mutate even if
