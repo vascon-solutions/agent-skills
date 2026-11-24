@@ -42,6 +42,7 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
     ├── publish-artifact/
     ├── variant-board/
     ├── walkthrough-artifact/
+    ├── environment-profile/
     ├── brainstorm/
     ├── unslop/
     ├── task-doc/
@@ -103,6 +104,7 @@ Skills in this pack are framework-agnostic and repo-agnostic. They are designed 
 | `image-artifact`            | Create static visual companions from existing Markdown, including summary cards, comparison boards, decision boards, concept posters, architecture diagrams, and API flow images, plus `board-snapshot` browser captures of issued variant boards. Repo Markdown defaults to `~/agent-artifacts/<repo-name>-<source-stem>/images/` |
 | `variant-board`             | Build or revise a UI variant board (before/after, option comparison, state coverage, defect report) from a brief in the target app's own design system on a white editorial page; verify, issue frozen versions under `html/versions/`, resolve task-doc citations, migrate legacy boards, and export/import bundles for hosts without the filesystem |
 | `walkthrough-artifact`      | Build a product walkthrough of shipped features on a non-production environment: real screenshots captured through `audit-ui`, one HTML page from a starter, an A4 landscape PDF, and a manifest that traces every image to its raw capture; `check` compares page and manifest, `pdf` prints and counts pages |
+| `environment-profile` | Load or maintain a repo's deployed-environment profile (`docs/environments/<env>.md`) for audits and walkthroughs: lookup order, default rules, credential references by key, a brief stub, and a checker that rejects secret-like text and scans run folders for credential values |
 | `artifact-workbench`        | Serve an artifact workspace or single HTML artifact through a localhost workbench (read-only by default, optional live refresh and selection capture) for variant comparison, browser QA, and pre-publish inspection                                                                                                                           |
 | `repo-design-context`       | Discover whether local repo styling, design tokens, brand assets, or architecture vocabulary can safely inform generated artifacts                                                                                                                                                   |
 | `publish-artifact`          | Publish a `~/agent-artifacts/<slug>/` workspace to S3, GitHub Wikis, ClickUp Docs, native Google Docs, or raw Google Drive folders with explicit destination flags. Explicit command only                                                                                            |
@@ -282,6 +284,11 @@ Documentation audits and reviews report findings without editing. Existing clean
 
 1. `audit-api` — inspect the bounded effective OpenAPI/Swagger contract, probe required services, run dependent scenarios with Hurl or hardened curl fallback, verify persistence and negative cases, and report a redacted evidence-backed verdict
 2. Use curl directly for one independent request, and use Swagger UI only for visual contract exploration rather than end-to-end API evidence
+
+### Auditing or walking through a deployed environment
+
+1. `environment-profile` — find and load the repo's `docs/environments/<env>.md`, apply the default rules, and use credentials by reference only; `audit-ui`, `audit-api` and `walkthrough-artifact` point to it
+2. `node skills/environment-profile/scripts/check-profile.mjs profile <profile.md>` before landing a profile, and `check-profile.mjs scan <run-folder> --values ~/.config/<project>/<env>.json` before keeping a run folder
 
 ### Applying stack standards
 

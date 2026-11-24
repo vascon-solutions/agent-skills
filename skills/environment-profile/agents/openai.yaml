@@ -1,0 +1,4 @@
+interface:
+  display_name: "Environment Profile"
+  short_description: "Load, create or check a repo's deployed-environment profile, and scan run folders for leaked credentials"
+  default_prompt: "Use $environment-profile to find and load this repo's environment profile before the audit or walkthrough, and use its credential references without printing a value."
