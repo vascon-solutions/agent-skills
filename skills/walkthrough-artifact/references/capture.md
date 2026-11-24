@@ -14,7 +14,7 @@ Start from audit-ui's brief template (`assets/templates/audit-brief.md` in the a
 - **Screenshot maximum.** A range per scope item plus a total, for example "4-8 per item, 40 total". audit-ui's default of 12 is too low for a walkthrough; the brief overrides it.
 - **Allowed mutations.** Only the demo records the walkthrough needs, each carrying the marker text from the manifest, such as "Walkthrough demo". Name the end state for each, for example "cancelled after capture".
 - **Bounded assumptions.** "Walkthrough capture: follow the capture rules in walkthrough-artifact's capture reference", then list the rules below.
-- **Cleanup requirement.** Release every account (for example logout-all), restore or cancel every demo record, close every browser session, and record all of it in `report.md` under Created Records and Cleanup.
+- **Cleanup requirement.** Release every account (sign out through the UI, then the API logout; ending all sessions for an account is a recorded last resort), restore or cancel every demo record, close every browser session, and record all of it in `report.md` under Created Records and Cleanup.
 
 A capture needed after the report is written is a new run under the same audit slug, with its own short brief and report. Do not add files to a finished run.
 

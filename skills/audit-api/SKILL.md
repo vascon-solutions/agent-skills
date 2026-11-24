@@ -42,8 +42,8 @@ safety, mutation authority, authentication, the selected endpoint surface, or
 the required outcome is materially unclear.
 
 For a deployed non-production environment, load the repo's environment profile
-through `environment-profile` first; it supplies base URLs, actors, credential
-references, session rules and allowed mutations.
+through `environment-profile` first; it supplies base URLs, build confirmation,
+actors, credential references, session rules and allowed mutations.
 
 ## Enforce Safety
 

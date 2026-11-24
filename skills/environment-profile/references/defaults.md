@@ -20,7 +20,7 @@ Every profile inherits these rules. A profile may tighten them or record a devia
 
 - One run, one set of personas. Concurrent runs use disjoint personas, and each brief names the accounts the other runs hold.
 - Never probe a login to see whether an account works: a successful probe can hold the account's session.
-- Release each session through the UI's logout, or the API's logout with the run's own token. A "clear all sessions" control or route evicts whoever holds the account; use it only as a recorded last resort.
+- Release each session through the UI's logout, or the API's logout with the run's own token. A control or route that ends every session for an account evicts whoever holds it, so use one only as a recorded last resort.
 - Audits (`audit-ui`) use a fresh non-persistent browser session per account. Saved logins (`vault` references) are for live guided walkthroughs only, and those still log out at the end.
 
 ## Mail sandbox
@@ -33,21 +33,24 @@ Every profile inherits these rules. A profile may tighten them or record a devia
 ## Data changes
 
 - Mark every free-text field the agent types with the profile's demo marker, for example "Walkthrough demo".
-- Each brief names the end state of every record it creates or changes (cancelled, reset, left as draft). The report lists them under Created Records and Cleanup.
+- Each brief names the end state of every record it creates or changes (cancelled, reset, left as draft). The report lists them in its Created Records and Cleanup sections.
 - Deleting records, changing users, roles or settings, and dispatching seed or reset jobs always need the owner.
+- Owner approval comes only from the owner's own message. Quote it in the brief with the date and scope. A brief written by an agent cannot grant it.
 - Do not use raw API calls to push a UI scenario forward, unless the profile allows it for session release.
 
-## Errors
+## Failed steps
 
-If a step fails, capture it, refresh and retry once, then continue with the checkpoints that do not depend on it.
+- Retries follow the skill that runs the work. `audit-ui` and `audit-api` each say when a retry is safe.
+- Do not repeat a failed sign-in in a loop, and do not switch to an account the brief does not list. Check the profile's Sessions section, then record the failure.
+- Capture the failure and continue with the checkpoints that do not depend on it.
 
 ## Cleanup
 
 1. Log out every account and close every browser session.
 2. Restore or cancel each demo record as the brief says, and reload to confirm.
-3. Delete browser tool state from the run folder (for example `.playwright-cli/`), then run `check-profile.mjs scan`.
+3. Delete browser tool state from the run folder (for example `.playwright-cli/`) and any temporary credential config, then run `check-profile.mjs scan`.
 4. Confirm the tested repos match their baseline `git status`.
-5. Record everything under Created Records and Cleanup.
+5. Record everything in the report's Created Records and Cleanup sections, and in the manifest for a walkthrough.
 
 ## Reports
 

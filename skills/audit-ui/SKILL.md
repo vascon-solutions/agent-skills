@@ -40,8 +40,8 @@ evidence budget, cleanup, and assumptions. Ask one question only when safety,
 mutation authority, authentication, or the required outcome remains ambiguous.
 
 For a deployed non-production environment, load the repo's environment profile
-through `environment-profile` first; it supplies origins, actors, credential
-references, session rules and allowed changes.
+through `environment-profile` first; it supplies origins, build confirmation,
+actors, credential references, session rules and allowed changes.
 
 ## Enforce Safety
 

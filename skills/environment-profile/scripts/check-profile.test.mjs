@@ -8,7 +8,7 @@ import { REQUIRED_SECTIONS, checkProfile, findSecretLike, main, scanFolder } fro
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const template = fs.readFileSync(path.join(here, "..", "templates", "environment-profile.md"), "utf8");
-const today = new Date("2026-11-20T12:00:00Z");
+const today = new Date("2030-01-15T12:00:00Z");
 
 function profile({ front = {}, sections = REQUIRED_SECTIONS, extra = "" } = {}) {
   const fields = {
@@ -16,8 +16,8 @@ function profile({ front = {}, sections = REQUIRED_SECTIONS, extra = "" } = {}) 
     project: "demo-app",
     environment: "dev",
     classification: "test",
-    "last-verified": "2026-11-19",
-    "verified-by": "walkthrough 2026-11-19",
+    "last-verified": "2030-01-14",
+    "verified-by": "audit run 2030-01-14",
     ...front,
   };
   const head = Object.entries(fields)
@@ -31,11 +31,15 @@ const rules = (result) => result.errors.map((error) => error.rule);
 
 test("a complete profile with references only passes", () => {
   const extra = [
-    "| Vendor | ops@vendor.example | vendor | bids | local-file: vendorPassword |",
-    'PW="$(jq -r .internalPassword ~/.config/demo-app/dev.json)"',
-    "Mail sandbox: https://mail.example.test (basic auth, keys `mailpitUser` and `mailpitPassword`)",
-    "Sign in with the password from `local-file: internalPassword`.",
-    "export FIXTURE_VENDOR_PASSWORD=\"$(jq -r .vendorPassword ~/.config/demo-app/dev.json)\"",
+    "| Member | member@example.test | web | checkout | local-file: memberPassword |",
+    'PW="$(jq -er .staffPassword ~/.config/demo-app/dev.json)"',
+    "Mail sandbox: https://mail.example.test (basic auth, keys `mailUser` and `mail_password`)",
+    "Sign in with the password from `local-file: staffPassword`.",
+    "export SEED_MEMBER_PASSWORD=\"$(jq -r .memberPassword ~/.config/demo-app/dev.json)\"",
+    `TOKEN="$(jq '{email: "staff@example.test", password: .staffPassword, portal: "staff"}' ~/.config/demo-app/dev.json)"`,
+    "Pipe the password with `--password-stdin`. Mail takes basic auth with `curl -K -`.",
+    "The session lasts `ACCESS_TOKEN_TTL=3600` seconds.",
+    "| Persona | Password |\n| --- | --- |\n| staff | local-file: staffPassword |",
   ].join("\n");
   const result = checkProfile(profile({ extra }), { today });
   assert.deepEqual(result.errors, []);
@@ -64,21 +68,29 @@ test("production and unknown classifications are refused", () => {
 
 test("placeholders and stale verification are reported", () => {
   assert.ok(rules(checkProfile(profile({ front: { project: "<project-slug>" } }), { today })).includes("front-matter"));
-  const stale = checkProfile(profile({ front: { "last-verified": "2026-09-01" } }), { today });
+  const stale = checkProfile(profile({ front: { "last-verified": "2029-10-01" } }), { today });
   assert.deepEqual(stale.errors, []);
   assert.equal(stale.warnings[0].rule, "stale");
+  for (const unusable of ["2030-03-01", "2030-13-45"]) {
+    const result = checkProfile(profile({ front: { "last-verified": unusable } }), { today });
+    assert.ok(rules(result).includes("front-matter"), `${unusable} accepted`);
+  }
 });
 
 test("secret-looking values are rejected without echoing them", () => {
-  const cases = {
-    "credential-literal": "The vendor password is `Tr0ub4dor-Example`.",
-    "url-credentials": "Open https://mailer:Tr0ub4dor-Example@mail.example.test/ to read mail.",
-    jwt: "Token eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.c2lnbmF0dXJlLXZhbHVl",
-    "bearer-token": "Authorization: Bearer abcdefghijklmnopqrstuvwxyz012345",
-    "credential-assignment": "FIXTURE_VENDOR_PASSWORD=Tr0ub4dor-Example",
-    "query-secret": "https://app.example.test/verify?token=abcdef0123456789",
-  };
-  for (const [rule, line] of Object.entries(cases)) {
+  const cases = [
+    ["credential-literal", "The member password is `Tr0ub4dor-Example`."],
+    ["credential-literal", '{"email": "staff@example.test", "password": "Tr0ub4dor-Example"}'],
+    ["url-credentials", "Open https://mailer:Tr0ub4dor-Example@mail.example.test/ to read mail."],
+    ["jwt", "Token eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.c2lnbmF0dXJlLXZhbHVl"],
+    ["bearer-token", "Authorization: Bearer abcdefghijklmnopqrstuvwxyz012345"],
+    ["credential-assignment", "SEED_MEMBER_PASSWORD=Tr0ub4dor-Example"],
+    ["credential-assignment", 'export APP_PASSWORD="Tr0ub4dor-Example"'],
+    ["credential-plain", "- Password: Tr0ub4dor-Example"],
+    ["credential-column", "| Persona | Password |\n| --- | --- |\n| staff | Tr0ub4dor-Example |"],
+    ["query-secret", "https://app.example.test/verify?token=abcdef0123456789"],
+  ];
+  for (const [rule, line] of cases) {
     const result = checkProfile(profile({ extra: line }), { today });
     assert.ok(rules(result).includes(rule), `${rule} not detected`);
     assert.ok(result.errors.every((error) => !error.message.includes("Tr0ub4dor")));
@@ -86,7 +98,7 @@ test("secret-looking values are rejected without echoing them", () => {
 });
 
 test("placeholder credentials in URLs and plain http to localhost are allowed", () => {
-  const extra = "https://<user>:<pass>@mail.example.test is never used; local runs use http://localhost:8025.";
+  const extra = "https://<user>:<pass>@mail.example.test is never used; local runs use http://localhost:8025 or http://[::1]:8025.";
   assert.deepEqual(checkProfile(profile({ extra }), { today }).errors, []);
   assert.ok(rules(checkProfile(profile({ extra: "API: http://api.example.test" }), { today })).includes("https"));
 });
@@ -102,26 +114,31 @@ test("scan counts credential values by key name and never prints them", () => {
   const valuesFile = path.join(dir, "..", `${path.basename(dir)}-values.json`);
   try {
     const secret = "Tr0ub4dor&Example";
+    const basicHeader = Buffer.from(`mailer:${secret}`).toString("base64");
     fs.mkdirSync(path.join(dir, ".playwright-cli"));
     fs.writeFileSync(path.join(dir, ".playwright-cli", "snap.yml"), `textbox "Password": ${secret}\n`);
     fs.writeFileSync(path.join(dir, "console.log"), `GET https://mail.example.test/?p=${encodeURIComponent(secret)}\n`);
+    fs.writeFileSync(path.join(dir, "requests.log"), `Authorization: Basic ${basicHeader}\n`);
     fs.writeFileSync(path.join(dir, "report.md"), "clean\n");
-    fs.writeFileSync(valuesFile, JSON.stringify({ vendorPassword: secret, internalPassword: "password" }));
+    fs.writeFileSync(valuesFile, JSON.stringify({ memberPassword: secret, staffPassword: "password", mailUser: "mailer" }));
 
     const { findings, skipped } = scanFolder(dir, JSON.parse(fs.readFileSync(valuesFile, "utf8")));
     assert.deepEqual(
       findings.map((finding) => [finding.file, finding.key]).sort(),
       [
-        [".playwright-cli/snap.yml", "vendorPassword"],
-        ["console.log", "vendorPassword"],
+        [".playwright-cli/snap.yml", "memberPassword"],
+        ["console.log", "memberPassword"],
+        ["requests.log", "basic-auth:mailUser+memberPassword"],
       ],
     );
-    assert.deepEqual(skipped, ["internalPassword"]);
+    assert.deepEqual(skipped, ["staffPassword", "mailUser"]);
 
     const lines = [];
     const sink = { log: (line) => lines.push(line), error: (line) => lines.push(line) };
     assert.equal(main(["scan", dir, "--values", valuesFile], sink), 1);
-    assert.ok(lines.every((line) => !line.includes(secret) && !line.includes(encodeURIComponent(secret))));
+    for (const form of [secret, encodeURIComponent(secret), basicHeader]) {
+      assert.ok(lines.every((line) => !line.includes(form)));
+    }
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
     fs.rmSync(valuesFile, { force: true });
@@ -134,13 +151,28 @@ test("profile mode flags a known credential value by key", () => {
     const file = path.join(dir, "dev.md");
     const valuesFile = path.join(dir, "values.json");
     fs.writeFileSync(file, profile({ extra: "Mail login note: Zebra-Example-42" }));
-    fs.writeFileSync(valuesFile, JSON.stringify({ note: "demo", created: "2026-11-19", mailpitPassword: "Zebra-Example-42" }));
+    fs.writeFileSync(valuesFile, JSON.stringify({ note: "demo", created: "2030-01-14", mailPassword: "Zebra-Example-42" }));
     const lines = [];
     const sink = { log: (line) => lines.push(line), error: (line) => lines.push(line) };
     assert.equal(main(["profile", file, "--values", valuesFile], sink), 1);
-    assert.ok(lines.some((line) => /credential-value: contains the value of key mailpitPassword/.test(line)));
+    assert.ok(lines.some((line) => /credential-value: contains the value of key mailPassword/.test(line)));
     assert.ok(lines.every((line) => !line.includes("Zebra-Example-42")));
     assert.ok(lines.every((line) => !/key (note|created)/.test(line)), "metadata keys are not credentials");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a malformed credentials file is reported without quoting its content", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "env-profile-malformed-"));
+  try {
+    const valuesFile = path.join(dir, "values.json");
+    fs.writeFileSync(valuesFile, '{"mailPassword": Zebra-Example-42}');
+    const lines = [];
+    const sink = { log: (line) => lines.push(line), error: (line) => lines.push(line) };
+    assert.equal(main(["scan", dir, "--values", valuesFile], sink), 2);
+    assert.ok(lines.length > 0);
+    assert.ok(lines.every((line) => !line.includes("Zebra")));
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
